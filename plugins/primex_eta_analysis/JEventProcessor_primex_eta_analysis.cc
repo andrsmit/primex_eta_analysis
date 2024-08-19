@@ -74,12 +74,14 @@ jerror_t JEventProcessor_primex_eta_analysis::init(void)
 	TDirectory *dir_primex_eta = new TDirectoryFile("primex_eta_analysis", "primex_eta_analysis");
 	dir_primex_eta->cd();
 	
+	// Distribution of the FCAL energy sum for each different trigger type:
 	for(int itrig=0; itrig<N_TRIGS; itrig++) {
 		h_fcal_energy_sum[itrig] = new TH1F(Form("fcal_energy_sum_%d",itrig), 
 			Form("FCAL Shower Energy Sum (%s); E_{FCAL} [GeV]", trigger_names[itrig].c_str()), 
 			1200, 0., 12.);
 	}
 	
+	// Thrown angle distribution with different cuts on the beam photon energy:
 	TDirectory *dir_thrown = new TDirectoryFile("thrown", "thrown");
 	dir_thrown->cd();
 	for(int icut=0; icut<13; icut++) {
@@ -89,10 +91,11 @@ jerror_t JEventProcessor_primex_eta_analysis::init(void)
 	}
 	dir_thrown->cd("../");
 	
-	//-----------------------------------------------------//
+	//====================================================================================//
 	
 	TDirectory *dir_timing = new TDirectoryFile("rf_timing", "rf_timing");
 	dir_timing->cd();
+	// Timing distributions for each different trigger type:
 	for(int itrig=0; itrig<N_TRIGS; itrig++) {
 		h_fcal_rf_dt[itrig] = new TH1F(Form("fcal_rf_dt_%d",itrig), 
 			Form("FCAL - RF Time (%s); [ns]", trigger_names[itrig].c_str()), 
@@ -115,7 +118,7 @@ jerror_t JEventProcessor_primex_eta_analysis::init(void)
 	}
 	dir_timing->cd("../");
 	
-	//-----------------------------------------------------//
+	//====================================================================================//
 	
 	TDirectory *dir_gg = new TDirectoryFile("eta_gg", "eta_gg");
 	dir_gg->cd();
@@ -205,79 +208,97 @@ jerror_t JEventProcessor_primex_eta_analysis::init(void)
 	h_hmass->GetYaxis()->SetTitle("Hybrid Mass");
 	h_hmass->Sumw2();
 	
-	//------------------------------------------------------------------------------------//
+	//------------------------------------//
 	
+	// x-y position of FCAL showers that survive all cuts:
+	h_xy_1 = new TH2F("xy_1", "Postion of Shower 1; x_{1} [cm]; y_{1} [cm]", 500, -100., 100., 500, -100., 100.);
+	h_xy_2 = new TH2F("xy_2", "Postion of Shower 2; x_{2} [cm]; y_{2} [cm]", 500, -100., 100., 500, -100., 100.);
+	
+	// Missing-mass vs. angle:
+	h_mm_vs_theta = new TH2F("mm_vs_theta", "Squared Missing Mass; M_{miss}^{2} [GeV/c^{2}]", 650, 0., 6.5, 4000, 0., 40.);
+	
+	//------------------------------------//
+	
+	// reconstructed angle of two-photon pair vs. thrown angle (only filled for MC):
 	h_rec_vs_thrown = new TH2F("rec_vs_thrown", 
 		"Reconstructed Angle vs. Thrown Angle; #theta_{thrown} [#circ]; #theta_{rec} [#circ]", 
 		650, 0., 6.5, 650, 0., 6.5);
 	h_rec_vs_thrown->Sumw2();
 	
+	// invariant mass vs. thrown angle of eta (only filled for MC):
 	h_mgg_thrown = new TH2F("mgg_thrown", "Two-Photon Invariant Mass", 650, 0., 6.5, 600, 0., 1.2);
 	h_mgg_thrown->GetXaxis()->SetTitle("#theta_{thrown} [#circ]");
 	h_mgg_thrown->GetYaxis()->SetTitle("M_{#gamma#gamma} [GeV/c^{2}]");
 	h_mgg_thrown->Sumw2();
 	
+	// energy-constrained invariant mass vs. thrown angle of eta (only filled for MC):
 	h_mgg_const_thrown = new TH2F("mgg_const_thrown", "Energy-Constrained Inv Mass", 
 		650, 0., 6.5, 600, 0., 1.2);
 	h_mgg_const_thrown->GetXaxis()->SetTitle("#theta_{thrown} [#circ]");
 	h_mgg_const_thrown->GetYaxis()->SetTitle("M_{#gamma#gamma}^{constr} [GeV/c^{2}]");
 	h_mgg_const_thrown->Sumw2();
 	
+	// hybrid mass vs. thrown angle of eta (only filled for MC):
 	h_hmass_thrown = new TH2F("hmass_thrown", "Hybrid Mass", 
 		650, 0., 6.5, 1000, -1.0, 1.0);
 	h_hmass_thrown->GetXaxis()->SetTitle("#theta_{thrown} [#circ]");
 	h_hmass_thrown->GetYaxis()->SetTitle("Hybrid Mass");
 	h_hmass_thrown->Sumw2();
 	
-	h_xy_1 = new TH2F("xy_1", "Postion of Shower 1; x_{1} [cm]; y_{1} [cm]", 500, -100., 100., 500, -100., 100.);
-	h_xy_2 = new TH2F("xy_2", "Postion of Shower 2; x_{2} [cm]; y_{2} [cm]", 500, -100., 100., 500, -100., 100.);
-	
-	h_mm_vs_theta = new TH2F("mm_vs_theta", "Squared Missing Mass; M_{miss}^{2} [GeV/c^{2}]", 650, 0., 6.5, 4000, 0., 40.);
-	
 	dir_gg->cd("../");
 	
-	//------------------------------------------------------------------------------------//
+	//====================================================================================//
+	// Various "monitoring" distributions:
 	
+	// difference in scattering angles for the two-photons:
 	h_dtheta = new TH1F("dtheta", "#Delta#theta_{12}; #theta_{1} - #theta_{2} [#circ]", 2000, -10., 10.);
 	h_dtheta->Sumw2();
 	
+	// difference in scattering angles for the two-photons (when their energies are within 10% of each other):
 	h_dtheta_sym = new TH1F("dtheta_sym", 
 		"#Delta#theta_{12} (0.9 < #frac{E_{1}}{E_{2}} < 1.1); #theta_{1} - #theta_{2} [#circ]", 2000, -10., 10.);
 	h_dtheta_sym->Sumw2();
 	
+	// difference in energy for the two-photons:
 	h_denergy = new TH1F("denergy", "#DeltaE_{12}; E_{1} - E_{2} [GeV]", 2000, -10., 10.);
 	h_denergy->Sumw2();
 	
+	// difference in energy for the two-photons (when their scattering angles are within 10% of each other):
 	h_denergy_sym = new TH1F("denergy_sym", 
 		"#DeltaE_{12} (0.9 < #frac{#theta_{1}}{#theta_{2}} < 1.1); E_{1} - E_{2} [GeV]", 2000, -10., 10.);
 	h_denergy_sym->Sumw2();
 	
+	// invariant mass vs. average energy of the two photons:
 	h_mgg_vs_energy = new TH2F("mgg_vs_energy", "Two-Photon Invariant Mass", 800, 0., 8., 600, 0., 1.2);
 	h_mgg_vs_energy->GetXaxis()->SetTitle("E_{#gamma}^{avg} [GeV]");
 	h_mgg_vs_energy->GetYaxis()->SetTitle("M_{#gamma#gamma} [GeV/c^{2}]");
 	h_mgg_vs_energy->Sumw2();
 	
+	// energy-constrained invariant mass vs. average energy of the two photons:
 	h_mgg_const_vs_energy = new TH2F("mgg_const_vs_energy", "Energy-Constrained Inv Mass", 800, 0., 8., 600, 0., 1.2);
 	h_mgg_const_vs_energy->GetXaxis()->SetTitle("E_{#gamma}^{avg} [GeV]");
 	h_mgg_const_vs_energy->GetYaxis()->SetTitle("M_{#gamma#gamma}^{constr} [GeV/c^{2}]");
 	h_mgg_const_vs_energy->Sumw2();
 	
+	// elasticity of the two photon pair vs. average energy of the two photons:
 	h_elas_vs_energy = new TH2F("elas_vs_energy", "Elasticity Ratio", 800, 0., 8., 1000, 0., 2.);
 	h_elas_vs_energy->GetXaxis()->SetTitle("E_{#gamma}^{avg} [GeV]");
 	h_elas_vs_energy->GetYaxis()->SetTitle("(E_{#gamma,1} + E_{#gamma,2}) / E_{#eta}");
 	h_elas_vs_energy->Sumw2();
 	
+	// invariant mass vs. average angle of the two photons:
 	h_mgg_vs_angle = new TH2F("mgg_vs_angle", "Two-Photon Invariant Mass", 500, 0., 10., 600, 0., 1.2);
 	h_mgg_vs_angle->GetXaxis()->SetTitle("#theta_{#gamma}^{avg} [#circ]");
 	h_mgg_vs_angle->GetYaxis()->SetTitle("M_{#gamma#gamma} [GeV/c^{2}]");
 	h_mgg_vs_angle->Sumw2();
 	
+	// energy-constrained invariant mass vs. average angle of the two photons:
 	h_mgg_const_vs_angle = new TH2F("mgg_const_vs_angle", "Energy-Constrained Inv Mass", 500, 0., 10., 600, 0., 1.2);
 	h_mgg_const_vs_angle->GetXaxis()->SetTitle("#theta_{#gamma}^{avg} [#circ]");
 	h_mgg_const_vs_angle->GetYaxis()->SetTitle("M_{#gamma#gamma}^{constr} [GeV/c^{2}]");
 	h_mgg_const_vs_angle->Sumw2();
 	
-	//-----------------------------------------------------//
+	//====================================================================================//
 	
 	dir_primex_eta->cd("../");
 	
@@ -506,16 +527,7 @@ jerror_t JEventProcessor_primex_eta_analysis::brun(JEventLoop *eventLoop, int32_
 	m_MicroscopeFactorErr  = locMicroscopeFactorErr;
 	m_TAGMEnergyBoundHi    = locTAGMEnergyBoundHi;
 	m_TAGMEnergyBoundLo    = locTAGMEnergyBoundLo;
-	/*
-	cout << "\n\n\n\n\n";
-	cout << "==============================================================================" << endl;
-	cout << m_HodoscopeHiFactor << "; " << m_HodoscopeHiFactorErr << "; " 
-		<< m_HodoscopeLoFactor << "; " << m_HodoscopeLoFactorErr << "; " << m_MicroscopeFactor 
-		<< "; " << m_MicroscopeFactorErr << "; " << m_TAGMEnergyBoundHi << "; " 
-		<< m_TAGMEnergyBoundLo << endl;
-	cout << "==============================================================================" << endl;
-	cout << "\n\n\n\n\n";
-	*/
+	
 	/*------------------------------------------------------------------------------------------------------*/
 	
 	return NOERROR;
@@ -621,11 +633,11 @@ jerror_t JEventProcessor_primex_eta_analysis::evnt(JEventLoop *eventLoop, uint64
 			double py    = p * sin(theta) * sin(phi);
 			double pz    = p * cos(theta);
 			TLorentzVector thrownP4(px, py, pz, p);
-			if(mcthrown->type ==  1) locPhotonsMCList.push_back(thrownP4);
-			if(mcthrown->type ==  8) locPipsMCList.push_back(thrownP4);
-			if(mcthrown->type ==  9) locPimsMCList.push_back(thrownP4);
-			//if(mcthrown->type == 13) locNsMCList.push_back(thrownP4);
-			//if(mcthrown->type == 14) locPsMCList.push_back(thrownP4);
+			if(mcthrown->type ==  1) locPhotonsMCList.push_back(thrownP4); // photon
+			if(mcthrown->type ==  8) locPipsMCList.push_back(thrownP4);    // pi+
+			if(mcthrown->type ==  9) locPimsMCList.push_back(thrownP4);    // pi-
+			//if(mcthrown->type == 13) locNsMCList.push_back(thrownP4);    // neutron
+			//if(mcthrown->type == 14) locPsMCList.push_back(thrownP4);    // proton
 		}
 		if(locPhotonsMCList.size() == 2 && locPipsMCList.size() == 0 && locPimsMCList.size() == 0) {
 			locEtaMCP4 = locPhotonsMCList[0] + locPhotonsMCList[1];
