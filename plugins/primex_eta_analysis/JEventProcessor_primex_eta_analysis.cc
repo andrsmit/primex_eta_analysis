@@ -19,50 +19,54 @@ extern "C"{
 //------------------
 JEventProcessor_primex_eta_analysis::JEventProcessor_primex_eta_analysis()
 {
+	// default values for the RF timing cuts for each sub-detector:
 	m_BEAM_RF_CUT =  2.004;
 	m_FCAL_RF_CUT =  2.0;
 	m_BCAL_RF_CUT = 10.0;
 	m_CCAL_RF_CUT =  2.0;
 	m_TOF_RF_CUT  =  1.0;
+	
+	// default values for the minimum energy cuts:
+	m_MIN_FCAL_ENERGY = 0.5; // energy of each FCAL shower used in the analysis
+	m_MIN_BEAM_ENERGY = 8.0; // energy of the tagged photon energy
+	m_MIN_BCAL_ENERGY = 0.;  // energy sum of BCAL showers within timing cut
+	m_MIN_CCAL_ENERGY = 0.5; // energy sum of CCAL showers within timing cut
+	
+	// default cut value for selecting a match between the FCAL and TOF:
+	m_FCAL_TOF_CUT = 8.0; // distance between fcal shower and closest DTOFPoint
+	
+	// default value for elasticity cut:
+	m_ELAS_CUT_SIGMA = 0.031;
+	m_ELAS_CUT_WIDTH = 3.0;
+	m_ELAS_CUT_MU_P0 = 1.0; // mu = p0 + p1*E_gamma
+	m_ELAS_CUT_MU_P1 = 0.0;
+	
+	// miscellaneous:
+	m_USE_LOG_WEIGHT = 1; // use log-weighted FCAL position
+	m_BYPASS_TRIGGER = 0; // determines whether or not to check the trigger bits set for each event
+	
+	//-------------------------------------------------------------------------------------//
+	// allow for command-line overriding of the default values:
+	
 	gPARMS->SetDefaultParameter("primex_eta_analysis:FCAL_RF_CUT", m_FCAL_RF_CUT);
 	gPARMS->SetDefaultParameter("primex_eta_analysis:BEAM_RF_CUT", m_BEAM_RF_CUT);
 	gPARMS->SetDefaultParameter("primex_eta_analysis:BCAL_RF_CUT", m_BCAL_RF_CUT);
 	gPARMS->SetDefaultParameter("primex_eta_analysis:CCAL_RF_CUT", m_CCAL_RF_CUT);
 	gPARMS->SetDefaultParameter("primex_eta_analysis:TOF_RF_CUT",  m_TOF_RF_CUT);
 	
-	m_MIN_FCAL_ENERGY = 0.5;
-	m_MIN_BEAM_ENERGY = 8.0;
 	gPARMS->SetDefaultParameter("primex_eta_analysis:MIN_FCAL_ENERGY", m_MIN_FCAL_ENERGY);
 	gPARMS->SetDefaultParameter("primex_eta_analysis:MIN_BEAM_ENERGY", m_MIN_BEAM_ENERGY);
-	
-	m_MIN_BCAL_ENERGY = 0.;
-	m_MIN_CCAL_ENERGY = 0.5;
 	gPARMS->SetDefaultParameter("primex_eta_analysis:MIN_BCAL_ENERGY", m_MIN_BCAL_ENERGY);
 	gPARMS->SetDefaultParameter("primex_eta_analysis:MIN_CCAL_ENERGY", m_MIN_CCAL_ENERGY);
 	
-	m_FCAL_TOF_CUT = 8.0;
 	gPARMS->SetDefaultParameter("primex_eta_analysis:FCAL_TOF_CUT", m_FCAL_TOF_CUT);
 	
-	/*
-	m_ELAS_CUT_SIGMA = 0.04036; // from empirical fit of E_{2gamma} / E_{eta} vs. theta_rec
-	m_ELAS_CUT_WIDTH = 4.0;     // number of sigmas to cut
-	m_ELAS_CUT_MU_P0 =  0.9765;   // from empirical fit of E_{2gamma} / E_{eta} vs. theta_rec
-	m_ELAS_CUT_MU_P1 = -0.006388; // from empirical fit of E_{2gamma} / E_{eta} vs. theta_rec
-	*/
-	
-	m_ELAS_CUT_SIGMA = 0.031;
-	m_ELAS_CUT_WIDTH = 3.0;
-	m_ELAS_CUT_MU_P0 = 1.0;
-	m_ELAS_CUT_MU_P1 = 0.0;
 	gPARMS->SetDefaultParameter("primex_eta_analysis:ELAS_CUT_SIGMA", m_ELAS_CUT_SIGMA);
 	gPARMS->SetDefaultParameter("primex_eta_analysis:ELAS_CUT_WIDTH", m_ELAS_CUT_WIDTH);
 	gPARMS->SetDefaultParameter("primex_eta_analysis:ELAS_CUT_MU_P0", m_ELAS_CUT_MU_P0);
 	gPARMS->SetDefaultParameter("primex_eta_analysis:ELAS_CUT_MU_P1", m_ELAS_CUT_MU_P1);
 	
-	m_USE_LOG_WEIGHT = 1;
 	gPARMS->SetDefaultParameter("primex_eta_analysis:USE_LOG_WEIGHT", m_USE_LOG_WEIGHT);
-	
-	m_BYPASS_TRIGGER = 0;
 	gPARMS->SetDefaultParameter("primex_eta_analysis:BYPASS_TRIGGER", m_BYPASS_TRIGGER);
 }
 
@@ -310,8 +314,11 @@ jerror_t JEventProcessor_primex_eta_analysis::init(void)
 //------------------
 jerror_t JEventProcessor_primex_eta_analysis::brun(JEventLoop *eventLoop, int32_t runnumber)
 {
+	//--------------------------------------------------------------//
+	// Get geometry information for each run from CCDB:
+	
 	DGeometry*   dgeom = NULL;
-	DApplication* dapp = dynamic_cast< DApplication* >(eventLoop->GetJApplication());
+	DApplication* dapp = dynamic_cast<DApplication*>(eventLoop->GetJApplication());
 	if(dapp)     dgeom = dapp->GetDGeometry(runnumber);
 	
 	if(dgeom){
@@ -328,6 +335,9 @@ jerror_t JEventProcessor_primex_eta_analysis::brun(JEventLoop *eventLoop, int32_
 	jcalib->Get("PHOTON_BEAM/beam_spot", beam_spot);
 	m_beamX = beam_spot.at("x");
 	m_beamY = beam_spot.at("y");
+	
+	//--------------------------------------------------------------//
+	// Set the target mass depending on run number:
 	
 	if(runnumber < 60000 || 
 		( 70000 <= runnumber && runnumber <=  79999) || 
@@ -357,6 +367,9 @@ jerror_t JEventProcessor_primex_eta_analysis::brun(JEventLoop *eventLoop, int32_
 	} else {
 		m_Target = m_He4;
 	}
+	
+	//--------------------------------------------------------------//
+	// Manually update the geometry information from the CCDB with more accurate values:
 	
 	if(runnumber>60000 && runnumber<69999) 
 	{
@@ -407,6 +420,8 @@ jerror_t JEventProcessor_primex_eta_analysis::brun(JEventLoop *eventLoop, int32_
 		m_ccalX_new = m_ccalX;
 		m_ccalY_new = m_ccalY;
 	}
+	
+	// these objects will be used to correct the shower positions event-by-event with the updated geometry:
 	
 	m_fcal_correction.SetXYZ(m_fcalX_new-m_fcalX, m_fcalY_new-m_fcalY, 0.);
 	m_ccal_correction.SetXYZ(m_ccalX_new-m_ccalX, m_ccalY_new-m_ccalY, 0.);
@@ -603,6 +618,7 @@ jerror_t JEventProcessor_primex_eta_analysis::evnt(JEventLoop *eventLoop, uint64
 	}
 	
 	//-----------------------------------------------------//
+	// Apply fill lock for multi-threaded running:
 	
 	japp->RootFillLock(this);
 	
@@ -779,12 +795,16 @@ void JEventProcessor_primex_eta_analysis::eta_gg_analysis(
 	bool is_mc, double thrown_beam_energy, double thrown_eta_angle
 )
 {
+	// Apply BCAL Veto:
 	if(bcal_energy_sum>0.05) return;
+	
+	// Apply multiplicity cut on the number of FCAL showers:
 	if(!(n_fcal_showers==2 && n_good_fcal_showers==2)) return;
 	
 	int n_fcal_showers_total = static_cast<int>(fcal_showers.size());
 	
 	//----------------------------------------------------------------------------------//
+	// Loop over all possible combinations of pairs of FCAL showers that pass the cuts:
 	
 	for(int ishow=0; ishow<n_fcal_showers_total; ishow++) {
 		
@@ -799,18 +819,23 @@ void JEventProcessor_primex_eta_analysis::eta_gg_analysis(
 		
 		double t1  = show1->getTime() - (pos1.Mag()/c) - rfTime;
 		double e1  = show1->getEnergy();
+		
+		// apply minimum energy and RF timing cuts:
 		if(e1 < m_MIN_FCAL_ENERGY || fabs(t1) >= m_FCAL_RF_CUT) continue;
 		
+		// apply fiducial cut to remove the innermost two FCAL layers:
 		if(fcal_fiducial_cut(pos1, vertex, 2.0)) continue;
 		
 		double px1 = e1*pos1.X()/pos1.Mag();
 		double py1 = e1*pos1.Y()/pos1.Mag();
 		double pz1 = e1*pos1.Z()/pos1.Mag();
 		
+		// check the distance between this shower and the closest (if any) tof hit:
 		double tof_dx1, tof_dy1, tof_dt1;
 		check_TOF_match(pos1, rfTime, vertex, tof_points, tof_dx1, tof_dy1, tof_dt1, m_TOF_RF_CUT);
 		double tof_dr1 = sqrt(pow(tof_dx1,2.0)+pow(tof_dy1,2.0));
 		
+		// plot FCAL-TOF matching distributions for monitoring:
 		if(n_fcal_showers==2) {
 			h_fcal_tof_dx->Fill(tof_dx1);
 			h_fcal_tof_dy->Fill(tof_dy1);
@@ -836,14 +861,18 @@ void JEventProcessor_primex_eta_analysis::eta_gg_analysis(
 			
 			double t2  = show2->getTime() - (pos2.Mag()/c) - rfTime;
 			double e2  = show2->getEnergy();
+			
+			// apply minimum energy and RF timing cuts:
 			if(e2 < m_MIN_FCAL_ENERGY || fabs(t2) >= m_FCAL_RF_CUT) continue;
 			
+			// apply fiducial cut to remove the innermost two FCAL layers:
 			if(fcal_fiducial_cut(pos2, vertex, 2.0)) continue;
 			
 			double px2 = e2*pos2.X()/pos2.Mag();
 			double py2 = e2*pos2.Y()/pos2.Mag();
 			double pz2 = e2*pos2.Z()/pos2.Mag();
 			
+			// check the distance between this shower and the closest (if any) tof hit:
 			double tof_dx2, tof_dy2, tof_dt2;
 			check_TOF_match(pos2, rfTime, vertex, tof_points, tof_dx2, tof_dy2, tof_dt2, m_TOF_RF_CUT);
 			double tof_dr2 = sqrt(pow(tof_dx2,2.0)+pow(tof_dy2,2.0));
@@ -851,9 +880,11 @@ void JEventProcessor_primex_eta_analysis::eta_gg_analysis(
 			//-----------------------------------------------------//
 			// TOF Veto
 			
+			// reject combinations of FCAL showers where both showers are near a TOF hit:
 			bool tof_veto = false;
 			if(tof_dr1 < m_FCAL_TOF_CUT && tof_dr2 < m_FCAL_TOF_CUT) tof_veto = true;
 			
+			// count the number of FCAL-TOF matches for monitoring:
 			int n_tof_matches = 0;
 			if(tof_dr1 < m_FCAL_TOF_CUT) n_tof_matches++;
 			if(tof_dr2 < m_FCAL_TOF_CUT) n_tof_matches++;
@@ -864,14 +895,21 @@ void JEventProcessor_primex_eta_analysis::eta_gg_analysis(
 			//-----------------------------------------------------//
 			// Two-Photon kinematics:
 			
-			double Egg  =  e1 +  e2;
-			double pggx = px1 + px2;
-			double pggy = py1 + py2;
-			double pggz = pz1 + pz2;
+			double Egg  =  e1 +  e2; // energy of 2-photon pair
+			double pggx = px1 + px2; // momentum along x-axis
+			double pggy = py1 + py2; // momentum along y-axis
+			double pggz = pz1 + pz2; // momentum along z-axis
 			
-			double pggr    = sqrt(pow(pggx,2.0) + pow(pggy,2.0));
-			double prod_th = (180./TMath::Pi()) * atan2(pggr,pggz);
+			// transverse momentum:
+			double pggt = sqrt(pow(pggx,2.0) + pow(pggy,2.0));
+			
+			// polar angle:
+			double prod_th = (180./TMath::Pi()) * atan2(pggt,pggz);
+			
+			// opening angle:
 			double cos12   = (pos1.X()*pos2.X() + pos1.Y()*pos2.Y() + pos1.Z()*pos2.Z()) / (pos1.Mag()*pos2.Mag());
+			
+			// invariant mass:
 			double invmass = sqrt(2.0*e1*e2*(1.-cos12));
 			
 			//-----------------------------------------------------//
@@ -880,10 +918,20 @@ void JEventProcessor_primex_eta_analysis::eta_gg_analysis(
 			for(vector<const DBeamPhoton*>::const_iterator gam = beam_photons.begin(); 
 				gam != beam_photons.end(); gam++) {
 				
-				double eb    = (*gam)->lorentzMomentum().E();
+				double eb    = (*gam)->lorentzMomentum().E(); // energy of beam photon
 				double brfdt = (*gam)->time() - rfTime;
 				
+				// remove beam photons below the minimum energy cut:
 				if(eb < m_MIN_BEAM_ENERGY) continue;
+				
+				// Accidental subtraction procedure:
+				//   - Fill histograms with a weight of 1.0 for beam photons within main RF bunch
+				//   - Select two side-bands to the left and two-sidebands to the right (4 in total)
+				//   - Fill histograms with a weight of -1/4 for beam photons in these sidebands.
+				//      - An extra scaling factor is applied to out-of-time beam photons to account
+				//        for the non-uniformity of beam bunches.
+				//      - This scaling factor comes from the /ANALYSIS/accidental_scaling_factor tabls in the CCDB.
+				//      - reference: GlueX-doc-4122 (B. Zihlmann)
 				
 				double fill_weight = 0.0;
 				if(fabs(brfdt) < m_BEAM_RF_CUT) 
@@ -896,24 +944,34 @@ void JEventProcessor_primex_eta_analysis::eta_gg_analysis(
 				}
 				//else { continue; }
 				
-				//double eeta = energy_after_recoil(eb, prod_th, m_eta, m_Target);
-				double eeta = energy_after_recoil(eb, prod_th, m_eta, m_Proton);
+				// Calculate the energy of the eta meson, assuming a coherent production process:
+				double eeta = energy_after_recoil(eb, prod_th, m_eta, m_Target);
+				
+				// Apply a cut on the elasticity
+				//  (ratio of measured energy of 2-photons, to the calculated energy above):
 				
 				bool elas_cut = false;
 				double loc_elas_mean  = m_ELAS_CUT_MU_P0 + m_ELAS_CUT_MU_P1*prod_th;
 				double loc_elas_width = m_ELAS_CUT_WIDTH * m_ELAS_CUT_SIGMA;
 				if(fabs((Egg/eeta)-loc_elas_mean)<loc_elas_width) elas_cut = true;
 				
+				// set a variable to indicate if the two-photon mass is consistent with an eta meson:
 				bool  eta_cut = false;
 				if(0.497862<invmass && invmass<0.597862) eta_cut = true;
 				
+				// Plot timing distribution of beam photons after elasticity cut to see the level of accidentals:
 				if(elas_cut) {
 					h_beam_rf_dt_cut->Fill(brfdt);
 				}
+				
+				// If the beam photon wasn't in the main RF bunch or selected sidebands, skip it:
 				if(fill_weight==0.0) continue;
 				
 				//-----------------------------------------------------//
 				// Energy constraint
+				
+				// adjust the measured energies of the two-photons to exactly equal the energy of 
+				// a coherently-produced eta meson:
 				
 				double sig1 = fcal_energy_res(e1);
 				double sig2 = fcal_energy_res(e2);
@@ -921,8 +979,9 @@ void JEventProcessor_primex_eta_analysis::eta_gg_analysis(
 				
 				double e1c = e1/(1.+sigr) + (eeta-e2)/(1.+(1./sigr));
 				double e2c = eeta - e1c;
-				double invmass_const = sqrt(2.*e1c*e2c*(1.-cos12));
+				double invmass_const = sqrt(2.*e1c*e2c*(1.-cos12)); // energy-constrained invariant mass
 				
+				// re-compute the polar angle of the two-photon pair using these adjusted energies:
 				double px1c  = e1c*pos1.X()/pos1.Mag();
 				double py1c  = e1c*pos1.Y()/pos1.Mag();
 				double pz1c  = e1c*pos1.Z()/pos1.Mag();
@@ -932,8 +991,8 @@ void JEventProcessor_primex_eta_analysis::eta_gg_analysis(
 				double pggxc = px1c + px2c;
 				double pggyc = py1c + py2c;
 				double pggzc = pz1c + pz2c;
-				double pggrc = sqrt(pow(pggxc,2.0) + pow(pggyc,2.0));
-				double prod_th_const = (180./TMath::Pi()) * atan2(pggrc,pggzc);
+				double pggtc = sqrt(pow(pggxc,2.0) + pow(pggyc,2.0));
+				double prod_th_const = (180./TMath::Pi()) * atan2(pggtc,pggzc);
 				
 				//-----------------------------------------------------//
 				// Hybrid Mass
@@ -949,7 +1008,10 @@ void JEventProcessor_primex_eta_analysis::eta_gg_analysis(
 				//-----------------------------------------------------//
 				// Default Cuts
 				
+				// plot elasticity vs. mass ratio:
 				h_elas_vs_mgg->Fill(invmass/m_eta, Egg/eeta, fill_weight);
+				
+				// plot the elasticity distribution for events where the mass is close to the eta:
 				if(eta_cut) {
 					h_elas->Fill(prod_th, Egg/eb, fill_weight);
 					h_elas_corr->Fill(prod_th, Egg/eeta, fill_weight);
@@ -958,9 +1020,17 @@ void JEventProcessor_primex_eta_analysis::eta_gg_analysis(
 					else                 h_elas_corr_side->Fill(prod_th, Egg/eeta, -1.0*fill_weight);
 				}
 				
+				// apply elasticity cut and plot the invariant mass distriubtion:
 				if(elas_cut) {
+					// invariant mass vs. polar angle:
 					h_mgg->Fill(prod_th, invmass, fill_weight);
+					
+					// energy-constrained invariant mass vs. polar angle:
 					h_mgg_const->Fill(prod_th, invmass_const, fill_weight);
+					
+					// for monitoring purposes, plot the invariant mass separately for 
+					//   beam photons in the main RF bunch and for beam photons in the accidental sidebands:
+					
 					if(fill_weight==1.0) {
 						h_mgg_main->Fill(prod_th, invmass);
 						h_mgg_const_main->Fill(prod_th, invmass_const);
@@ -968,20 +1038,29 @@ void JEventProcessor_primex_eta_analysis::eta_gg_analysis(
 						h_mgg_side->Fill(prod_th, invmass, -1.0*fill_weight);
 						h_mgg_const_side->Fill(prod_th, invmass_const, -1.0*fill_weight);
 					}
+					
+					// energy-constrained invariant mass vs. energy-constrained polar angle:
 					h_mgg_const_corr->Fill(prod_th_const, invmass_const, fill_weight);
+					
+					// hybrid mass:
 					h_hmass->Fill(prod_th, hmass, fill_weight);
 					
+					// missing mass:
 					h_mm_vs_theta->Fill(prod_th, mmsq, fill_weight);
 					
+					// for MC, plot invariant mass vs thrown information:
 					if(is_mc) {
-						if(0.5078 < invmass_const && invmass_const < 0.5978) {
-							h_rec_vs_thrown->Fill(thrown_eta_angle, prod_th, fill_weight);
-						}
 						h_mgg_thrown->Fill(thrown_eta_angle, invmass, fill_weight);
 						h_mgg_const_thrown->Fill(thrown_eta_angle, invmass_const, fill_weight);
 						h_hmass_thrown->Fill(thrown_eta_angle, hmass, fill_weight);
+						
+						// plot reconstructed vs. thrown angle:
+						if(0.5078 < invmass_const && invmass_const < 0.5978) {
+							h_rec_vs_thrown->Fill(thrown_eta_angle, prod_th, fill_weight);
+						}
 					}
 					
+					// plot x-y distribution of showers:
 					if(eta_cut) {
 						h_xy_1->Fill(pos1.X(), pos1.Y(), fill_weight);
 						h_xy_2->Fill(pos2.X(), pos2.Y(), fill_weight);
@@ -1027,9 +1106,7 @@ int JEventProcessor_primex_eta_analysis::fcal_fiducial_cut(DVector3 pos, DVector
 {
 	int fid_cut = 0;
 	
-	//if(sqrt(pow(pos.X(),2.0)+pow(pos.Y(),2.0)) < 10.) fid_cut = 1;
-	
-	double fcal_inner_layer_cut = (1.5 + layer_cut) * 4.0157;
+	double fcal_inner_layer_cut = (1.5 + layer_cut) * 4.0157; // 4.0157 cm is the size of one FCAL block
 	
 	double fcal_face_x = vertex.X() + (pos.X() * (m_fcalZ - vertex.Z())/pos.Z());
 	double fcal_face_y = vertex.Y() + (pos.Y() * (m_fcalZ - vertex.Z())/pos.Z());
@@ -1119,6 +1196,8 @@ double JEventProcessor_primex_eta_analysis::energy_after_recoil(double eb, doubl
 
 double JEventProcessor_primex_eta_analysis::fcal_energy_res(double e)
 {
+	// hard-coded values for the FCAL energy resolution (taken from GlueX NIM paper)
+	
 	double a = 0.062, b = 0.047;
 	double sig = (a*a)/e + (b*b);
 	sig = sqrt(sig) * e;
