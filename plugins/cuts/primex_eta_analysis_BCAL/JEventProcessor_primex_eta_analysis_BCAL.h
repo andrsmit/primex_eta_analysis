@@ -1,12 +1,12 @@
 // $Id$
 //
-//    File: JEventProcessor_primex_eta_analysis.h
+//    File: JEventProcessor_primex_eta_analysis_BCAL.h
 // Created: Fri Aug 11 14:26:44 EDT 2023
 // Creator: andrsmit (on Linux ifarm1802.jlab.org 3.10.0-1160.92.1.el7.x86_64 x86_64)
 //
 
-#ifndef _JEventProcessor_primex_eta_analysis_
-#define _JEventProcessor_primex_eta_analysis_
+#ifndef _JEventProcessor_primex_eta_analysis_BCAL_
+#define _JEventProcessor_primex_eta_analysis_BCAL_
 
 // JANA headers:
 #include <JANA/JApplication.h>
@@ -36,11 +36,11 @@
 using namespace jana;
 using namespace std;
 
-class JEventProcessor_primex_eta_analysis:public jana::JEventProcessor{
+class JEventProcessor_primex_eta_analysis_BCAL:public jana::JEventProcessor{
 	public:
-		JEventProcessor_primex_eta_analysis();
-		~JEventProcessor_primex_eta_analysis(){};
-		const char* className(void){return "JEventProcessor_primex_eta_analysis";}
+		JEventProcessor_primex_eta_analysis_BCAL();
+		~JEventProcessor_primex_eta_analysis_BCAL(){};
+		const char* className(void){return "JEventProcessor_primex_eta_analysis_BCAL";}
 
 	private:
 		jerror_t init(void);
@@ -127,56 +127,16 @@ class JEventProcessor_primex_eta_analysis:public jana::JEventProcessor{
 		const double m_Be9      =  8.39479;     // [GeV]
 		const double m_C12      = 11.17793;     // [GeV]
 		
-		const double c          = 29.9792458;   // [cm/ns]
+		const double m_c        = 29.9792458;   // [cm/ns]
 		
 		//---------------------------------------//
 		// Histograms
 		
-		static const int N_TRIGS = 4;
-		vector<string> trigger_names = {"FCAL+CCAL Trigger", 
-			"Low-energy FCAL Trigger", "PS Trigger", "CCAL Trigger"};
+		TH2F *h_mgg, *h_mgg_const;
 		
-		TH1F *h_fcal_energy_sum[N_TRIGS];
-		
-		TH1F *h_theta_thrown[13];
-		
-		TH1F *h_fcal_rf_dt[N_TRIGS];
-		TH1F *h_bcal_rf_dt[N_TRIGS];
-		TH1F *h_ccal_rf_dt[N_TRIGS];
-		TH1F *h_tagh_rf_dt[N_TRIGS];
-		TH1F *h_tagm_rf_dt[N_TRIGS];
-		TH1F  *h_tof_rf_dt[N_TRIGS];
-		
-		TH1F *h_fcal_tof_dx, *h_fcal_tof_dy, *h_fcal_tof_dr;
-		TH1F *h_fcal_tof_dt, *h_fcal_tof_dt_cut;
-		TH1F *h_fcal_tof_matches;
-		
-		TH1F *h_beam_rf_dt_cut;
-		
-		TH2F *h_elas_vs_mgg;
-		TH2F *h_elas;
-		TH2F *h_elas_corr, *h_elas_corr_main, *h_elas_corr_side;
-		
-		TH2F *h_mgg,       *h_mgg_main,       *h_mgg_side;
-		TH2F *h_mgg_const, *h_mgg_const_main, *h_mgg_const_side;
-		TH2F *h_mgg_const_corr;
-		TH2F *h_hmass;
-		TH2F *h_mm_vs_theta;
-		
-		TH2F *h_rec_vs_thrown;
-		TH2F *h_mgg_thrown;
-		TH2F *h_mgg_const_thrown;
-		TH2F *h_hmass_thrown;
-		
-		TH1F *h_dtheta,  *h_dtheta_sym;
-		TH1F *h_denergy, *h_denergy_sym;
-		
-		TH2F *h_mgg_vs_energy, *h_mgg_const_vs_energy;
-		TH2F *h_elas_vs_energy;
-		
-		TH2F *h_mgg_vs_angle,  *h_mgg_const_vs_angle;
-		
-		TH2F *h_xy_1, *h_xy_2;
+		vector<double> m_timing_cuts, m_energy_cuts;
+		vector<TH2F*> h_mgg_rf, h_mgg_rf_cut;
+		vector<TH2F*> h_mgg_dE, h_mgg_dE_cut;
 };
 
-#endif // _JEventProcessor_primex_eta_analysis_
+#endif // _JEventProcessor_primex_eta_analysis_BCAL_
