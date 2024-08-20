@@ -79,9 +79,10 @@ foreach target ($target_list)
 			
 			#
 			# For phases 1 and 2, all skim files were stored in "ver01".
-			# However, for phase 3, most skim files are in 'ver00', while some runs had to be-reprocessed and stored in 'ver01'
-			# To automate the procedure, first check if the directory for a given run exists in 'ver01'.
-			# If so, use that version. If not, check if it exists in 'ver00' and use that one instead.
+			# However, for phase 3, most skim files are in 'ver00', while some runs had to be 
+			# reprocessed and stored in 'ver01'.
+			# To automate the procedure, I first check if the directory for a given run exists in 'ver01'.
+			# If so, I use that version. If not, I check if it exists in 'ver00' and use that one instead.
 			#
 			
 			if( $phase == "3" ) then
