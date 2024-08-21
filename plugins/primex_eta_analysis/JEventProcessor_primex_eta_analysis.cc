@@ -882,7 +882,7 @@ void JEventProcessor_primex_eta_analysis::eta_gg_analysis(
 			
 			// reject combinations of FCAL showers where both showers are near a TOF hit:
 			bool tof_veto = false;
-			if(tof_dr1 < m_FCAL_TOF_CUT && tof_dr2 < m_FCAL_TOF_CUT) tof_veto = true;
+			if((tof_dr1 < m_FCAL_TOF_CUT) && (tof_dr2 < m_FCAL_TOF_CUT)) tof_veto = true;
 			
 			// count the number of FCAL-TOF matches for monitoring:
 			int n_tof_matches = 0;

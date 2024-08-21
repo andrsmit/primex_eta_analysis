@@ -101,7 +101,7 @@ jerror_t JEventProcessor_primex_eta_analysis_BCAL::init(void)
 	
 	//====================================================================================//
 	
-	// Invariant mass without BCAL veto:
+	// invariant mass without BCAL veto:
 	
 	h_mgg = new TH2F("mgg", "No BCAL Veto", 650, 0., 6.5, 600, 0., 1.2);
 	h_mgg->Sumw2();
@@ -443,38 +443,6 @@ jerror_t JEventProcessor_primex_eta_analysis_BCAL::evnt(JEventLoop *eventLoop, u
 	eventLoop->Get(locDMCThrown);
 	
 	//-----------------------------------------------------//
-	// Trigger information
-	/*
-	bool trig_conditions[N_TRIGS];
-	for(int itrig=0; itrig<N_TRIGS; itrig++) { trig_conditions[itrig] = false; }
-	
-	if(locDMCThrown.size() > 0) 
-	{
-		trig_conditions[0] = true;
-		trig_conditions[1] = true;
-	} else if(m_BYPASS_TRIGGER) {
-		trig_conditions[0] = true;
-		trig_conditions[1] = true;
-	} else {
-		const DL1Trigger *trig = NULL;
-		try {
-			eventLoop->GetSingle(trig);
-		} catch (...) {}
-		if (trig == NULL) { return NOERROR; }
-		
-		uint32_t trigmask    = trig->trig_mask;	
-		uint32_t fp_trigmask = trig->fp_trig_mask;
-		
-		if(!trigmask)   return NOERROR;
-		if(fp_trigmask) return NOERROR;
-		
-		if(trigmask & (1 <<  1)) trig_conditions[0] = true; // FCAL Energy Sum
-		if(trigmask & (1 <<  2)) trig_conditions[1] = true; // FCAL Energy Sum (low-threshold)
-		if(trigmask & (1 <<  3)) trig_conditions[2] = true; // PS
-		if(trigmask & (1 << 10)) trig_conditions[3] = true; // CCAL Energy Sum
-	}
-	*/
-	//-----------------------------------------------------//
 	// Apply fill lock for multi-threaded running:
 	
 	japp->RootFillLock(this);
@@ -701,7 +669,7 @@ void JEventProcessor_primex_eta_analysis_BCAL::eta_gg_analysis(
 			// TOF Veto
 			
 			// reject combinations of FCAL showers where both showers are near a TOF hit:
-			if(tof_dr1 < m_FCAL_TOF_CUT && tof_dr2 < m_FCAL_TOF_CUT) continue;
+			if((tof_dr1 < m_FCAL_TOF_CUT) && (tof_dr2 < m_FCAL_TOF_CUT)) continue;
 			
 			//-----------------------------------------------------//
 			// Two-Photon kinematics:
