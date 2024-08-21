@@ -48,26 +48,22 @@ JEventProcessor_primex_eta_analysis::JEventProcessor_primex_eta_analysis()
 	//-------------------------------------------------------------------------------------//
 	// allow for command-line overriding of the default values:
 	
-	gPARMS->SetDefaultParameter("primex_eta_analysis:FCAL_RF_CUT", m_FCAL_RF_CUT);
-	gPARMS->SetDefaultParameter("primex_eta_analysis:BEAM_RF_CUT", m_BEAM_RF_CUT);
-	gPARMS->SetDefaultParameter("primex_eta_analysis:BCAL_RF_CUT", m_BCAL_RF_CUT);
-	gPARMS->SetDefaultParameter("primex_eta_analysis:CCAL_RF_CUT", m_CCAL_RF_CUT);
-	gPARMS->SetDefaultParameter("primex_eta_analysis:TOF_RF_CUT",  m_TOF_RF_CUT);
-	
+	gPARMS->SetDefaultParameter("primex_eta_analysis:FCAL_RF_CUT",     m_FCAL_RF_CUT);
+	gPARMS->SetDefaultParameter("primex_eta_analysis:BEAM_RF_CUT",     m_BEAM_RF_CUT);
+	gPARMS->SetDefaultParameter("primex_eta_analysis:BCAL_RF_CUT",     m_BCAL_RF_CUT);
+	gPARMS->SetDefaultParameter("primex_eta_analysis:CCAL_RF_CUT",     m_CCAL_RF_CUT);
+	gPARMS->SetDefaultParameter("primex_eta_analysis:TOF_RF_CUT",      m_TOF_RF_CUT);
 	gPARMS->SetDefaultParameter("primex_eta_analysis:MIN_FCAL_ENERGY", m_MIN_FCAL_ENERGY);
 	gPARMS->SetDefaultParameter("primex_eta_analysis:MIN_BEAM_ENERGY", m_MIN_BEAM_ENERGY);
 	gPARMS->SetDefaultParameter("primex_eta_analysis:MIN_BCAL_ENERGY", m_MIN_BCAL_ENERGY);
 	gPARMS->SetDefaultParameter("primex_eta_analysis:MIN_CCAL_ENERGY", m_MIN_CCAL_ENERGY);
-	
-	gPARMS->SetDefaultParameter("primex_eta_analysis:FCAL_TOF_CUT", m_FCAL_TOF_CUT);
-	
-	gPARMS->SetDefaultParameter("primex_eta_analysis:ELAS_CUT_SIGMA", m_ELAS_CUT_SIGMA);
-	gPARMS->SetDefaultParameter("primex_eta_analysis:ELAS_CUT_WIDTH", m_ELAS_CUT_WIDTH);
-	gPARMS->SetDefaultParameter("primex_eta_analysis:ELAS_CUT_MU_P0", m_ELAS_CUT_MU_P0);
-	gPARMS->SetDefaultParameter("primex_eta_analysis:ELAS_CUT_MU_P1", m_ELAS_CUT_MU_P1);
-	
-	gPARMS->SetDefaultParameter("primex_eta_analysis:USE_LOG_WEIGHT", m_USE_LOG_WEIGHT);
-	gPARMS->SetDefaultParameter("primex_eta_analysis:BYPASS_TRIGGER", m_BYPASS_TRIGGER);
+	gPARMS->SetDefaultParameter("primex_eta_analysis:FCAL_TOF_CUT",    m_FCAL_TOF_CUT);
+	gPARMS->SetDefaultParameter("primex_eta_analysis:ELAS_CUT_SIGMA",  m_ELAS_CUT_SIGMA);
+	gPARMS->SetDefaultParameter("primex_eta_analysis:ELAS_CUT_WIDTH",  m_ELAS_CUT_WIDTH);
+	gPARMS->SetDefaultParameter("primex_eta_analysis:ELAS_CUT_MU_P0",  m_ELAS_CUT_MU_P0);
+	gPARMS->SetDefaultParameter("primex_eta_analysis:ELAS_CUT_MU_P1",  m_ELAS_CUT_MU_P1);
+	gPARMS->SetDefaultParameter("primex_eta_analysis:USE_LOG_WEIGHT",  m_USE_LOG_WEIGHT);
+	gPARMS->SetDefaultParameter("primex_eta_analysis:BYPASS_TRIGGER",  m_BYPASS_TRIGGER);
 }
 
 //------------------
@@ -443,11 +439,13 @@ jerror_t JEventProcessor_primex_eta_analysis::brun(JEventLoop *eventLoop, int32_
 		m_MicroscopeFactorErr  = 0.01;
 		m_TAGMEnergyBoundHi    = 9.00;
 		m_TAGMEnergyBoundLo    = 8.00;
-		return NOERROR;
 		
+		return NOERROR;
+		/*
 		cerr << "Could not load ANALYSIS/accidental_scaling_factor from CCDB !" << endl;
 		gSystem->Exit(1);        // make sure we don't fail silently
 		return RESOURCE_UNAVAILABLE;    // sanity check, this shouldn't be executed!
+		*/
 	}
 	
 	//get the first line
@@ -462,14 +460,17 @@ jerror_t JEventProcessor_primex_eta_analysis::brun(JEventLoop *eventLoop, int32_
 		m_MicroscopeFactorErr  = 0.01;
 		m_TAGMEnergyBoundHi    = 9.00;
 		m_TAGMEnergyBoundLo    = 8.00;
-		return NOERROR;
 		
+		gSystem->ClosePipe(locInputFile);
+		return NOERROR;
+		/*
 		//vector<double> locCachedValues = { -1., -1., -1., -1., -1., -1., -1., -1. };
 		//dAccidentalScalingFactor_Cache[runnumber] = locCachedValues;   // give up for this run
 		gSystem->ClosePipe(locInputFile);
 		cerr << "Could not parse ANALYSIS/accidental_scaling_factor from CCDB !" << endl;
 		gSystem->Exit(1);        // make sure we don't fail silently
 		return RESOURCE_UNAVAILABLE;    // sanity check, this shouldn't be executed!
+		*/
 	}
 	
 	//get the second line (where the # is)
@@ -483,14 +484,17 @@ jerror_t JEventProcessor_primex_eta_analysis::brun(JEventLoop *eventLoop, int32_
 		m_MicroscopeFactorErr  = 0.01;
 		m_TAGMEnergyBoundHi    = 9.00;
 		m_TAGMEnergyBoundLo    = 8.00;
-		return NOERROR;
 		
+		gSystem->ClosePipe(locInputFile);
+		return NOERROR;
+		/*
 		//vector<double> locCachedValues = { -1., -1., -1., -1., -1., -1., -1., -1. };
 		//dAccidentalScalingFactor_Cache[runnumber] = locCachedValues;   // give up for this run
 		gSystem->ClosePipe(locInputFile);
 		cerr << "Could not parse ANALYSIS/accidental_scaling_factor from CCDB !" << endl;
 		gSystem->Exit(1);        // make sure we don't fail silently
 		return RESOURCE_UNAVAILABLE;    // sanity check, this shouldn't be executed!
+		*/
 	}
 	
 	// catch some CCDB error conditions
@@ -504,8 +508,10 @@ jerror_t JEventProcessor_primex_eta_analysis::brun(JEventLoop *eventLoop, int32_
 		m_MicroscopeFactorErr  = 0.01;
 		m_TAGMEnergyBoundHi    = 9.00;
 		m_TAGMEnergyBoundLo    = 8.00;
-		return NOERROR;
 		
+		gSystem->ClosePipe(locInputFile);
+		return NOERROR;
+		/*
 		// no assignment for this run
 		//vector<double> locCachedValues = { -1., -1., -1., -1., -1., -1., -1., -1. };
 		//dAccidentalScalingFactor_Cache[runnumber] = locCachedValues;   // give up for this run
@@ -513,6 +519,7 @@ jerror_t JEventProcessor_primex_eta_analysis::brun(JEventLoop *eventLoop, int32_
 		cerr << "No data available for ANALYSIS/accidental_scaling_factor, run " << runnumber << " from CCDB !" << endl;
 		gSystem->Exit(1);        // make sure we don't fail silently
 		return RESOURCE_UNAVAILABLE;    // sanity check, this shouldn't be executed!
+		*/
 	}
 	
 	istringstream locStringStream(buff);
