@@ -104,11 +104,10 @@ foreach target ($target_list)
 			set command = "$command -account ${account} -partition ${partition}"
 			set command = "$command -cores ${cores} -ram ${ram} -time ${time} -disk ${disk}"
 			set command = "$command -constraint ${constraint}"
-			set command = "$command -input"
 			foreach file (${dir_mss}/${runnumber}/${skim}_${runnumber}_*.evio)
-				set command = "$command `basename $file` mss:${file}"
+				set command = "$command -input `basename $file` mss:${file}"
 			end
-			set command = "$command $script $outdir $skim $target $run $phase $jfile"
+			set command = "$command $script $outdir $skim $target $runnumber $phase $jfile"
 			
 			echo "$command" > $jfile
 			

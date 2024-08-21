@@ -20,8 +20,12 @@ setenv JANA_CALIB_URL mysql://ccdb_user@hallddb-farm.jlab.org/ccdb
 
 setenv HALLD_MY /home/andrsmit/halld_my
 
+echo "ls -a"
+ls -a
+
 # copy JANA config file:
 
+echo "cp /work/halld/home/andrsmit/primex_eta_analysis/data/config/eta_ana.conf jana.conf"
 cp /work/halld/home/andrsmit/primex_eta_analysis/data/config/eta_ana.conf jana.conf
 
 # remove symlink created by swif and replace with local file:
@@ -46,5 +50,8 @@ mv ${runnumber}.root $outdir/rootFiles/phase${phase}/${target}/${runnumber}.root
 
 # delete local copies of input files and jsub file:
 
+echo "rm -f ${skim}_${runnumber}_*.evio"
 rm -f ${skim}_${runnumber}_*.evio
+
+echo "rm -f $jfile"
 rm -f $jfile
