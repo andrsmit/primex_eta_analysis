@@ -87,19 +87,33 @@ jerror_t JEventProcessor_primex_eta_analysis_FCAL::init(void)
 	TDirectory *dir_primex_eta = new TDirectoryFile("primex_eta_analysis_FCAL", "primex_eta_analysis_FCAL");
 	dir_primex_eta->cd();
 	
-	// invariant mass without BCAL veto:
+	// energy-constrained invariant mass without FCAL cuts:
 	
 	h_mgg = new TH2F("mgg", "No FCAL multiplicity cut", 650, 0., 6.5, 600, 0., 1.2);
 	h_mgg->Sumw2();
 	h_mgg->GetXaxis()->SetTitle("#theta_{#eta} [#circ]");
 	h_mgg->GetYaxis()->SetTitle("M_{#gamma#gamma} [GeV/c^{2}]");
 	
-	// energy-constrained invariant mass without BCAL veto:
+	// with minimum energy cuts:
 	
-	h_mgg_const = new TH2F("mgg_const", "No FCAL multiplicity cut", 650, 0., 6.5, 600, 0., 1.2);
-	h_mgg_const->Sumw2();
-	h_mgg_const->GetXaxis()->SetTitle("#theta_{#eta} [#circ]");
-	h_mgg_const->GetYaxis()->SetTitle("M_{#gamma#gamma}^{constr} [GeV/c^{2}]");
+	h_mgg_ecut = new TH2F("mgg_ecut", Form("E_{1,2} > %.1f",m_MIN_FCAL_ENERGY), 650, 0., 6.5, 600, 0., 1.2);
+	h_mgg_ecut->Sumw2();
+	h_mgg_ecut->GetXaxis()->SetTitle("#theta_{#eta} [#circ]");
+	h_mgg_ecut->GetYaxis()->SetTitle("M_{#gamma#gamma} [GeV/c^{2}]");
+	
+	// with 'good' multiplicity = 2:
+	
+	h_mgg_good_mult = new TH2F("mgg_good_mult", "2 Good FCAL showers", 650, 0., 6.5, 600, 0., 1.2);
+	h_mgg_good_mult->Sumw2();
+	h_mgg_good_mult->GetXaxis()->SetTitle("#theta_{#eta} [#circ]");
+	h_mgg_good_mult->GetYaxis()->SetTitle("M_{#gamma#gamma} [GeV/c^{2}]");
+	
+	// with total multiplicity = 2:
+	
+	h_mgg_mult = new TH2F("mgg_mult", "2 FCAL showers", 650, 0., 6.5, 600, 0., 1.2);
+	h_mgg_mult->Sumw2();
+	h_mgg_mult->GetXaxis()->SetTitle("#theta_{#eta} [#circ]");
+	h_mgg_mult->GetYaxis()->SetTitle("M_{#gamma#gamma} [GeV/c^{2}]");
 	
 	// vary the fiducial cut:
 	
@@ -604,7 +618,6 @@ void JEventProcessor_primex_eta_analysis_FCAL::eta_gg_analysis(
 			// TOF Veto
 			
 			// reject combinations of FCAL showers where both showers are near a TOF hit:
-			bool tof_veto = false;
 			if((tof_dr1 < m_FCAL_TOF_CUT) && (tof_dr2 < m_FCAL_TOF_CUT)) continue;
 			
 			//-----------------------------------------------------//
@@ -678,7 +691,8 @@ void JEventProcessor_primex_eta_analysis_FCAL::eta_gg_analysis(
 				else { continue; }
 				
 				// Calculate the energy of the eta meson, assuming a coherent production process:
-				double eeta = energy_after_recoil(eb, prod_th, m_eta, m_Target);
+				//double eeta = energy_after_recoil(eb, prod_th, m_eta, m_Target);
+				double eeta = energy_after_recoil(eb, prod_th, m_eta, m_Proton);
 				
 				// Apply a cut on the elasticity
 				//  (ratio of measured energy of 2-photons, to the calculated energy above):
@@ -723,8 +737,24 @@ void JEventProcessor_primex_eta_analysis_FCAL::eta_gg_analysis(
 				// Vary FCAL cuts:
 				
 				// invariant mass (with and without energy-constrain) vs polar angle with no cuts:
-				h_mgg->Fill(prod_th, invmass, fill_weight);
-				h_mgg_const->Fill(prod_th, invmass_const, fill_weight);
+				if((fabs(t1) < m_FCAL_RF_CUT) && (fabs(t2) < m_FCAL_RF_CUT)) {
+					h_mgg->Fill(prod_th, invmass, fill_weight);
+					
+					// next, apply minimum energy cut:
+					if((e1 > m_MIN_FCAL_ENERGY) && (e2 > m_MIN_FCAL_ENERGY)) {
+						h_mgg_ecut->Fill(prod_th, invmass, fill_weight);
+						
+						// multiplicity cut (only 2 'good' showers):
+						if(n_good_fcal_showers==2) {
+							h_mgg_good_mult->Fill(prod_th, invmass, fill_weight);
+							
+							// multiplicity cut (only 2 showers total within timing cut):
+							if(n_fcal_showers==2) {
+								h_mgg_mult->Fill(prod_th, invmass, fill_weight);
+							}
+						}
+					}
+				}
 				
 				for(int icut=0; icut<loc_n_fiducial_cuts; icut++) {
 					if(loc_fiducial_cuts[icut]==1) h_mgg_fid[icut]->Fill(prod_th, invmass_const, fill_weight);

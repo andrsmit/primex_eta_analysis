@@ -40,18 +40,18 @@ cp /work/halld/home/andrsmit/primex_eta_analysis/data/config/eta_ana.conf jana.c
 
 set bin = ${HALLD_RECON_HOME}/Linux_Alma9-x86_64-gcc11.4.1/bin/hd_root
 
-echo "$bin --config=jana.conf -o ${runnumber}.root ${skim}_${runnumber}_*.evio"
-$bin --config=jana.conf -o ${runnumber}.root ${skim}_${runnumber}_*.evio
+echo "$bin --config=jana.conf -o ${runnumber}.root ${skim_type}_${runnumber}_*.evio"
+$bin --config=jana.conf -o ${runnumber}.root ${skim_type}_${runnumber}_*.evio
 
 # move output root file to appropriate directory:
 
-echo "mv ${runnumber}.root $outdir/rootFiles/phase${phase}/${target}/${runnumber}.root"
-mv ${runnumber}.root $outdir/rootFiles/phase${phase}/${target}/${runnumber}.root
+echo "mv ${runnumber}.root $outdir/rootFiles/phase${phase}/${target_type}/${runnumber}.root"
+mv ${runnumber}.root $outdir/rootFiles/phase${phase}/${target_type}/${runnumber}.root
 
 # delete local copies of input files and jsub file:
 
-echo "rm -f ${skim}_${runnumber}_*.evio"
-rm -f ${skim}_${runnumber}_*.evio
+echo "rm -f ${skim_type}_${runnumber}_*.evio"
+rm -f ${skim_type}_${runnumber}_*.evio
 
 echo "rm -f $jfile"
 rm -f $jfile

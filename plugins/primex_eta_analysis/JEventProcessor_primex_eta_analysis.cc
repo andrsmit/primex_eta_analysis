@@ -952,7 +952,8 @@ void JEventProcessor_primex_eta_analysis::eta_gg_analysis(
 				//else { continue; }
 				
 				// Calculate the energy of the eta meson, assuming a coherent production process:
-				double eeta = energy_after_recoil(eb, prod_th, m_eta, m_Target);
+				//double eeta = energy_after_recoil(eb, prod_th, m_eta, m_Target);
+				double eeta = energy_after_recoil(eb, prod_th, m_eta, m_Proton);
 				
 				// Apply a cut on the elasticity
 				//  (ratio of measured energy of 2-photons, to the calculated energy above):

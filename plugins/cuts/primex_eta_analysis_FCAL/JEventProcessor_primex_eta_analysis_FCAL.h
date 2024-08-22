@@ -132,7 +132,10 @@ class JEventProcessor_primex_eta_analysis_FCAL:public jana::JEventProcessor{
 		//---------------------------------------//
 		// Histograms
 		
-		TH2F *h_mgg, *h_mgg_const;
+		TH2F *h_mgg;
+		TH2F *h_mgg_ecut;
+		TH2F *h_mgg_good_mult;
+		TH2F *h_mgg_mult;
 		
 		vector<double> m_fiducial_cuts;
 		vector<TH2F*> h_mgg_fid;
