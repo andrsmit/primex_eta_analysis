@@ -125,7 +125,7 @@ jerror_t JEventProcessor_primex_eta_analysis_BCAL::init(void)
 		
 		// require that there's at most 1 BCAL shower within timing cut as well: 
 		TH2F *loc_h_mgg_cut = new TH2F(Form("mgg_rf_cut_%02d", icut),
-			Form("BCAL Veto: #left|t_{BCAL} - t_{RF}#right| < %.1f ns", m_timing_cuts[icut]), 
+			Form("BCAL Veto: #left|t_{BCAL} - t_{RF}#right| < %.1f ns & N_{showers} <= 1", m_timing_cuts[icut]), 
 			650, 0.0, 6.5, 600, 0.0, 1.2);
 		loc_h_mgg_cut->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
 		loc_h_mgg_cut->GetYaxis()->SetTitle("m_{#gamma#gamma}^{constr.} [GeV/c^{2}]");
@@ -148,7 +148,7 @@ jerror_t JEventProcessor_primex_eta_analysis_BCAL::init(void)
 		
 		// require that there's at most 1 BCAL shower within timing cut as well: 
 		TH2F *loc_h_mgg_cut = new TH2F(Form("mgg_dE_cut_%02d",icut),
-			Form("BCAL Veto: E_{BCAL} < %.03f GeV", m_energy_cuts[icut]), 650, 0.0, 6.5, 600, 0.0, 1.2);
+			Form("BCAL Veto: E_{BCAL} < %.03f GeV & N_{showers} <= 1", m_energy_cuts[icut]), 650, 0.0, 6.5, 600, 0.0, 1.2);
 		loc_h_mgg_cut->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
 		loc_h_mgg_cut->GetYaxis()->SetTitle("m_{#gamma#gamma}^{constr.} [GeV/c^{2}]");
 		loc_h_mgg_cut->Sumw2();

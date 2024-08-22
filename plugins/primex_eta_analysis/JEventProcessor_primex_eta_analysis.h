@@ -160,13 +160,19 @@ class JEventProcessor_primex_eta_analysis:public jana::JEventProcessor{
 		TH2F *h_mgg,       *h_mgg_main,       *h_mgg_side;
 		TH2F *h_mgg_const, *h_mgg_const_main, *h_mgg_const_side;
 		TH2F *h_mgg_const_corr;
-		TH2F *h_hmass;
-		TH2F *h_mm_vs_theta;
 		
 		TH2F *h_rec_vs_thrown;
 		TH2F *h_mgg_thrown;
 		TH2F *h_mgg_const_thrown;
-		TH2F *h_hmass_thrown;
+		
+		TH2F *h_hmass,              *h_mm_vs_theta;
+		TH2F *h_hmass_eta_cut,      *h_mm_vs_theta_eta_cut;
+		TH2F *h_hmass_eta_elas_cut, *h_mm_vs_theta_eta_elas_cut;
+		
+		TH2F *h_kine_vs_theta;
+		TH2F *h_tagh_vs_theta;
+		TH2F *h_tagm_vs_theta;
+		TH2F *h_ebeam_vs_theta;
 		
 		TH1F *h_dtheta,  *h_dtheta_sym;
 		TH1F *h_denergy, *h_denergy_sym;

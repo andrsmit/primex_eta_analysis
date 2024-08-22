@@ -194,28 +194,61 @@ jerror_t JEventProcessor_primex_eta_analysis::init(void)
 	h_mgg_const_side->GetYaxis()->SetTitle("M_{#gamma#gamma}^{constr} [GeV/c^{2}]");
 	h_mgg_const_side->Sumw2();
 	
-	//------------------------------------//
-	
 	// Energy-constrained mass vs. energy-constrained angle:
 	h_mgg_const_corr = new TH2F("mgg_const_corr", "Energy-Constrained Inv Mass", 650, 0., 6.5, 600, 0., 1.2);
 	h_mgg_const_corr->GetXaxis()->SetTitle("#theta_{#gamma#gamma}^{constr} [#circ]");
 	h_mgg_const_corr->GetYaxis()->SetTitle("M_{#gamma#gamma}^{constr} [GeV/c^{2}]");
 	h_mgg_const_corr->Sumw2();
 	
+	//------------------------------------//
+	
 	// Hybrid (rotated) mass:
-	h_hmass = new TH2F("hmass", "Hybrid Mass", 650, 0., 6.5, 1000, -1.0, 1.0);
+	h_hmass = new TH2F("hmass", "Hybrid Mass", 
+		650, 0., 6.5, 1000, -1.0, 1.0);
 	h_hmass->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
 	h_hmass->GetYaxis()->SetTitle("Hybrid Mass");
 	h_hmass->Sumw2();
+	
+	// Missing-mass vs. angle:
+	h_mm_vs_theta = new TH2F("mm_vs_theta", "Squared Missing Mass", 
+		650, 0., 6.5, 4000, 0., 40.);
+	h_mm_vs_theta->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
+	h_mm_vs_theta->GetYaxis()->SetTitle("#Deltam^{2} [GeV^{2}/c^{4}]");
+	h_mm_vs_theta->Sumw2();
+	
+	// apply eta invariant mass cut to both:
+	
+	h_hmass_eta_cut = new TH2F("hmass_eta_cut", "Hybrid Mass (m_{#gamma#gamma} cut)", 
+		650, 0., 6.5, 1000, -1.0, 1.0);
+	h_hmass_eta_cut->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
+	h_hmass_eta_cut->GetYaxis()->SetTitle("Hybrid Mass");
+	h_hmass_eta_cut->Sumw2();
+	
+	h_mm_vs_theta_eta_cut = new TH2F("mm_vs_theta_eta_cut", "Squared Missing Mass (m_{#gamma#gamma} cut)", 
+		650, 0., 6.5, 4000, 0., 40.);
+	h_mm_vs_theta_eta_cut->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
+	h_mm_vs_theta_eta_cut->GetYaxis()->SetTitle("#Deltam^{2} [GeV^{2}/c^{4}]");
+	h_mm_vs_theta_eta_cut->Sumw2();
+	
+	// apply elasticity cut to both:
+	
+	h_hmass_eta_elas_cut = new TH2F("hmass_eta_elas_cut", "Hybrid Mass (m_{#gamma#gamma} + elasticity cut)", 
+		650, 0., 6.5, 1000, -1.0, 1.0);
+	h_hmass_eta_elas_cut->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
+	h_hmass_eta_elas_cut->GetYaxis()->SetTitle("Hybrid Mass");
+	h_hmass_eta_elas_cut->Sumw2();
+	
+	h_mm_vs_theta_eta_elas_cut = new TH2F("mm_vs_theta_eta_elas_cut", 
+		"Squared Missing Mass (m_{#gamma#gamma} + elasticity cut)", 650, 0., 6.5, 4000, 0., 40.);
+	h_mm_vs_theta_eta_elas_cut->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
+	h_mm_vs_theta_eta_elas_cut->GetYaxis()->SetTitle("#Deltam^{2} [GeV^{2}/c^{4}]");
+	h_mm_vs_theta_eta_elas_cut->Sumw2();
 	
 	//------------------------------------//
 	
 	// x-y position of FCAL showers that survive all cuts:
 	h_xy_1 = new TH2F("xy_1", "Postion of Shower 1; x_{1} [cm]; y_{1} [cm]", 500, -100., 100., 500, -100., 100.);
 	h_xy_2 = new TH2F("xy_2", "Postion of Shower 2; x_{2} [cm]; y_{2} [cm]", 500, -100., 100., 500, -100., 100.);
-	
-	// Missing-mass vs. angle:
-	h_mm_vs_theta = new TH2F("mm_vs_theta", "Squared Missing Mass; M_{miss}^{2} [GeV/c^{2}]", 650, 0., 6.5, 4000, 0., 40.);
 	
 	//------------------------------------//
 	
@@ -238,12 +271,32 @@ jerror_t JEventProcessor_primex_eta_analysis::init(void)
 	h_mgg_const_thrown->GetYaxis()->SetTitle("M_{#gamma#gamma}^{constr} [GeV/c^{2}]");
 	h_mgg_const_thrown->Sumw2();
 	
-	// hybrid mass vs. thrown angle of eta (only filled for MC):
-	h_hmass_thrown = new TH2F("hmass_thrown", "Hybrid Mass", 
-		650, 0., 6.5, 1000, -1.0, 1.0);
-	h_hmass_thrown->GetXaxis()->SetTitle("#theta_{thrown} [#circ]");
-	h_hmass_thrown->GetYaxis()->SetTitle("Hybrid Mass");
-	h_hmass_thrown->Sumw2();
+	//------------------------------------//
+	
+	// 2-dimensional grid of eta kinetic energy vs. polar angle:
+	
+	h_kine_vs_theta = new TH2F("kine_vs_theta", "#eta kinetic energy vs. polar angle", 600, 0.0, 6.0, 700, 0., 12.0);
+	h_kine_vs_theta->GetXaxis()->SetTitle("#theta_{#eta} [#circ]");
+	h_kine_vs_theta->GetYaxis()->SetTitle("T_{#eta} [GeV]");
+	h_kine_vs_theta->Sumw2();
+	
+	// 2-dimensional grid of photon beam energy vs. polar angle:
+	
+	h_ebeam_vs_theta = new TH2F("ebeam_vs_theta", "E_{#gamma} vs. polar angle", 600, 0.0, 6.0, 400, 8.0, 12.0);
+	h_ebeam_vs_theta->GetXaxis()->SetTitle("#theta_{#eta} [#circ]");
+	h_ebeam_vs_theta->GetYaxis()->SetTitle("E_{#gamma} GeV");
+	h_ebeam_vs_theta->Sumw2();
+	
+	h_tagh_vs_theta = new TH2F("tagh_vs_theta", "E_{#gamma} vs. polar angle", 600, 0.0, 6.0, 274, 0.5, 274.5);
+	h_tagh_vs_theta->GetXaxis()->SetTitle("#theta_{#eta} [#circ]");
+	h_tagh_vs_theta->GetYaxis()->SetTitle("TAGH counter");
+	h_tagh_vs_theta->Sumw2();
+	
+	h_tagm_vs_theta = new TH2F("tagm_vs_theta", "E_{#gamma} vs. polar angle", 600, 0.0, 6.0, 102, 0.5, 102.5);
+	h_tagm_vs_theta->GetXaxis()->SetTitle("#theta_{#eta} [#circ]");
+	h_tagm_vs_theta->GetYaxis()->SetTitle("TAGM counter");
+	h_tagm_vs_theta->Sumw2();
+	
 	
 	dir_gg->cd("../");
 	
@@ -1008,10 +1061,12 @@ void JEventProcessor_primex_eta_analysis::eta_gg_analysis(
 				double hmass = (invmass/m_eta)*cos(TMath::Pi()/4.0) - (Egg/eeta)*sin(TMath::Pi()/4.0);
 				
 				//-----------------------------------------------------//
-				// Missing Mass
+				// Missing Mass 
+				//   - This is calculated assuming the reaction took place on a quasifree nucleon
+				//     However, we neglect the fermi-momentum of said nucleon
 				
-				double mmsq = 2.0*m_Target*eb - 2.0*eb*Egg + m_Target*m_Target + m_eta*m_eta 
-					- 2.0*m_Target*Egg + 2.0*eb*cos(prod_th*TMath::Pi()/180.)*sqrt(Egg*Egg - m_eta*m_eta);
+				double mmsq = 2.0*m_Proton*eb - 2.0*eb*Egg + m_Proton*m_Proton + m_eta*m_eta 
+					- 2.0*m_Proton*Egg + 2.0*eb*cos(prod_th*TMath::Pi()/180.)*sqrt(Egg*Egg - m_eta*m_eta);
 				
 				//-----------------------------------------------------//
 				// Default Cuts
@@ -1050,17 +1105,10 @@ void JEventProcessor_primex_eta_analysis::eta_gg_analysis(
 					// energy-constrained invariant mass vs. energy-constrained polar angle:
 					h_mgg_const_corr->Fill(prod_th_const, invmass_const, fill_weight);
 					
-					// hybrid mass:
-					h_hmass->Fill(prod_th, hmass, fill_weight);
-					
-					// missing mass:
-					h_mm_vs_theta->Fill(prod_th, mmsq, fill_weight);
-					
 					// for MC, plot invariant mass vs thrown information:
 					if(is_mc) {
 						h_mgg_thrown->Fill(thrown_eta_angle, invmass, fill_weight);
 						h_mgg_const_thrown->Fill(thrown_eta_angle, invmass_const, fill_weight);
-						h_hmass_thrown->Fill(thrown_eta_angle, hmass, fill_weight);
 						
 						// plot reconstructed vs. thrown angle:
 						if(0.5078 < invmass_const && invmass_const < 0.5978) {
@@ -1068,10 +1116,18 @@ void JEventProcessor_primex_eta_analysis::eta_gg_analysis(
 						}
 					}
 					
-					// plot x-y distribution of showers:
 					if(eta_cut) {
+						// plot x-y distribution of showers:
 						h_xy_1->Fill(pos1.X(), pos1.Y(), fill_weight);
 						h_xy_2->Fill(pos2.X(), pos2.Y(), fill_weight);
+						
+						// plot 2-d grid of energy vs. theta:
+						h_kine_vs_theta->Fill(prod_th, Egg-m_eta, fill_weight);
+						h_ebeam_vs_theta->Fill(prod_th, eb, fill_weight);
+						if((*gam)->dSystem == SYS_TAGH) 
+							h_tagh_vs_theta->Fill(prod_th, (*gam)->dCounter, fill_weight);
+						else if((*gam)->dSystem == SYS_TAGM) 
+							h_tagm_vs_theta->Fill(prod_th, (*gam)->dCounter, fill_weight);
 					}
 					
 					//-----------------------------------//
@@ -1101,6 +1157,26 @@ void JEventProcessor_primex_eta_analysis::eta_gg_analysis(
 						h_denergy_sym->Fill(e1-e2, fill_weight);
 					}
 				}
+				
+				// hybrid mass:
+				h_hmass->Fill(prod_th, hmass, fill_weight);
+				
+				// missing mass:
+				h_mm_vs_theta->Fill(prod_th, mmsq, fill_weight);
+				
+				// plot the above two distributions with a cut around the eta mass:
+				
+				if(eta_cut) {
+					h_hmass_eta_cut->Fill(prod_th, hmass, fill_weight);
+					h_mm_vs_theta_eta_cut->Fill(prod_th, mmsq, fill_weight);
+					
+					// next, apply elasticity cut:
+					if(elas_cut) {
+						h_hmass_eta_elas_cut->Fill(prod_th, hmass, fill_weight);
+						h_mm_vs_theta_eta_elas_cut->Fill(prod_th, mmsq, fill_weight);
+					}
+				}
+				
 			} // loop over DBeamPhotons
 		} // inner loop over DFCALShowers
 	} // outer loop over DFCALShowers
