@@ -3,6 +3,7 @@
 #include "/work/halld/home/andrsmit/primex_eta_analysis/cross_section/include/style.cc"
 #include "/work/halld/home/andrsmit/primex_eta_analysis/cross_section/include/fit_mgg.cc"
 #include "/work/halld/home/andrsmit/primex_eta_analysis/cross_section/include/get_yield.cc"
+#include "/work/halld/home/andrsmit/primex_eta_analysis/cross_section/include/plot_fit_results.cc"
 
 char loc_pathName[256] = "/work/halld/home/andrsmit/primex_eta_analysis";
 
@@ -45,23 +46,19 @@ void CrossSection(TString pluginname="primex_eta_analysis/eta_gg", TString hname
 	// Which data set to use:
 	
 	m_phase                   =       3;
-	m_pass                    =       2;
-	m_luminosity              =    18.0;
+	m_luminosity              = 5.88005;
 	m_empty_target_flux_ratio = 0.0;
 	
 	/*
 	m_phase                   =       1;
-	m_pass                    =       2;
 	m_luminosity              = 5.88005;
 	m_empty_target_flux_ratio = 6.46002;
 	
 	m_phase                   =       2;
-	m_pass                    =       2;
 	m_luminosity              = 1.60250;
 	m_empty_target_flux_ratio = 1.94506;
 	
 	m_phase                   =       3;
-	m_pass                    =       2;
 	m_luminosity              =    18.0;
 	m_empty_target_flux_ratio = 3.08500;
 	*/
@@ -124,10 +121,16 @@ void CrossSection(TString pluginname="primex_eta_analysis/eta_gg", TString hname
 	
 	// do the fits in each angular bin:
 	
-	//DRAW_MGG_FITS = false;
+	DRAW_MGG_FITS = false;
 	
 	fitAngularYield();
 	plotAngularYield();
+	
+	plotFitResults();
+	
+	if(saveAngularYield("output2.root")) {
+		cout << "Problem saving yield to output ROOT file (filename might already exist)." << endl;
+	}
 	
 	/*	
 	TF1 *f_fit;

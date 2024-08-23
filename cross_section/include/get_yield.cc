@@ -77,22 +77,25 @@ void fitAngularYield()
 
 void plotAngularYield()
 {
-	double min_mgg_cut = 0.50;
-	double max_mgg_cut = 0.65;
-	
 	double *angle     = new double[m_n_bins_fit];
 	double *angle_err = new double[m_n_bins_fit];
 	double *yield     = new double[m_n_bins_fit];
 	double *yield_err = new double[m_n_bins_fit];
+	
+	double maximum_yield = 0.;
 	
 	for(int ibin=0; ibin<m_n_bins_fit; ibin++) {
 		angle[ibin]     = m_angular_bin[ibin].first;
 		angle_err[ibin] = m_angular_bin[ibin].second;
 		yield[ibin]     = m_angular_yield[ibin].first;
 		yield_err[ibin] = m_angular_yield[ibin].second;
+		if(m_angular_yield[ibin].first > maximum_yield) {
+			maximum_yield = m_angular_yield[ibin].first;
+		}
 	}
 	
 	gYield = new TGraphErrors(m_n_bins_fit, angle, yield, angle_err, yield_err);
+	gYield->SetName("eta_gg_yield");
 	gYield->GetXaxis()->SetTitle("Polar Angle, #theta_{#gamma#gamma} [#circ]");
 	gYield->GetXaxis()->SetTitleSize(0.05);
 	gYield->GetXaxis()->SetTitleOffset(1.0);
@@ -103,15 +106,31 @@ void plotAngularYield()
 	gYield->GetYaxis()->CenterTitle("");
 	gYield->SetTitle("");
 	gYield->SetMarkerStyle(4);
+	gYield->SetMarkerSize(0.7);
 	gYield->SetMarkerColor(kBlue+2);
 	gYield->SetLineColor(kBlue+2);
-	gYield->SetLineWidth(2);
+	gYield->SetLineWidth(1);
+	
+	gYield->GetYaxis()->SetRangeUser(0.0, 1.1*maximum_yield);
 	
 	cYield = new TCanvas("cYield", "Angular Yield", 700, 500);
 	styleCanvas(cYield);
 	
 	cYield->cd();
-	gYield->Draw("APE1");
+	gYield->Draw("APE");
 	
 	return;
+}
+
+int saveAngularYield(TString output_fname)
+{
+	if(!gSystem->AccessPathName(output_fname.Data())) return 1;
+	
+	TFile *fOutput = new TFile(output_fname.Data(), "RECREATE");
+	fOutput->cd();
+	gYield->Write();
+	fOutput->Write();
+	fOutput->Close();
+	
+	return 0;
 }
