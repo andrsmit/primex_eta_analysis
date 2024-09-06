@@ -42,7 +42,7 @@ void initParameters() {
 		double loc_min_angle = 0.01*(double)(loc_bin_lo);
 		double loc_max_angle = 0.01*(double)(loc_bin_hi);
 		double loc_angle     = 0.5*(loc_min_angle+loc_max_angle);
-		double loc_angle_err = (loc_max_angle-loc_min_angle)/2.;
+		double loc_angle_err = 0.0;//(loc_max_angle-loc_min_angle)/2.;
 		
 		m_angular_bin.push_back({loc_angle,loc_angle_err});
 		m_angular_yield.push_back({0.0, 0.0});
@@ -124,6 +124,12 @@ int initFitFunction(TF1 **f1, TString func_name) {
 			break;
 	}
 	for(int ipar=0; ipar<n_background_fit_parameters; ipar++) par_names.push_back(Form("p%d",ipar));
+	
+	// enhancement from fdc:
+	n_background_fit_parameters += 3;
+	par_names.push_back("N_{FDC}");
+	par_names.push_back("#mu_{FDC}");
+	par_names.push_back("#sigma_{FDC}");
 	
 	// eta-primex fit parameters:
 	int n_etap_fit_parameters = 3;

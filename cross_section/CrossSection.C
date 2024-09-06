@@ -45,9 +45,9 @@ void CrossSection(TString pluginname="primex_eta_analysis/eta_gg", TString hname
 	//------------------------------------------------------//
 	// Which data set to use:
 	
-	m_phase                   =       3;
+	m_phase                   =       1;
 	m_luminosity              = 5.88005;
-	m_empty_target_flux_ratio = 0.0;
+	m_empty_target_flux_ratio = 6.43002;
 	
 	/*
 	m_phase                   =       1;
@@ -74,12 +74,16 @@ void CrossSection(TString pluginname="primex_eta_analysis/eta_gg", TString hname
 				Alternatively, correct the luminosity by multiplying by a factor of 0.9817:
 	-------------------------------------------------------*/
 	
-	m_luminosity *= 0.9817;
+	m_SUBTRACT_EMPTY      = true; // subtract empty target background prior to fit
+	m_FIT_FDC_ENHANCEMENT = false; // use a Gaussian to fit the enhancement seen around 0.45 GeV 
+	                               // (only checked if m_SUBTRACT_EMPTY==false)
+	
+	if(m_SUBTRACT_EMPTY) m_luminosity *= 0.9817;
 	
 	//-----------------------------------------------------//
 	// Configure invariant mass fitting options:
 	
-	m_signal_fit_option = 2;
+	m_signal_fit_option = 3;
 	/*
 	Different options for fitting the eta->2gamma signal:
 		1. single Gaussian function to describe eta signal
@@ -102,7 +106,7 @@ void CrossSection(TString pluginname="primex_eta_analysis/eta_gg", TString hname
 		2. Crystal Ball + Gaussian function
 	*/
 	
-	m_min_bkgd_fit = 0.44;
+	m_min_bkgd_fit = 0.42;
 	m_max_bkgd_fit = 1.05;
 	
 	initParameters();
@@ -128,16 +132,17 @@ void CrossSection(TString pluginname="primex_eta_analysis/eta_gg", TString hname
 	
 	plotFitResults();
 	
-	if(saveAngularYield("output2.root")) {
+	if(saveAngularYield("output1.root")) {
 		cout << "Problem saving yield to output ROOT file (filename might already exist)." << endl;
 	}
 	
-	/*	
+	//------------------------------------------------------------//
+	
 	TF1 *f_fit;
 	int n_pars = initFitFunction(&f_fit, "test_fit");
 	
-	int min_theta_bin = h_mgg_vs_theta_full->GetXaxis()->FindBin(4.05);
-	int max_theta_bin = h_mgg_vs_theta_full->GetXaxis()->FindBin(4.10);
+	int min_theta_bin = h_mgg_vs_theta_full->GetXaxis()->FindBin(0.0);
+	int max_theta_bin = h_mgg_vs_theta_full->GetXaxis()->FindBin(0.08);
 	
 	TH1F *h1_full  = (TH1F*)h_mgg_vs_theta_full->ProjectionY( "h1_full",  min_theta_bin, max_theta_bin);
 	TH1F *h1_empty = (TH1F*)h_mgg_vs_theta_empty->ProjectionY("h1_empty", min_theta_bin, max_theta_bin);
@@ -155,13 +160,17 @@ void CrossSection(TString pluginname="primex_eta_analysis/eta_gg", TString hname
 	styleMggHistogram(h1_sub, kRed, 3);
 	styleCanvas(loc_canvas);
 	
+	if(m_SUBTRACT_EMPTY) {
+		h1_full->Add(h1_empty, -1.0);
+	}
+	
 	loc_canvas->cd();
 	h1_full->Draw("PE1");
 	h1_empty->Draw("hist same");
 	h1_full->Draw("PE1 same");
-	h1_sub->Draw("PE1");
+	h1_full->Draw("PE1");
 	
-	fit_mgg(h1_sub, f_fit, n_pars);
+	fit_mgg(h1_full, f_fit, n_pars);
 	
 	f_fit->SetLineColor(kGreen+2);
 	f_fit->Draw("same");
@@ -170,12 +179,13 @@ void CrossSection(TString pluginname="primex_eta_analysis/eta_gg", TString hname
 	n_pars = initFitFunction(&f_bkgd, "bkgd");
 	f_bkgd->SetParameters(f_fit->GetParameters());
 	f_bkgd->SetParameter("N_{#eta}", 0.0);
+	f_bkgd->SetParameter("N_{#eta,1}", 0.0);
+	f_bkgd->SetParameter("N_{#eta,2}", 0.0);
 	f_bkgd->SetParameter("N_{#omega}", 0.0);
 	f_bkgd->SetParameter("N_{#eta'}", 0.0);
 	f_bkgd->SetLineColor(kBlue);
 	f_bkgd->SetLineStyle(2);
 	f_bkgd->Draw("same");
-	*/
 	
 	return;
 }

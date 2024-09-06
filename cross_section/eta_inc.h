@@ -10,7 +10,7 @@ double m_theta_bin_size = 0.01 * (double)m_rebins_theta;
 //---------------------------------------------------//
 // Mass Bin Size [default is 6MeV]:
 
-int m_rebins_mgg = 4;
+int m_rebins_mgg = 5;
 double m_mgg_bin_size = (1.2/600.) * (double)m_rebins_mgg;
 
 //---------------------------------------------------//
@@ -55,9 +55,9 @@ double m_max_mgg_cut = 0.60;
 /*************************************************************************/
 // fitting:
 
-bool DO_LINESHAPE_FIT = false; // fit data with lineshape from MC
-bool FIX_ETA_PARS     = false; // fix eta fit parameters from MC
-bool SUBTRACT_EMPTY   = true;  // subtract empty target before doing fit
+bool m_SUBTRACT_EMPTY      = true;  // subtract empty target background prior to fit
+bool m_FIT_FDC_ENHANCEMENT = false; // use a Gaussian to fit the enhancement seen around 0.45 GeV 
+                                    // (only checked if m_SUBTRACT_EMPTY==false)
 
 int m_signal_fit_option = 1, m_omega_fit_option = 1, m_background_fit_option = 1;
 

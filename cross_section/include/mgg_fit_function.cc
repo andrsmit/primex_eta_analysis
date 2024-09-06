@@ -153,6 +153,18 @@ Double_t mgg_fit(Double_t *x, Double_t *par) {
 	}
 	
 	//-------------------------//
+	// enhancement around 0.44 GeV:
+	
+	double     N_fdc = par[n_signal_parameters+n_background_parameters+5+0];
+	double    mu_fdc = par[n_signal_parameters+n_background_parameters+5+1];
+	double sigma_fdc = par[n_signal_parameters+n_background_parameters+5+2];
+	double     A_fdc = N_fdc * m_mgg_bin_size / sqrt(2.0*TMath::Pi()) / sigma_fdc;
+	
+	Double_t f_fdc = A_fdc * exp(-0.5*pow((loc_mgg-mu_fdc)/sigma_fdc, 2.0));
+	
+	n_background_parameters += 3;
+	
+	//-------------------------//
 	// eta-prime:
 	
 	Double_t f_eta_prime;
@@ -166,6 +178,6 @@ Double_t mgg_fit(Double_t *x, Double_t *par) {
 	
 	//----------------------------------------------------------------------------------//
 	
-	Double_t f_mgg = f_eta + f_omega + f_background + f_eta_prime;
+	Double_t f_mgg = f_eta + f_omega + f_background + f_eta_prime + f_fdc;
 	return f_mgg;
 }

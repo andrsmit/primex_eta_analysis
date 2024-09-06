@@ -10,6 +10,10 @@ void   guessBackgroundParameters(TF1 *f1, TH1F *h1);
 void     fixBackgroundParameters(TF1 *f1);
 void releaseBackgroundParameters(TF1 *f1);
 
+void   guessFDCParameters(TF1 *f1, TH1F *h1);
+void     fixFDCParameters(TF1 *f1);
+void releaseFDCParameters(TF1 *f1);
+
 void   guessEtapParameters(TF1 *f1, TH1F *h1);
 void     fixEtapParameters(TF1 *f1);
 void releaseEtapParameters(TF1 *f1);
@@ -47,6 +51,9 @@ void fit_mgg(TH1F *h1, TF1 *f_fit, int n_parameters) {
 	// get initial guesses for background fit parameters:
 	
 	guessBackgroundParameters(f_fit, h1);
+	if(!m_SUBTRACT_EMPTY && m_FIT_FDC_ENHANCEMENT) {
+		guessFDCParameters(f_fit, h1);
+	}
 	
 	// exlude eta mass region from fit:
 	
@@ -68,6 +75,7 @@ void fit_mgg(TH1F *h1, TF1 *f_fit, int n_parameters) {
 	
 	fixOmegaParameters(f_fit);
 	fixBackgroundParameters(f_fit);
+	if(!m_SUBTRACT_EMPTY && m_FIT_FDC_ENHANCEMENT) fixFDCParameters(f_fit);
 	fixEtapParameters(f_fit);
 	
 	m_exclude_regions.clear();
@@ -75,6 +83,10 @@ void fit_mgg(TH1F *h1, TF1 *f_fit, int n_parameters) {
 	
 	f_fit->SetRange(0.5, 0.625);
 	h1->Fit(f_fit, "R0QL");
+	
+	releaseOmegaParameters(f_fit);
+	releaseBackgroundParameters(f_fit);
+	if(!m_SUBTRACT_EMPTY && m_FIT_FDC_ENHANCEMENT) releaseFDCParameters(f_fit);
 	
 	f_fit->SetRange(m_min_bkgd_fit, m_max_bkgd_fit);
 	h1->Fit(f_fit, "R0QL");
@@ -141,6 +153,12 @@ void initializeFitParameters(TF1 *f1) {
 			loc_n_fit_parameters += 5;
 			break;
 	}
+	
+	// fdc-enhancement:
+	f1->FixParameter(loc_n_fit_parameters+0, 0.0);
+	f1->FixParameter(loc_n_fit_parameters+1, 0.45);
+	f1->FixParameter(loc_n_fit_parameters+2, 0.015);
+	loc_n_fit_parameters += 3;
 	
 	// eta-prime fit parameters:
 	f1->FixParameter(loc_n_fit_parameters+0, 0.0);
@@ -218,11 +236,20 @@ void releaseOmegaParameters(TF1 *f1) {
 	int alpha_omega_par = f1->GetParNumber("#alpha_{#omega}");
 	int     n_omega_par = f1->GetParNumber("n_{#omega}");
 	
-	f1->FixParameter(    N_omega_par, f1->GetParameter(    N_omega_par));
-	f1->FixParameter(   mu_omega_par, f1->GetParameter(   mu_omega_par));
-	f1->FixParameter(sigma_omega_par, f1->GetParameter(sigma_omega_par));
-	f1->FixParameter(alpha_omega_par, f1->GetParameter(alpha_omega_par));
-	f1->FixParameter(    n_omega_par, f1->GetParameter(    n_omega_par));
+	f1->ReleaseParameter(N_omega_par);
+	f1->SetParLimits(N_omega_par, 0., 1.e6);
+	
+	f1->ReleaseParameter(mu_omega_par);
+	f1->SetParLimits(mu_omega_par, 0.750, 0.800);
+	
+	f1->ReleaseParameter(sigma_omega_par);
+	f1->SetParLimits(sigma_omega_par, 0.015, 0.050);
+	
+	f1->ReleaseParameter(alpha_omega_par);
+	f1->SetParLimits(alpha_omega_par, 0.500, 9.999);
+	
+	f1->ReleaseParameter(n_omega_par);
+	f1->SetParLimits(n_omega_par, 0.500, 9.999);
 	
 	return;
 }
@@ -299,6 +326,108 @@ void fixBackgroundParameters(TF1 *f1) {
 		int p4_par = f1->GetParNumber("p4");
 		f1->FixParameter(p4_par, f1->GetParameter(p4_par));
 	}
+	
+	return;
+}
+
+void releaseBackgroundParameters(TF1 *f1) {
+	
+	int p0_par = f1->GetParNumber("p0");
+	int p1_par = f1->GetParNumber("p1");
+	int p2_par = f1->GetParNumber("p2");
+	int p3_par = f1->GetParNumber("p3");
+	
+	switch(m_background_fit_option) {
+		case 1:
+		{
+			// 3rd-order polynomial:
+			
+			f1->ReleaseParameter(p0_par);
+			f1->ReleaseParameter(p1_par);
+			f1->ReleaseParameter(p2_par);
+			f1->ReleaseParameter(p3_par);
+			
+			f1->SetParLimits(p0_par, -1.e4, 1.e4);
+			f1->SetParLimits(p1_par, -1.e3, 1.e3);
+			f1->SetParLimits(p2_par, -1.e3, 1.e3);
+			f1->SetParLimits(p3_par, -1.e3, 1.e3);
+			break;
+		}
+		case 2:
+		{
+			// Exponential:
+			int p4_par = f1->GetParNumber("p4");
+			
+			f1->ReleaseParameter(p0_par);
+			f1->ReleaseParameter(p1_par);
+			f1->ReleaseParameter(p2_par);
+			//f1->ReleaseParameter(p3_par);
+			f1->ReleaseParameter(p4_par);
+			
+			f1->SetParLimits(p0_par, 0.0, 1.e4);
+			f1->SetParLimits(p1_par, -1.e3, 0.0);
+			f1->SetParLimits(p2_par, 0.0, 1.0);
+			//f1->SetParLimits(p3_par, -1.e3, 1.e3);
+			f1->SetParLimits(p4_par, 0.0, 1.e3);
+			break;
+		}
+	}
+	
+	return;
+}
+
+//--------------------------------------------------------------//
+// Enhancement from FDC packages around 0.45 GeV:
+
+void guessFDCParameters(TF1 *f1, TH1F *h1) {
+	
+	int     N_fdc_par = f1->GetParNumber("N_{FDC}");
+	int    mu_fdc_par = f1->GetParNumber("#mu_{FDC}");
+	int sigma_fdc_par = f1->GetParNumber("#sigma_{FDC}");
+	
+	// just set N to 0:
+	
+	double     N_fdc_guess = 0.0;
+	double    mu_fdc_guess = 0.45;
+	double sigma_fdc_guess = 0.015;
+	
+	f1->SetParameter(    N_fdc_par,     N_fdc_guess);
+	f1->SetParameter(   mu_fdc_par,    mu_fdc_guess);
+	f1->SetParameter(sigma_fdc_par, sigma_fdc_guess);
+	
+	f1->SetParLimits(    N_fdc_par, 0.000, 1.0e4);
+	f1->SetParLimits(   mu_fdc_par, 0.420, 0.475);
+	f1->SetParLimits(sigma_fdc_par, 0.015, 0.050);
+	
+	return;
+}
+
+void fixFDCParameters(TF1 *f1) {
+	
+	int     N_fdc_par = f1->GetParNumber("N_{FDC}");
+	int    mu_fdc_par = f1->GetParNumber("#mu_{FDC}");
+	int sigma_fdc_par = f1->GetParNumber("#sigma_{FDC}");
+	
+	f1->FixParameter(    N_fdc_par, f1->GetParameter(N_fdc_par));
+	f1->FixParameter(   mu_fdc_par, f1->GetParameter(mu_fdc_par));
+	f1->FixParameter(sigma_fdc_par, f1->GetParameter(sigma_fdc_par));
+	
+	return;
+}
+
+void releaseFDCParameters(TF1 *f1) {
+	
+	int     N_fdc_par = f1->GetParNumber("N_{FDC}");
+	int    mu_fdc_par = f1->GetParNumber("#mu_{FDC}");
+	int sigma_fdc_par = f1->GetParNumber("#sigma_{FDC}");
+	
+	f1->ReleaseParameter(    N_fdc_par);
+	f1->ReleaseParameter(   mu_fdc_par);
+	f1->ReleaseParameter(sigma_fdc_par);
+	
+	f1->SetParLimits(    N_fdc_par, 0.000, 1.0e4);
+	f1->SetParLimits(   mu_fdc_par, 0.420, 0.475);
+	f1->SetParLimits(sigma_fdc_par, 0.015, 0.050);
 	
 	return;
 }
