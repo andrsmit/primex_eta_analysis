@@ -15,6 +15,7 @@ gxenv /home/andrsmit/version.xml
 
 setenv CCDB_CONNECTION mysql://ccdb_user@hallddb-farm.jlab.org/ccdb
 setenv JANA_CALIB_URL mysql://ccdb_user@hallddb-farm.jlab.org/ccdb
+setenv JANA_CALIB_CONTEXT variation=mc
 
 setenv HALLD_MY /home/andrsmit/halld_my
 

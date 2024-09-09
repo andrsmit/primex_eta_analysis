@@ -86,7 +86,7 @@ for file in $dir_mss/bggen_upd_*_decay_evtgen_geant4_smeared.hddm.tar; do
 	#echo "$run_number"
 	
 	# setup output file name:
-	root_file=${dir_output}/${run_number}.root
+	root_file=${dir_root}/${run_number}.root
 	if [ -f $root_file ]; then
 		continue
 	#else
