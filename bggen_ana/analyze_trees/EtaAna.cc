@@ -13,7 +13,7 @@ EtaAna::EtaAna() {
 	// set defaults for cut values:
 	m_BEAM_RF_CUT =  2.004;
 	m_FCAL_RF_CUT =  2.004;
-	m_BCAL_RF_CUT = 10.0;
+	m_BCAL_RF_CUT =  1.0;
 	m_TOF_RF_CUT  =  1.0;
 	
 	// default values for the minimum energy cuts:
@@ -84,29 +84,7 @@ void EtaAna::etaggAnalysis() {
 	h_thrown->Fill(locFinalState);
 	
 	if(m_nfcal<2) return;
-	/*
-	if(m_nmc!=2) return;
-	int n_eta_thrown = 0, n_proton_thrown  = 0;
-	for(int i=0; i<m_nmc; i++) {
-		if(m_mc_pdgtype[i]==221) n_eta_thrown += 1;
-		if(m_mc_pdgtype[i]==2212) n_proton_thrown += 1;
-	}
-	if(n_eta_thrown!=1 || n_proton_thrown!=1) return;
-	*/
 	
-	/*
-	for(int i=0; i<m_nmc; i++) {
-		int n_types = m_pdg_types.size();
-		int found_val = 0;
-		for(int j=0; j<n_types; j++) {
-			if((int)m_mc_pdgtype[i]==m_pdg_types[j]) {
-				found_val = 1;
-				break;
-			}
-		}
-		if(!found_val) m_pdg_types.push_back(m_mc_pdgtype[i]);
-	}
-	*/
 	//---------------------------------------------------------------------------//
 	// Make a list of good FCAL showers to use in analysis:
 	
@@ -160,7 +138,17 @@ void EtaAna::etaggAnalysis() {
 	}
 	
 	// BCAL Veto:
-	//if(m_nbcal>0) return;
+	int    locNBCALShowers  = 0;
+	double locBCALEnergySum = 0.;
+	for(int ishow=0; ishow<m_nbcal; ishow++) {
+		TVector3 loc_pos(m_bcal_x[ishow], m_bcal_y[ishow], m_bcal_z[ishow]);
+		loc_pos -= m_vertex;
+		double loc_t = m_bcal_t[ishow] - (loc_pos.Mag()/m_c) - m_rfTime;
+		if(fabs(loc_t) < m_BCAL_RF_CUT) {
+			locBCALEnergySum += m_bcal_e[ishow];
+			locNBCALShowers++;
+		}
+	}
 	
 	// FCAL multiplicity cut:
 	if(!(locNFCALShowers==2 && locNGoodFCALShowers==2)) return;
@@ -320,8 +308,11 @@ void EtaAna::etaggAnalysis() {
 					
 					if(eta_cut) {
 						
-						h_accepted->Fill(locFinalState, fill_weight);
-						
+						h_theta[locFinalState]->Fill(prod_th, fill_weight);
+						if(locNBCALShowers==0) {
+							h_accepted->Fill(locFinalState, fill_weight);
+							h_theta_veto[locFinalState]->Fill(prod_th, fill_weight);
+						}
 						// plot x-y distribution of showers:
 						h_xy_1->Fill(pos1.X(), pos1.Y(), fill_weight);
 						h_xy_2->Fill(pos2.X(), pos2.Y(), fill_weight);
@@ -768,6 +759,28 @@ void EtaAna::initHistograms() {
 	h_thrown->GetXaxis()->SetBinLabel(h_thrown->GetNbinsX(), "other");
 	h_accepted->GetXaxis()->SetBinLabel(h_accepted->GetNbinsX(), "other");
 	
+	// angular distribution for each reaction type:
+	
+	for(int itype=0; itype<n_reactions; itype++) {
+		
+		TString hist_label = "", hist_title = "";
+		for(int iparticle=0; iparticle<m_reaction_types[itype].size(); iparticle++) {
+			hist_label += ShortName(m_reaction_types[itype][iparticle]);
+			hist_title += ParticleName_ROOT(m_reaction_types[itype][iparticle]);
+		}
+		TH1F *loc_h_theta      = new TH1F(Form("theta_%s",hist_label.Data()), 
+			Form("Angular Yield (%s)",hist_title.Data()), 65, 0.0, 6.5);
+		TH1F *loc_h_theta_veto = new TH1F(Form("theta_veto_%s",hist_label.Data()), 
+			Form("Angular Yield with BCAL Veto (%s)",hist_title.Data()), 65, 0.0, 6.5);
+		h_theta.push_back(loc_h_theta);
+		h_theta_veto.push_back(loc_h_theta_veto);
+	}
+	TH1F *loc_h_theta = new TH1F("theta_other", "Angular Yield (other)", 65, 0.0, 6.5);
+	TH1F *loc_h_theta_veto = new TH1F("theta_veto_other", "Angular Yield with BCAL Veto (other)", 65, 0.0, 6.5);
+	h_theta.push_back(loc_h_theta);
+	h_theta_veto.push_back(loc_h_theta_veto);
+	
+	
 	// Elasticity vs. mass ratio:
 	h_elas_vs_mgg = new TH2F("elas_vs_mgg", 
 		"; M_{#gamma#gamma}/M_{#eta}(PDG); #left(E_{1}+E_{2}#right)/E_{#eta}#left(E_{#gamma},#theta_{#gamma#gamma}#right)", 
@@ -830,6 +843,11 @@ void EtaAna::resetHistograms() {
 	h_thrown->Reset();
 	h_accepted->Reset();
 	
+	for(int itype=0; itype<h_theta.size(); itype++) {
+		h_theta[itype]->Reset();
+		h_theta_veto[itype]->Reset();
+	}
+	
 	h_elas_vs_mgg->Reset();
 	h_elas->Reset();
 	h_elas_corr->Reset();
@@ -853,6 +871,14 @@ void EtaAna::writeHistograms() {
 	
 	h_thrown->Write();
 	h_accepted->Write();
+	
+	TDirectory *dir_theta = new TDirectoryFile("theta","theta");
+	dir_theta->cd();
+	for(int itype=0; itype<h_theta.size(); itype++) {
+		h_theta[itype]->Write();
+		h_theta_veto[itype]->Write();
+	}
+	dir_theta->cd("../");
 	
 	h_elas_vs_mgg->Write();
 	h_elas->Write();
