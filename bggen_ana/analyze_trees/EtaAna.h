@@ -135,10 +135,12 @@ class EtaAna {
 		TH1F *h_thrown;
 		TH1F *h_accepted;
 		
-		//vector<TH1F*> h_mgg,   h_mgg_cut;
-		vector<TH1F*> h_theta, h_theta_veto;
-		//vector<TH1F*> h_bcalE, h_bcalE_cut;
-		//vector<TH1F*> h_nbcal;
+		vector<TH1F*> h_theta;
+		int m_n_bcal_vetos = 4;
+		vector<vector<TH1F*>> h_theta_veto;
+		vector<TH1F*> h_nbcal, h_bcal_energy, h_bcal_energy_single;
+		vector<TH2F*> h_bcal_dt_vs_eta_angle;
+		vector<TH1F*> h_bcal_deltaPhi;
 		
 		TH2F *h_elas_vs_mgg;
 		TH2F *h_elas;

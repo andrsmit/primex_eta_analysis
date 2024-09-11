@@ -5,6 +5,7 @@
 int main(int argc, char **argv) {
 	
 	genSettings_t genSettings;
+	genSettings.ver_str      = "";
 	genSettings.min_run      = 61434;
 	genSettings.max_run      = 61434;
 	genSettings.run_number   = 61434;
@@ -18,6 +19,9 @@ int main(int argc, char **argv) {
 		if(*argptr == '-') {
 			argptr++;
 			switch(*argptr) {
+			case 'v':
+				genSettings.ver_str = ++argptr;
+				break;
 			case 'b':
 				genSettings.min_run  = atoi(++argptr);
 				break;
@@ -55,7 +59,7 @@ int main(int argc, char **argv) {
 	
 	locAna.initHistograms();
 	
-	TString ver_str = "Helium-proton-v3895";
+	//TString ver_str = "Helium-neutron-v3894";
 	
 	//
 	// Check if an input filename was specificed at runtime. 
@@ -83,7 +87,7 @@ int main(int argc, char **argv) {
 		int loc_phase = locAna.getPrimexPhase(genSettings.min_run);
 		
 		// Directory where input ROOT trees are read from:
-		sprintf(rootTree_pathName, "%s/rootTrees/phase%d/%s", loc_path, loc_phase, ver_str.Data());
+		sprintf(rootTree_pathName, "%s/rootTrees/phase%d/%s", loc_path, loc_phase, genSettings.ver_str.c_str());
 		if(gSystem->AccessPathName(rootTree_pathName)) {
 			cout << "Input ROOT tree directory does not exist." << endl;
 			cout << " directory name: " << rootTree_pathName << endl;
@@ -99,7 +103,7 @@ int main(int argc, char **argv) {
 		}
 		
 		// Output file name:
-		TString output_fname = Form("%s/%s_%d_%d.root", rootFile_pathName, ver_str.Data(), 
+		TString output_fname = Form("%s/%s_%d_%d.root", rootFile_pathName, genSettings.ver_str.c_str(), 
 			genSettings.min_run, genSettings.max_run);
 		locAna.setOutputFileName(output_fname.Data());
 		
@@ -134,6 +138,7 @@ void printUsage(genSettings_t genSettings, int goYes) {
 	if(goYes==0) {
 		fprintf(stderr,"\nSWITCHES:\n");
 		fprintf(stderr,"-h\tPrintthis message\n");
+		fprintf(stderr,"-v<arg>\tVersion string (e.g. Helium-proton-v3895)\n");
 		fprintf(stderr,"-b<arg>\tMinimum run number to process\n");
 		fprintf(stderr,"-e<arg>\tMaximum run number to process\n");
 		fprintf(stderr,"-r<arg>\tRun number for specified input file\n");
@@ -147,7 +152,8 @@ void printUsage(genSettings_t genSettings, int goYes) {
 				genSettings.input_fname.c_str());
 			cout << "" << endl;
 		} else {
-			printf("\nAnalyzing simulations for runs %d-%d:\n", genSettings.min_run, genSettings.max_run);
+			printf("\nAnalyzing %s simulations for runs %d-%d:\n", genSettings.ver_str.c_str(), 
+				genSettings.min_run, genSettings.max_run);
 			cout << "" << endl;
 		}
 	}

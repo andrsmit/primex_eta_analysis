@@ -13,7 +13,7 @@ EtaAna::EtaAna() {
 	// set defaults for cut values:
 	m_BEAM_RF_CUT =  2.004;
 	m_FCAL_RF_CUT =  2.004;
-	m_BCAL_RF_CUT =  1.0;
+	m_BCAL_RF_CUT = 12.0;
 	m_TOF_RF_CUT  =  1.0;
 	
 	// default values for the minimum energy cuts:
@@ -26,7 +26,7 @@ EtaAna::EtaAna() {
 	
 	// default value for elasticity cut:
 	m_ELAS_CUT_SIGMA = 0.031;
-	m_ELAS_CUT_WIDTH = 3.0;
+	m_ELAS_CUT_WIDTH = 5.0;
 	m_ELAS_CUT_MU_P0 = 1.0; // mu = p0 + p1*E_gamma
 	m_ELAS_CUT_MU_P1 = 0.0;
 	
@@ -50,6 +50,12 @@ void EtaAna::initializeReactionTypes() {
 	m_reaction_types.push_back({Rho0, Neutron});
 	m_reaction_types.push_back({phiMeson, Proton});
 	m_reaction_types.push_back({phiMeson, Neutron});
+	m_reaction_types.push_back({Eta, Pi0, Pi0, Proton});
+	m_reaction_types.push_back({Eta, Pi0, Pi0, Neutron});
+	m_reaction_types.push_back({Eta, Pi0, PiPlus, Neutron});
+	m_reaction_types.push_back({Eta, Pi0, PiMinus, Proton});
+	m_reaction_types.push_back({Eta, PiPlus, PiMinus, Proton});
+	m_reaction_types.push_back({Eta, PiPlus, PiMinus, Neutron});
 	
 	return;
 }
@@ -138,15 +144,21 @@ void EtaAna::etaggAnalysis() {
 	}
 	
 	// BCAL Veto:
-	int    locNBCALShowers  = 0;
+	int    locNBCALShowers  = 0, locNBCALShowers_1ns = 0;
 	double locBCALEnergySum = 0.;
+	double locBCALRFDT = 0., locBCALPhi = 0.; // only useful when there's exactly 1 BCAL shower within timing cut
 	for(int ishow=0; ishow<m_nbcal; ishow++) {
 		TVector3 loc_pos(m_bcal_x[ishow], m_bcal_y[ishow], m_bcal_z[ishow]);
 		loc_pos -= m_vertex;
 		double loc_t = m_bcal_t[ishow] - (loc_pos.Mag()/m_c) - m_rfTime;
-		if(fabs(loc_t) < m_BCAL_RF_CUT) {
+		if(fabs(loc_t) < 12.0) {
 			locBCALEnergySum += m_bcal_e[ishow];
 			locNBCALShowers++;
+			locBCALRFDT = loc_t;
+			locBCALPhi  = loc_pos.Phi() * (180./TMath::Pi());
+			if(fabs(loc_t) < 1.0) {
+				locNBCALShowers_1ns++;
+			}
 		}
 	}
 	
@@ -219,6 +231,9 @@ void EtaAna::etaggAnalysis() {
 			// polar angle:
 			double prod_th = (180./TMath::Pi()) * atan2(pggt,pggz);
 			
+			// azimuthal angle:
+			double prod_phi = (180./TMath::Pi()) * atan2(pggy,pggx);
+			
 			// opening angle:
 			double cos12   = (pos1.X()*pos2.X() + pos1.Y()*pos2.Y() + pos1.Z()*pos2.Z()) / (pos1.Mag()*pos2.Mag());
 			
@@ -288,6 +303,16 @@ void EtaAna::etaggAnalysis() {
 				double mmsq = 2.0*m_Proton*eb - 2.0*eb*Egg + m_Proton*m_Proton + m_eta*m_eta 
 					- 2.0*m_Proton*Egg + 2.0*eb*cos(prod_th*TMath::Pi()/180.)*sqrt(Egg*Egg - m_eta*m_eta);
 				
+				//-----------------------------------------------------//
+				// Different ways to apply BCAL Veto:
+				/*
+				 1. Veto events with any BCAL shower within +/-12 ns (strict veto)
+				 2. Veto events with any BCAL shower within +/-1 ns
+				 3. Allow a single BCAL shower if the deltaPhi from two-photon pair is 180 +/- 30, no cut on timing
+				 4. Allow a single BCAL shower if the deltaPhi from two-photon pair is 180 +/- 30 and the timing is >1ns
+				*/
+				//-----------------------------------------------------//
+				
 				h_elas_vs_mgg->Fill(invmass/m_eta, Egg/eeta, fill_weight);
 				
 				if(eta_cut) {
@@ -308,11 +333,40 @@ void EtaAna::etaggAnalysis() {
 					
 					if(eta_cut) {
 						
+						// check different BCAL veto options:
+						vector<int> loc_bcal_vetos;
+						for(int iveto=0; iveto<m_n_bcal_vetos; iveto++) loc_bcal_vetos.push_back(0);
+						if(locNBCALShowers==0) 
+							loc_bcal_vetos[0] = 1;
+						if(locNBCALShowers_1ns==0) 
+							loc_bcal_vetos[1] = 1;
+						if((locNBCALShowers==0) ||
+							(locNBCALShowers==1 && fabs(fabs(locBCALPhi-prod_phi)-180.0) < 30.0))
+							loc_bcal_vetos[2] = 1;
+						if((locNBCALShowers==0) || 
+							(locNBCALShowers==1 && fabs(fabs(locBCALPhi-prod_phi)-180.0) < 30.0 && locBCALRFDT>1.0))
+							loc_bcal_vetos[3] = 1;
+						
 						h_theta[locFinalState]->Fill(prod_th, fill_weight);
-						if(locNBCALShowers==0) {
+						if(loc_bcal_vetos[3]) {
 							h_accepted->Fill(locFinalState, fill_weight);
-							h_theta_veto[locFinalState]->Fill(prod_th, fill_weight);
 						}
+						
+						for(int iveto=0; iveto<m_n_bcal_vetos; iveto++) {
+							if(loc_bcal_vetos[iveto]) h_theta_veto[locFinalState][iveto]->Fill(prod_th, fill_weight);
+						}
+						
+						// plot the distribution of BCAL showers for each reaction type:
+						h_nbcal[locFinalState]->Fill(locNBCALShowers, fill_weight);
+						h_bcal_energy[locFinalState]->Fill(locBCALEnergySum, fill_weight);
+						if(locNBCALShowers==1) {
+							h_bcal_energy_single[locFinalState]->Fill(locBCALEnergySum, fill_weight);
+							// plot time difference vs angle of eta:
+							h_bcal_dt_vs_eta_angle[locFinalState]->Fill(prod_th, locBCALRFDT, fill_weight);
+							// plot deltaPhi:
+							h_bcal_deltaPhi[locFinalState]->Fill(fabs(locBCALPhi-prod_phi), fill_weight);
+						}
+						
 						// plot x-y distribution of showers:
 						h_xy_1->Fill(pos1.X(), pos1.Y(), fill_weight);
 						h_xy_2->Fill(pos2.X(), pos2.Y(), fill_weight);
@@ -341,26 +395,6 @@ void EtaAna::etaggAnalysis() {
 }
 
 int EtaAna::getFinalState_bggen(int debug) {
-	
-	/*
-	Proton:
-	  0. gamma+p -> eta+p
-	  2. gamma+p -> eta+pi0+p
-	  4. gamma+p -> eta+pip+n
-	  6. gamma+p -> omega+p
-	  8. gamma+p -> rho+p
-	 10. gamma+p -> phi+p
-	 
-	Neutron:
-	  1. gamma+n -> eta+n
-	  3. gamma+n -> eta+pi0+n
-	  5. gamma+n -> eta+pim+p
-	  7. gamma+n -> omega+n
-	  9. gamma+n -> rho+n
-	 11. gamma+n -> phi+n
-	
-	 12. everything else
-	*/
 	
 	vector<Particle_t> loc_thrown_vec;
 	loc_thrown_vec.clear();
@@ -759,26 +793,61 @@ void EtaAna::initHistograms() {
 	h_thrown->GetXaxis()->SetBinLabel(h_thrown->GetNbinsX(), "other");
 	h_accepted->GetXaxis()->SetBinLabel(h_accepted->GetNbinsX(), "other");
 	
-	// angular distribution for each reaction type:
+	// Plots specific to different reaction types:
 	
-	for(int itype=0; itype<n_reactions; itype++) {
+	for(int itype=0; itype<(n_reactions+1); itype++) {
 		
 		TString hist_label = "", hist_title = "";
-		for(int iparticle=0; iparticle<m_reaction_types[itype].size(); iparticle++) {
-			hist_label += ShortName(m_reaction_types[itype][iparticle]);
-			hist_title += ParticleName_ROOT(m_reaction_types[itype][iparticle]);
+		if(itype==n_reactions) {
+			hist_label = "other";
+			hist_title = "other";
 		}
+		else {
+			for(int iparticle=0; iparticle<m_reaction_types[itype].size(); iparticle++) {
+				hist_label += ShortName(m_reaction_types[itype][iparticle]);
+				hist_title += ParticleName_ROOT(m_reaction_types[itype][iparticle]);
+			}
+		}
+		
+		// angular yields (with and without BCAL veto):
+		
 		TH1F *loc_h_theta      = new TH1F(Form("theta_%s",hist_label.Data()), 
 			Form("Angular Yield (%s)",hist_title.Data()), 65, 0.0, 6.5);
-		TH1F *loc_h_theta_veto = new TH1F(Form("theta_veto_%s",hist_label.Data()), 
-			Form("Angular Yield with BCAL Veto (%s)",hist_title.Data()), 65, 0.0, 6.5);
 		h_theta.push_back(loc_h_theta);
-		h_theta_veto.push_back(loc_h_theta_veto);
+		
+		vector<TH1F*> loc_h_theta_veto_vec;
+		for(int iveto=0; iveto<m_n_bcal_vetos; iveto++) {
+			TH1F *loc_h_theta_veto = new TH1F(Form("theta_veto_%d_%s",iveto,hist_label.Data()),
+				Form("Angular Yield with BCAL Veto (option %d) (%s)",iveto,hist_title.Data()), 65, 0.0, 6.5);
+			loc_h_theta_veto_vec.push_back(loc_h_theta_veto);
+		}
+		h_theta_veto.push_back(loc_h_theta_veto_vec);
+		
+		// BCAL shower distributions:
+		
+		TH1F *loc_h_nbcal = new TH1F(Form("nbcal_%s",hist_label.Data()), 
+			Form("Number of BCAL Showers (%s)",hist_title.Data()), 20, -0.5, 19.5);
+		
+		TH1F *loc_h_bcal_energy = new TH1F(Form("bcal_energy_sum_%s",hist_label.Data()),
+			Form("BCAL Energy Sum (%s)",hist_title.Data()), 500, 0.0, 5.0);
+		
+		TH1F *loc_h_bcal_energy_single = new TH1F(Form("bcal_energy_sum_single_%s",hist_label.Data()),
+			Form("BCAL Energy Sum, 1-Shower (%s)",hist_title.Data()), 500, 0.0, 5.0);
+		
+		TH2F *loc_h_bcal_dt_vs_eta_angle = new TH2F(Form("bcal_dt_vs_eta_angle_%s",hist_label.Data()),
+			Form("BCAL-RF Time vs #eta Angle (%s); #theta_{rec} [deg.]; t_{BCAL}-t_{RF} [ns]",hist_title.Data()),
+			100, 0.0, 10.0, 400, -20.0, 20.0);
+		
+		TH1F *loc_h_bcal_deltaPhi = new TH1F(Form("bcal_deltaPhi_%s",hist_label.Data()),
+			Form("#left|#phi_{#gamma#gamma} - #phi_{BCAL}#right| (%s); #Delta#phi_{#eta-BCAL} [deg.]",hist_title.Data()),
+			360, 0., 360.0);
+		
+		h_nbcal.push_back(loc_h_nbcal);
+		h_bcal_energy.push_back(loc_h_bcal_energy);
+		h_bcal_energy_single.push_back(loc_h_bcal_energy_single);
+		h_bcal_dt_vs_eta_angle.push_back(loc_h_bcal_dt_vs_eta_angle);
+		h_bcal_deltaPhi.push_back(loc_h_bcal_deltaPhi);
 	}
-	TH1F *loc_h_theta = new TH1F("theta_other", "Angular Yield (other)", 65, 0.0, 6.5);
-	TH1F *loc_h_theta_veto = new TH1F("theta_veto_other", "Angular Yield with BCAL Veto (other)", 65, 0.0, 6.5);
-	h_theta.push_back(loc_h_theta);
-	h_theta_veto.push_back(loc_h_theta_veto);
 	
 	
 	// Elasticity vs. mass ratio:
@@ -845,7 +914,12 @@ void EtaAna::resetHistograms() {
 	
 	for(int itype=0; itype<h_theta.size(); itype++) {
 		h_theta[itype]->Reset();
-		h_theta_veto[itype]->Reset();
+		for(int iveto=0; iveto<m_n_bcal_vetos; iveto++) h_theta_veto[itype][iveto]->Reset();
+		h_nbcal[itype]->Reset();
+		h_bcal_energy[itype]->Reset();
+		h_bcal_energy_single[itype]->Reset();
+		h_bcal_dt_vs_eta_angle[itype]->Reset();
+		h_bcal_deltaPhi[itype]->Reset();
 	}
 	
 	h_elas_vs_mgg->Reset();
@@ -872,13 +946,27 @@ void EtaAna::writeHistograms() {
 	h_thrown->Write();
 	h_accepted->Write();
 	
-	TDirectory *dir_theta = new TDirectoryFile("theta","theta");
-	dir_theta->cd();
 	for(int itype=0; itype<h_theta.size(); itype++) {
+		
+		TString dir_label = "other";
+		if(itype<m_reaction_types.size()) {
+			dir_label = "";
+			for(int iparticle=0; iparticle<m_reaction_types[itype].size(); iparticle++) {
+				dir_label += ShortName(m_reaction_types[itype][iparticle]);
+			}
+		}
+		
+		TDirectory *loc_dir = new TDirectoryFile(dir_label.Data(), dir_label.Data());
+		loc_dir->cd();
 		h_theta[itype]->Write();
-		h_theta_veto[itype]->Write();
+		for(int iveto=0; iveto<m_n_bcal_vetos; iveto++) h_theta_veto[itype][iveto]->Write();
+		h_nbcal[itype]->Write();
+		h_bcal_energy[itype]->Write();
+		h_bcal_energy_single[itype]->Write();
+		h_bcal_dt_vs_eta_angle[itype]->Write();
+		h_bcal_deltaPhi[itype]->Write();
+		loc_dir->cd("../");
 	}
-	dir_theta->cd("../");
 	
 	h_elas_vs_mgg->Write();
 	h_elas->Write();

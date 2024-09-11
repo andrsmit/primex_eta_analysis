@@ -26,6 +26,7 @@ using namespace std;
 // Structure for the configuration settings:
 
 struct genSettings_t {
+	string ver_str;
 	int min_run;
 	int max_run;
 	int run_number;       //
