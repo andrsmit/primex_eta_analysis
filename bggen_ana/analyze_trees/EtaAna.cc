@@ -363,6 +363,8 @@ void EtaAna::etaggAnalysis() {
 							h_bcal_energy_single[locFinalState]->Fill(locBCALEnergySum, fill_weight);
 							// plot time difference vs angle of eta:
 							h_bcal_dt_vs_eta_angle[locFinalState]->Fill(prod_th, locBCALRFDT, fill_weight);
+							// plot time difference vs energy of BCAL shower:
+							h_bcal_dt_vs_bcal_energy[locFinalState]->Fill(locBCALEnergySum, locBCALRFDT, fill_weight);
 							// plot deltaPhi:
 							h_bcal_deltaPhi[locFinalState]->Fill(fabs(locBCALPhi-prod_phi), fill_weight);
 						}
@@ -838,6 +840,10 @@ void EtaAna::initHistograms() {
 			Form("BCAL-RF Time vs #eta Angle (%s); #theta_{rec} [deg.]; t_{BCAL}-t_{RF} [ns]",hist_title.Data()),
 			100, 0.0, 10.0, 400, -20.0, 20.0);
 		
+		TH2F *loc_h_bcal_dt_vs_bcal_energy = new TH2F(Form("bcal_dt_vs_bcal_energy_%s",hist_label.Data()),
+			Form("BCAL-RF Time vs Shower Energy (%s); E_{BCAL} [GeV]; t_{BCAL}-t_{RF} [ns]",hist_title.Data()),
+			100, 0.0, 1.0, 400, -20.0, 20.0);
+		
 		TH1F *loc_h_bcal_deltaPhi = new TH1F(Form("bcal_deltaPhi_%s",hist_label.Data()),
 			Form("#left|#phi_{#gamma#gamma} - #phi_{BCAL}#right| (%s); #Delta#phi_{#eta-BCAL} [deg.]",hist_title.Data()),
 			360, 0., 360.0);
@@ -846,6 +852,7 @@ void EtaAna::initHistograms() {
 		h_bcal_energy.push_back(loc_h_bcal_energy);
 		h_bcal_energy_single.push_back(loc_h_bcal_energy_single);
 		h_bcal_dt_vs_eta_angle.push_back(loc_h_bcal_dt_vs_eta_angle);
+		h_bcal_dt_vs_bcal_energy.push_back(loc_h_bcal_dt_vs_bcal_energy);
 		h_bcal_deltaPhi.push_back(loc_h_bcal_deltaPhi);
 	}
 	
@@ -919,6 +926,7 @@ void EtaAna::resetHistograms() {
 		h_bcal_energy[itype]->Reset();
 		h_bcal_energy_single[itype]->Reset();
 		h_bcal_dt_vs_eta_angle[itype]->Reset();
+		h_bcal_dt_vs_bcal_energy[itype]->Reset();
 		h_bcal_deltaPhi[itype]->Reset();
 	}
 	
@@ -964,6 +972,7 @@ void EtaAna::writeHistograms() {
 		h_bcal_energy[itype]->Write();
 		h_bcal_energy_single[itype]->Write();
 		h_bcal_dt_vs_eta_angle[itype]->Write();
+		h_bcal_dt_vs_bcal_energy[itype]->Write();
 		h_bcal_deltaPhi[itype]->Write();
 		loc_dir->cd("../");
 	}

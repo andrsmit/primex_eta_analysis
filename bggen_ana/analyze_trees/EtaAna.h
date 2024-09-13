@@ -139,7 +139,7 @@ class EtaAna {
 		int m_n_bcal_vetos = 4;
 		vector<vector<TH1F*>> h_theta_veto;
 		vector<TH1F*> h_nbcal, h_bcal_energy, h_bcal_energy_single;
-		vector<TH2F*> h_bcal_dt_vs_eta_angle;
+		vector<TH2F*> h_bcal_dt_vs_eta_angle, h_bcal_dt_vs_bcal_energy;
 		vector<TH1F*> h_bcal_deltaPhi;
 		
 		TH2F *h_elas_vs_mgg;
