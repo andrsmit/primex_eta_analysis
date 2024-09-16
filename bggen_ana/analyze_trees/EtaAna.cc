@@ -335,24 +335,31 @@ void EtaAna::etaggAnalysis() {
 					h_elas_corr->Fill(prod_th, Egg/eeta, fill_weight);
 					if(locFinalState==0 || locFinalState==1) {
 						h_elas_signal->Fill(prod_th, Egg/eb, fill_weight);
-						h_elas_corr_signal->Fill(prod_th, Egg/eb, fill_weight);
+						h_elas_corr_signal->Fill(prod_th, Egg/eeta, fill_weight);
 					} else {
 						h_elas_bkgd->Fill(prod_th, Egg/eb, fill_weight);
-						h_elas_corr_bkgd->Fill(prod_th, Egg/eb, fill_weight);
+						h_elas_corr_bkgd->Fill(prod_th, Egg/eeta, fill_weight);
 					}
 				}
 				
 				// apply elasticity cut and plot the invariant mass distriubtion:
 				if(elas_cut) {
-					// invariant mass vs. polar angle:
-					h_mgg->Fill(prod_th, invmass, fill_weight);
 					
-					// energy-constrained invariant mass vs. polar angle:
-					h_mgg_const->Fill(prod_th, invmass_const, fill_weight);
-					
-					// energy-constrained invariant mass vs. energy-constrained polar angle:
-					h_mgg_const_corr->Fill(prod_th_const, invmass_const, fill_weight);
-					
+					if(loc_bcal_vetos[3]) {
+						// invariant mass vs. polar angle:
+						h_mgg->Fill(prod_th, invmass, fill_weight);
+						
+						// energy-constrained invariant mass vs. polar angle:
+						h_mgg_const->Fill(prod_th, invmass_const, fill_weight);
+						
+						if(locFinalState==0 || locFinalState==1) {
+							h_mgg_signal->Fill(prod_th, invmass, fill_weight);
+							h_mgg_const_signal->Fill(prod_th, invmass_const, fill_weight);
+						} else {
+							h_mgg_bkgd->Fill(prod_th, invmass, fill_weight);
+							h_mgg_const_bkgd->Fill(prod_th, invmass_const, fill_weight);
+						}
+					}
 					if(eta_cut) {
 						
 						h_theta[locFinalState]->Fill(prod_th, fill_weight);
@@ -892,17 +899,31 @@ void EtaAna::initHistograms() {
 	h_mgg->GetYaxis()->SetTitle("M_{#gamma#gamma} [GeV/c^{2}]");
 	h_mgg->Sumw2();
 	
+	h_mgg_signal = new TH2F("mgg_signal", "Two-Photon Invariant Mass", 650, 0., 6.5, 600, 0., 1.2);
+	h_mgg_signal->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
+	h_mgg_signal->GetYaxis()->SetTitle("M_{#gamma#gamma} [GeV/c^{2}]");
+	h_mgg_signal->Sumw2();
+	
+	h_mgg_bkgd = new TH2F("mgg_bkgd", "Two-Photon Invariant Mass", 650, 0., 6.5, 600, 0., 1.2);
+	h_mgg_bkgd->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
+	h_mgg_bkgd->GetYaxis()->SetTitle("M_{#gamma#gamma} [GeV/c^{2}]");
+	h_mgg_bkgd->Sumw2();
+	
 	// Energy-constrained mass vs. angle:
 	h_mgg_const = new TH2F("mgg_const", "Energy-Constrained Inv Mass", 650, 0., 6.5, 600, 0., 1.2);
 	h_mgg_const->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
 	h_mgg_const->GetYaxis()->SetTitle("M_{#gamma#gamma}^{constr} [GeV/c^{2}]");
 	h_mgg_const->Sumw2();
 	
-	// Energy-constrained mass vs. energy-constrained angle:
-	h_mgg_const_corr = new TH2F("mgg_const_corr", "Energy-Constrained Inv Mass", 650, 0., 6.5, 600, 0., 1.2);
-	h_mgg_const_corr->GetXaxis()->SetTitle("#theta_{#gamma#gamma}^{constr} [#circ]");
-	h_mgg_const_corr->GetYaxis()->SetTitle("M_{#gamma#gamma}^{constr} [GeV/c^{2}]");
-	h_mgg_const_corr->Sumw2();
+	h_mgg_const_signal = new TH2F("mgg_const_signal", "Energy-Constrained Inv Mass", 650, 0., 6.5, 600, 0., 1.2);
+	h_mgg_const_signal->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
+	h_mgg_const_signal->GetYaxis()->SetTitle("M_{#gamma#gamma}^{constr} [GeV/c^{2}]");
+	h_mgg_const_signal->Sumw2();
+	
+	h_mgg_const_bkgd = new TH2F("mgg_const_bkgd", "Energy-Constrained Inv Mass", 650, 0., 6.5, 600, 0., 1.2);
+	h_mgg_const_bkgd->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
+	h_mgg_const_bkgd->GetYaxis()->SetTitle("M_{#gamma#gamma}^{constr} [GeV/c^{2}]");
+	h_mgg_const_bkgd->Sumw2();
 	
 	// Missing-mass vs. angle:
 	h_mm_vs_theta = new TH2F("mm_vs_theta", "Squared Missing Mass", 
@@ -957,7 +978,11 @@ void EtaAna::resetHistograms() {
 	
 	h_mgg->Reset();
 	h_mgg_const->Reset();
-	h_mgg_const_corr->Reset();
+	h_mgg_signal->Reset();
+	h_mgg_const_signal->Reset();
+	h_mgg_bkgd->Reset();
+	h_mgg_const_bkgd->Reset();
+	
 	h_mm_vs_theta->Reset();
 	h_mm_vs_theta_eta_cut->Reset();
 	h_mm_vs_theta_eta_elas_cut->Reset();
@@ -1010,7 +1035,11 @@ void EtaAna::writeHistograms() {
 	
 	h_mgg->Write();
 	h_mgg_const->Write();
-	h_mgg_const_corr->Write();
+	h_mgg_signal->Write();
+	h_mgg_const_signal->Write();
+	h_mgg_bkgd->Write();
+	h_mgg_const_bkgd->Write();
+	
 	h_mm_vs_theta->Write();
 	h_mm_vs_theta_eta_cut->Write();
 	h_mm_vs_theta_eta_elas_cut->Write();
