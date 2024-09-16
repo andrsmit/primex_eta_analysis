@@ -143,8 +143,8 @@ class EtaAna {
 		vector<TH1F*> h_bcal_deltaPhi;
 		
 		TH2F *h_elas_vs_mgg;
-		TH2F *h_elas;
-		TH2F *h_elas_corr;
+		TH2F *h_elas,      *h_elas_signal,      *h_elas_bkgd;
+		TH2F *h_elas_corr, *h_elas_corr_signal, *h_elas_corr_bkgd;
 		TH2F *h_mgg;
 		TH2F *h_mgg_const;
 		TH2F *h_mgg_const_corr;

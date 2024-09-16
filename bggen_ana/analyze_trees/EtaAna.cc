@@ -240,6 +240,21 @@ void EtaAna::etaggAnalysis() {
 			// invariant mass:
 			double invmass = sqrt(2.0*e1*e2*(1.-cos12));
 			
+			// check different BCAL veto options:
+			
+			vector<int> loc_bcal_vetos;
+			for(int iveto=0; iveto<m_n_bcal_vetos; iveto++) loc_bcal_vetos.push_back(0);
+			if(locNBCALShowers==0) 
+				loc_bcal_vetos[0] = 1;
+			if(locNBCALShowers_1ns==0) 
+				loc_bcal_vetos[1] = 1;
+			if((locNBCALShowers==0) ||
+				(locNBCALShowers==1 && fabs(fabs(locBCALPhi-prod_phi)-180.0) < 30.0))
+				loc_bcal_vetos[2] = 1;
+			if((locNBCALShowers==0) || 
+				(locNBCALShowers==1 && fabs(fabs(locBCALPhi-prod_phi)-180.0) < 30.0 && locBCALRFDT>1.0))
+				loc_bcal_vetos[3] = 1;
+			
 			//-----------------------------------------------------//
 			// Loop over Beam photons
 			
@@ -315,9 +330,16 @@ void EtaAna::etaggAnalysis() {
 				
 				h_elas_vs_mgg->Fill(invmass/m_eta, Egg/eeta, fill_weight);
 				
-				if(eta_cut) {
+				if(eta_cut && loc_bcal_vetos[3]) {
 					h_elas->Fill(prod_th, Egg/eb, fill_weight);
 					h_elas_corr->Fill(prod_th, Egg/eeta, fill_weight);
+					if(locFinalState==0 || locFinalState==1) {
+						h_elas_signal->Fill(prod_th, Egg/eb, fill_weight);
+						h_elas_corr_signal->Fill(prod_th, Egg/eb, fill_weight);
+					} else {
+						h_elas_bkgd->Fill(prod_th, Egg/eb, fill_weight);
+						h_elas_corr_bkgd->Fill(prod_th, Egg/eb, fill_weight);
+					}
 				}
 				
 				// apply elasticity cut and plot the invariant mass distriubtion:
@@ -332,20 +354,6 @@ void EtaAna::etaggAnalysis() {
 					h_mgg_const_corr->Fill(prod_th_const, invmass_const, fill_weight);
 					
 					if(eta_cut) {
-						
-						// check different BCAL veto options:
-						vector<int> loc_bcal_vetos;
-						for(int iveto=0; iveto<m_n_bcal_vetos; iveto++) loc_bcal_vetos.push_back(0);
-						if(locNBCALShowers==0) 
-							loc_bcal_vetos[0] = 1;
-						if(locNBCALShowers_1ns==0) 
-							loc_bcal_vetos[1] = 1;
-						if((locNBCALShowers==0) ||
-							(locNBCALShowers==1 && fabs(fabs(locBCALPhi-prod_phi)-180.0) < 30.0))
-							loc_bcal_vetos[2] = 1;
-						if((locNBCALShowers==0) || 
-							(locNBCALShowers==1 && fabs(fabs(locBCALPhi-prod_phi)-180.0) < 30.0 && locBCALRFDT>1.0))
-							loc_bcal_vetos[3] = 1;
 						
 						h_theta[locFinalState]->Fill(prod_th, fill_weight);
 						if(loc_bcal_vetos[3]) {
@@ -863,11 +871,19 @@ void EtaAna::initHistograms() {
 		1000, 0., 2., 1000, 0., 2.);
 	
 	// Elasticity with tagged photon:
-	h_elas           = new TH2F("elas", 
+	h_elas             = new TH2F("elas", 
+		"Elasticity; E_{#gamma#gamma}/E_{#gamma}", 650, 0., 6.5, 1000, 0., 2.);
+	h_elas_signal      = new TH2F("elas_signal", 
+		"Elasticity; E_{#gamma#gamma}/E_{#gamma}", 650, 0., 6.5, 1000, 0., 2.);
+	h_elas_bkgd        = new TH2F("elas_bkgd", 
 		"Elasticity; E_{#gamma#gamma}/E_{#gamma}", 650, 0., 6.5, 1000, 0., 2.);
 	
 	// Elasticity with coherently-produced eta:
-	h_elas_corr      = new TH2F("elas_corr", 
+	h_elas_corr        = new TH2F("elas_corr", 
+		"Elasticity; E_{#gamma#gamma}/E_{#eta}#left(E_{#gamma},#theta_{#gamma#gamma}#right)", 650, 0., 6.5, 1000, 0., 2.);
+	h_elas_corr_signal = new TH2F("elas_corr_signal", 
+		"Elasticity; E_{#gamma#gamma}/E_{#eta}#left(E_{#gamma},#theta_{#gamma#gamma}#right)", 650, 0., 6.5, 1000, 0., 2.);
+	h_elas_corr_bkgd   = new TH2F("elas_corr_bkgd", 
 		"Elasticity; E_{#gamma#gamma}/E_{#eta}#left(E_{#gamma},#theta_{#gamma#gamma}#right)", 650, 0., 6.5, 1000, 0., 2.);
 	
 	// 2-photon invariant mass vs. angle:
@@ -931,8 +947,14 @@ void EtaAna::resetHistograms() {
 	}
 	
 	h_elas_vs_mgg->Reset();
+	
 	h_elas->Reset();
 	h_elas_corr->Reset();
+	h_elas_signal->Reset();
+	h_elas_corr_signal->Reset();
+	h_elas_bkgd->Reset();
+	h_elas_corr_bkgd->Reset();
+	
 	h_mgg->Reset();
 	h_mgg_const->Reset();
 	h_mgg_const_corr->Reset();
@@ -978,8 +1000,14 @@ void EtaAna::writeHistograms() {
 	}
 	
 	h_elas_vs_mgg->Write();
+	
 	h_elas->Write();
 	h_elas_corr->Write();
+	h_elas_signal->Write();
+	h_elas_corr_signal->Write();
+	h_elas_bkgd->Write();
+	h_elas_corr_bkgd->Write();
+	
 	h_mgg->Write();
 	h_mgg_const->Write();
 	h_mgg_const_corr->Write();
