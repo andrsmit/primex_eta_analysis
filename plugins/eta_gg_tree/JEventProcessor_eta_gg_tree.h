@@ -22,6 +22,7 @@
 #include "BCAL/DBCALShower.h"
 #include "CCAL/DCCALShower.h"
 #include "TOF/DTOFPoint.h"
+#include "START_COUNTER/DSCHit.h"
 #include "PID/DMCReaction.h"
 #include "PID/DBeamPhoton.h"
 #include "PID/DEventRFBunch.h"
@@ -64,6 +65,7 @@ class JEventProcessor_eta_gg_tree:public jana::JEventProcessor{
 			vector<const DFCALShower*> fcal_showers,
 			vector<const DBCALShower*> bcal_showers,
 			vector<const DTOFPoint*> tof_points,
+			vector<const DSCHit*> sc_hits,
 			vector<const DMCThrown*> mc_thrown);
 		
 		//---------------------------------------//
@@ -75,6 +77,8 @@ class JEventProcessor_eta_gg_tree:public jana::JEventProcessor{
 		
 		double m_fcalX_new, m_fcalY_new;
 		double m_ccalX_new, m_ccalY_new;
+		
+		vector<vector<DVector3>> m_sc_pos, m_sc_norm;
 		
 		DVector3 m_fcal_correction, m_ccal_correction;
 		

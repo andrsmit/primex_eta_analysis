@@ -108,9 +108,17 @@ jerror_t JEventProcessor_eta_gg_tree::init(void)
 	locTreeBranchRegister.Register_FundamentalArray<Double_t>("tof_z","ntof");
 	locTreeBranchRegister.Register_FundamentalArray<Double_t>("tof_t","ntof");
 	
+	// SC Hits:
+	locTreeBranchRegister.Register_Single<Int_t>("nsc");
+	locTreeBranchRegister.Register_FundamentalArray<Int_t>("sc_sector","nsc");
+	locTreeBranchRegister.Register_FundamentalArray<Double_t>("sc_phi","nsc");
+	locTreeBranchRegister.Register_FundamentalArray<Double_t>("sc_dE","nsc");
+	locTreeBranchRegister.Register_FundamentalArray<Double_t>("sc_t","nsc");
+	locTreeBranchRegister.Register_FundamentalArray<Double_t>("sc_pulse_height","nsc");
+	
 	// MC Thrown:
 	locTreeBranchRegister.Register_Single<Int_t>("nmc");
-	locTreeBranchRegister.Register_FundamentalArray<Double_t>("mc_pdgtype","nmc");
+	locTreeBranchRegister.Register_FundamentalArray<Int_t>("mc_pdgtype","nmc");
 	locTreeBranchRegister.Register_FundamentalArray<Double_t>("mc_x","nmc");
 	locTreeBranchRegister.Register_FundamentalArray<Double_t>("mc_y","nmc");
 	locTreeBranchRegister.Register_FundamentalArray<Double_t>("mc_z","nmc");
@@ -151,6 +159,9 @@ jerror_t JEventProcessor_eta_gg_tree::brun(JEventLoop *eventLoop, int32_t runnum
 	jcalib->Get("PHOTON_BEAM/beam_spot", beam_spot);
 	m_beamX = beam_spot.at("x");
 	m_beamY = beam_spot.at("y");
+	
+	// Get start counter geomety:
+	dgeom->GetStartCounterGeom(m_sc_pos, m_sc_norm);
 	
 	//--------------------------------------------------------------//
 	// Set the target mass depending on run number:
@@ -428,6 +439,9 @@ jerror_t JEventProcessor_eta_gg_tree::evnt(JEventLoop *eventLoop, uint64_t event
 	vector<const DTOFPoint*> locTOFPoints;
 	eventLoop->Get(locTOFPoints);
 	
+	vector<const DSCHit*> locSCHits;
+	eventLoop->Get(locSCHits);
+	
 	//-----------------------------------------------------//
 	// Look for pair of FCAL showers with invariant mass > 0.3 GeV/c^2:
 	
@@ -528,7 +542,8 @@ jerror_t JEventProcessor_eta_gg_tree::evnt(JEventLoop *eventLoop, uint64_t event
 	}
 	
 	if(locEventSelector) {
-		write_events(eventnumber, locRFTime, locBeamPhotons, locFCALShowers, locBCALShowers, locTOFPoints, locMCThrown);
+		write_events(eventnumber, locRFTime, locBeamPhotons, locFCALShowers, locBCALShowers, locTOFPoints, locSCHits, 
+			locMCThrown);
 		dTreeInterface->Fill(dTreeFillData);
 	}
 	else if(locIsMC && m_SAVE_MC_NOHITS) {
@@ -618,6 +633,7 @@ void JEventProcessor_eta_gg_tree::write_events(uint64_t eventnumber, double rfTi
 	vector<const DFCALShower*> fcal_showers,
 	vector<const DBCALShower*> bcal_showers,
 	vector<const DTOFPoint*> tof_points,
+	vector<const DSCHit*> sc_hits,
 	vector<const DMCThrown*> mc_thrown) {
 	
 	dTreeFillData.Fill_Single<Int_t>("eventNum", eventnumber);
@@ -708,6 +724,23 @@ void JEventProcessor_eta_gg_tree::write_events(uint64_t eventnumber, double rfTi
 		n_tof_points++;
 	}
 	dTreeFillData.Fill_Single<Int_t>("ntof", n_tof_points);
+	
+	// SC Hits:
+	size_t n_sc_hits = 0;
+	for(vector<const DSCHit*>::const_iterator sc = sc_hits.begin(); sc != sc_hits.end(); sc++) {
+		
+		int sector = (*sc)->sector;
+		double phi = m_sc_pos[sector-1][0].Phi() * (180./TMath::Pi());
+		
+		dTreeFillData.Fill_Array<Int_t>("sc_sector",          sector,              n_sc_hits);
+		dTreeFillData.Fill_Array<Double_t>("sc_phi",          phi,                 n_sc_hits);
+		dTreeFillData.Fill_Array<Double_t>("sc_dE",           (*sc)->dE,           n_sc_hits);
+		dTreeFillData.Fill_Array<Double_t>("sc_t",            (*sc)->t,            n_sc_hits);
+		dTreeFillData.Fill_Array<Double_t>("sc_pulse_height", (*sc)->pulse_height, n_sc_hits);
+		
+		n_sc_hits++;
+	}
+	dTreeFillData.Fill_Single<Int_t>("nsc", n_sc_hits);
 	
 	// MC Thrown:
 	size_t n_mc_thrown = 0;
