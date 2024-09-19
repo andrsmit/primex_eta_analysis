@@ -22,11 +22,13 @@
 #include "BCAL/DBCALShower.h"
 #include "CCAL/DCCALShower.h"
 #include "TOF/DTOFPoint.h"
+#include "START_COUNTER/DSCHit.h"
 #include "PID/DMCReaction.h"
 #include "PID/DBeamPhoton.h"
 #include "PID/DEventRFBunch.h"
 #include "DVector3.h"
 #include "DLorentzVector.h"
+#include "particleType.h"
 
 // ROOT headers:
 #include "TH1.h"
@@ -52,7 +54,7 @@ class JEventProcessor_primex_eta_analysis:public jana::JEventProcessor{
 		//---------------------------------------//
 		// Functions
 		
-		int fcal_fiducial_cut(DVector3 pos, DVector3 vertex, double layer_cut);
+		int fcal_fiducial_cut(DVector3 pos, double layer_cut);
 		
 		double energy_after_recoil(double eb, double theta, double m0, double mp);
 		
@@ -60,29 +62,27 @@ class JEventProcessor_primex_eta_analysis:public jana::JEventProcessor{
 		
 		double get_acc_scaling_factor(double eb);
 		
-		void check_TOF_match(DVector3 pos, double rfTime, DVector3 vertex, 
-			vector<const DTOFPoint*> tof_points, double &dx_min, double &dy_min, 
-			double &dt_min, double rf_time_cut);
+		void check_TOF_match(DVector3 pos, double rfTime, vector<const DTOFPoint*> tof_points, 
+			double &dx_min, double &dy_min, double &dt_min, double rf_time_cut);
 		
 		void eta_gg_analysis(
-			vector<const DFCALShower*> fcal_showers, vector<const DBeamPhoton*> beam_photons,
-			vector<const DBCALShower*> bcal_showers, vector<const DTOFPoint*> tof_points, 
-			int n_fcal_showers, int n_good_fcal_showers, double bcal_energy_sum, int n_bcal_showers, 
-			DVector3 vertex, double rfTime, 
-			bool is_mc, double thrown_beam_energy, double thrown_eta_angle
+			vector<const DFCALShower*> fcal_showers, 
+			vector<const DBeamPhoton*> beam_photons, 
+			vector<const DBCALShower*> bcal_showers, 
+			vector<const DTOFPoint*> tof_points, vector<const DSCHit*> sc_hits, 
+			int n_fcal_showers, int n_good_fcal_showers, 
+			double bcal_energy_sum, int n_bcal_showers, int n_bcal_showers_1ns, double bcal_phi, double bcal_rfdt,
+			double rfTime, bool is_mc, double thrown_beam_energy, double thrown_eta_angle
 		);
 		
 		//---------------------------------------//
 		// Geometry
 		
-		double m_beamX, m_beamY, m_beamZ;
-		double m_fcalX, m_fcalY, m_fcalZ;
-		double m_ccalX, m_ccalY, m_ccalZ;
-		
-		double m_fcalX_new, m_fcalY_new;
-		double m_ccalX_new, m_ccalY_new;
-		
+		DVector3 m_beamSpot;
+		DVector3 m_fcalFace, m_ccalFace;
 		DVector3 m_fcal_correction, m_ccal_correction;
+		
+		vector<vector<DVector3>> m_sc_pos, m_sc_norm;
 		
 		int m_phase_val = 0;
 		
@@ -115,7 +115,7 @@ class JEventProcessor_primex_eta_analysis:public jana::JEventProcessor{
 		//---------------------------------------//
 		// Constants 
 		
-		double m_Target;
+		Particle_t m_Target;
 		
 		const double m_pi0      =  0.1349770;   // [GeV]
 		const double m_eta      =  0.547862;    // [GeV]
@@ -146,6 +146,7 @@ class JEventProcessor_primex_eta_analysis:public jana::JEventProcessor{
 		TH1F *h_tagh_rf_dt[N_TRIGS];
 		TH1F *h_tagm_rf_dt[N_TRIGS];
 		TH1F  *h_tof_rf_dt[N_TRIGS];
+		TH1F   *h_sc_rf_dt[N_TRIGS];
 		
 		TH1F *h_fcal_tof_dx, *h_fcal_tof_dy, *h_fcal_tof_dr;
 		TH1F *h_fcal_tof_dt, *h_fcal_tof_dt_cut;
@@ -161,6 +162,13 @@ class JEventProcessor_primex_eta_analysis:public jana::JEventProcessor{
 		TH2F *h_mgg_const, *h_mgg_const_main, *h_mgg_const_side;
 		TH2F *h_mgg_const_corr;
 		
+		// plots 
+		static const int m_n_vetos = 6;
+		
+		TH2F *h_elas_veto[m_n_vetos];
+		TH2F *h_mgg_veto[m_n_vetos];
+		TH2F *h_mgg_const_veto[m_n_vetos];
+		
 		TH2F *h_rec_vs_thrown;
 		TH2F *h_mgg_thrown;
 		TH2F *h_mgg_const_thrown;
@@ -168,19 +176,6 @@ class JEventProcessor_primex_eta_analysis:public jana::JEventProcessor{
 		TH2F *h_hmass,              *h_mm_vs_theta;
 		TH2F *h_hmass_eta_cut,      *h_mm_vs_theta_eta_cut;
 		TH2F *h_hmass_eta_elas_cut, *h_mm_vs_theta_eta_elas_cut;
-		
-		TH2F *h_kine_vs_theta;
-		TH2F *h_tagh_vs_theta;
-		TH2F *h_tagm_vs_theta;
-		TH2F *h_ebeam_vs_theta;
-		
-		TH1F *h_dtheta,  *h_dtheta_sym;
-		TH1F *h_denergy, *h_denergy_sym;
-		
-		TH2F *h_mgg_vs_energy, *h_mgg_const_vs_energy;
-		TH2F *h_elas_vs_energy;
-		
-		TH2F *h_mgg_vs_angle,  *h_mgg_const_vs_angle;
 		
 		TH2F *h_xy_1, *h_xy_2;
 };
