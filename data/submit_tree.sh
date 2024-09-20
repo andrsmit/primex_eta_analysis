@@ -136,13 +136,16 @@ do
 			command="$command -name ${job_name} -account ${account} -partition ${partition}"
 			command="$command -cores ${cores} -ram ${ram} -time ${run_time} -disk ${disk}"
 			command="$command -constraint ${constraint}"
-			for file in ${dir_mss}/Run${run_number}/hd_rawdata_${run_number}_*.evio; do
-				command="$command -input `basename $file` mss:${file}"
+			for file in ${dir_mss}/${run_number}/${skim}_${run_number}_*.evio; do
+				if [ -f $file ]; then
+					command="$command -input `basename $file` mss:${file}"
+					echo "  `basename $file`"
+				fi
 			done
 			command="$command $script $skim $run_number $tree_file $root_file $cfg_file $jsub_file"
 			
 			if [ $submit_runs == "go" ]; then
-				echo "$command" > $jsub_file
+				#echo "$command" > $jsub_file
 				$command
 			fi
 			ij=$(($ij+1))
