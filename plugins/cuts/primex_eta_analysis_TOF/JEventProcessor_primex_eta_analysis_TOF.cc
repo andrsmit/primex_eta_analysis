@@ -753,7 +753,7 @@ void JEventProcessor_primex_eta_analysis_TOF::eta_gg_analysis(
 					// only check hits between 1ns < (t_sc - t_RF) < 7ns 
 					//    and with dE > 0.0002 (from DNeutralShower_factory)
 					
-					double loc_t  = (*sc)->t;
+					double loc_t  = (*sc)->t - rfTime;
 					double loc_dE = (*sc)->dE;
 					
 					if((1.0 < loc_t) && (loc_t < 7.0) && (loc_dE > 0.0002)) {
