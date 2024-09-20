@@ -749,9 +749,18 @@ void JEventProcessor_primex_eta_analysis_TOF::eta_gg_analysis(
 				
 				int loc_sc_veto = 0;
 				for(vector<const DSCHit*>::const_iterator sc = sc_hits.begin(); sc != sc_hits.end(); sc++) {
-					int sector = (*sc)->sector;
-					double phi = m_sc_pos[sector-1][0].Phi() * (180./TMath::Pi());
-					if(fabs(fabs(phi-prod_phi)-180.0) > 36.0) loc_sc_veto++;
+					
+					// only check hits between 1ns < (t_sc - t_RF) < 7ns 
+					//    and with dE > 0.0002 (from DNeutralShower_factory)
+					
+					double loc_t  = (*sc)->t;
+					double loc_dE = (*sc)->dE;
+					
+					if((1.0 < loc_t) && (loc_t < 7.0) && (loc_dE > 0.0002)) {
+						int sector = (*sc)->sector;
+						double phi = m_sc_pos[sector-1][0].Phi() * (180./TMath::Pi());
+						if(fabs(fabs(phi-prod_phi)-180.0) > 36.0) loc_sc_veto++;
+					}
 				}
 				
 				if(loc_sc_veto==0) local_bcal_veto = 1;

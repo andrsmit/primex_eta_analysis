@@ -138,6 +138,9 @@ jerror_t JEventProcessor_primex_eta_analysis::init(void)
 	// Plot the level of accidentals after elasticity cut:
 	h_beam_rf_dt_cut = new TH1F("beam_rf_dt_cut", "; t_{#gamma} - t_{RF} (ns); counts / 0.1 ns", 2000, -100., 100.);
 	
+	// Plot the level of accidentals in the start counter after elasticity cut:
+	h_sc_rf_dt_cut = new TH1F("sc_rf_dt_cut", "; t_{SC} - t_{RF} (ns); counts / 0.1 ns", 2000, -100., 100.);
+	
 	// Elasticity vs. mass ratio:
 	h_elas_vs_mgg = new TH2F("elas_vs_mgg", 
 		"; M_{#gamma#gamma}/M_{#eta}(PDG); #left(E_{1}+E_{2}#right)/E_{#eta}#left(E_{#gamma},#theta_{#gamma#gamma}#right)", 
@@ -982,9 +985,20 @@ void JEventProcessor_primex_eta_analysis::eta_gg_analysis(
 				
 				int loc_sc_veto = 0;
 				for(vector<const DSCHit*>::const_iterator sc = sc_hits.begin(); sc != sc_hits.end(); sc++) {
-					int sector = (*sc)->sector;
-					double phi = m_sc_pos[sector-1][0].Phi() * (180./TMath::Pi());
-					if(fabs(fabs(phi-prod_phi)-180.0) > 36.0) loc_sc_veto++;
+					
+					// only check hits between 1ns < (t_sc - t_RF) < 7ns 
+					//    and with dE > 0.0002 (from DNeutralShower_factory)
+					
+					double loc_t  = (*sc)->t;
+					double loc_dE = (*sc)->dE;
+					
+					if((0.5<invmass) && (invmass<0.60)) h_sc_rf_dt_cut->Fill(loc_t);
+					
+					if((1.0 < loc_t) && (loc_t < 7.0) && (loc_dE > 0.0002)) {
+						int sector = (*sc)->sector;
+						double phi = m_sc_pos[sector-1][0].Phi() * (180./TMath::Pi());
+						if(fabs(fabs(phi-prod_phi)-180.0) > 36.0) loc_sc_veto++;
+					}
 				}
 				
 				// Option 5 (add in SC Veto): Remove events where there is a hit in the SC with outside of the range:

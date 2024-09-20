@@ -152,7 +152,7 @@ class JEventProcessor_primex_eta_analysis:public jana::JEventProcessor{
 		TH1F *h_fcal_tof_dt, *h_fcal_tof_dt_cut;
 		TH1F *h_fcal_tof_matches;
 		
-		TH1F *h_beam_rf_dt_cut;
+		TH1F *h_beam_rf_dt_cut, *h_sc_rf_dt_cut;
 		
 		TH2F *h_elas_vs_mgg;
 		TH2F *h_elas;
