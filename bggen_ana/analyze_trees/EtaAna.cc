@@ -162,6 +162,18 @@ void EtaAna::etaggAnalysis() {
 		}
 	}
 	
+	// SC Veto:
+	vector<int> locGoodSCHits;
+	int locNSCHits = 0;
+	for(int isc=0; isc<m_nsc; isc++) {
+		double loc_t = m_sc_t[isc] - m_rfTime;
+		h_sc_rf_dt->Fill(loc_t);
+		if((1.0 < loc_t) && (loc_t < 7.0) && (m_sc_dE[isc] > 0.0002)) {
+			locNSCHits++;
+			locGoodSCHits.push_back(isc);
+		}
+	}
+	
 	// FCAL multiplicity cut:
 	if(!(locNFCALShowers==2 && locNGoodFCALShowers==2)) return;
 	
@@ -242,18 +254,40 @@ void EtaAna::etaggAnalysis() {
 			
 			// check different BCAL veto options:
 			
-			vector<int> loc_bcal_vetos;
-			for(int iveto=0; iveto<m_n_bcal_vetos; iveto++) loc_bcal_vetos.push_back(0);
-			if(locNBCALShowers==0) 
-				loc_bcal_vetos[0] = 1;
-			if(locNBCALShowers_1ns==0) 
-				loc_bcal_vetos[1] = 1;
+			vector<int> loc_veto_options;
+			for(int iveto=0; iveto<m_n_vetos; iveto++) loc_veto_options.push_back(0);
+			
+			// Option 0 (no veto): No Veto is applied:
+			loc_veto_options[0] = 1;
+			
+			// Option 1 (strict): Remove events with any BCAL shower within +/-12ns:
+			if(locNBCALShowers==0) loc_veto_options[1] = 1;
+			
+			// Option 2 (loose): Remove events with any BCAL shower within +/-1ns:
+			if(locNBCALShowers_1ns==0) loc_veto_options[2] = 1;
+			
+			// Option 3 (looser): Keep events where there is EITHER (i) no BCAL shower within +/-12ns, 
+			//        OR (ii) 1 BCAL shower that has opposite phi angle to two-photon pair in FCAL:
 			if((locNBCALShowers==0) ||
-				(locNBCALShowers==1 && fabs(fabs(locBCALPhi-prod_phi)-180.0) < 30.0))
-				loc_bcal_vetos[2] = 1;
+				(locNBCALShowers==1 && fabs(fabs(locBCALPhi-prod_phi)-180.0) < 30.0)) loc_veto_options[3] = 1;
+			
+			// Option 4 (improvement on option 3): Keep events where there is EITHER (i) no BCAL shower within +/-12ns, 
+			//        OR (ii) 1 BCAL shower that has opposite phi angle to two-photon pair in FCAL 
+			//        and is more than 1ns removed from RF time:
 			if((locNBCALShowers==0) || 
-				(locNBCALShowers==1 && fabs(fabs(locBCALPhi-prod_phi)-180.0) < 30.0 && locBCALRFDT>1.0))
-				loc_bcal_vetos[3] = 1;
+				(locNBCALShowers==1 && fabs(fabs(locBCALPhi-prod_phi)-180.0) < 30.0 && locBCALRFDT>1.0)) {
+				loc_veto_options[4] = 1;
+				
+				int loc_sc_veto = 0;
+				for(int isc=0; isc<locNSCHits; isc++) {
+					int sc_index = locGoodSCHits[isc];
+					if(fabs(fabs(m_sc_phi[sc_index]-prod_phi)-180.0) > 36.0) loc_sc_veto++;
+				}
+				
+				// Option 5 (add in SC Veto): Remove events where there is a hit in the SC with outside of the range:
+				//          150 < |phi_SC - phi_FCAL| < 210:
+				if(loc_sc_veto==0) loc_veto_options[5] = 1;
+			}
 			
 			//-----------------------------------------------------//
 			// Loop over Beam photons
@@ -310,6 +344,8 @@ void EtaAna::etaggAnalysis() {
 				double pggtc = sqrt(pow(pggxc,2.0) + pow(pggyc,2.0));
 				double prod_th_const = (180./TMath::Pi()) * atan2(pggtc,pggzc);
 				
+				prod_phi = (180./TMath::Pi()) * atan2(pggyc,pggxc);
+				
 				//-----------------------------------------------------//
 				// Missing Mass 
 				//   - This is calculated assuming the reaction took place on a quasifree nucleon
@@ -319,18 +355,19 @@ void EtaAna::etaggAnalysis() {
 					- 2.0*m_Proton*Egg + 2.0*eb*cos(prod_th*TMath::Pi()/180.)*sqrt(Egg*Egg - m_eta*m_eta);
 				
 				//-----------------------------------------------------//
-				// Different ways to apply BCAL Veto:
+				// Different ways to apply Veto:
 				/*
 				 1. Veto events with any BCAL shower within +/-12 ns (strict veto)
 				 2. Veto events with any BCAL shower within +/-1 ns
 				 3. Allow a single BCAL shower if the deltaPhi from two-photon pair is 180 +/- 30, no cut on timing
 				 4. Allow a single BCAL shower if the deltaPhi from two-photon pair is 180 +/- 30 and the timing is >1ns
+				 5. Same as 4, but adding in that there should be no SCHit outside the range deltaPhi = (150,210)
 				*/
 				//-----------------------------------------------------//
 				
 				h_elas_vs_mgg->Fill(invmass/m_eta, Egg/eeta, fill_weight);
 				
-				if(eta_cut && loc_bcal_vetos[3]) {
+				if(eta_cut && loc_veto_options[m_n_vetos-1]) {
 					h_elas->Fill(prod_th, Egg/eb, fill_weight);
 					h_elas_corr->Fill(prod_th, Egg/eeta, fill_weight);
 					if(locFinalState==0 || locFinalState==1) {
@@ -342,10 +379,40 @@ void EtaAna::etaggAnalysis() {
 					}
 				}
 				
+				// Plot the number of SC hits and DeltaPhi with 2-photon pair in FCAL:
+				
+				h_n_sc[locFinalState]->Fill(locNSCHits, fill_weight);
+				for(int isc=0; isc<locNSCHits; isc++) {
+					int sc_index = locGoodSCHits[isc];
+					h_sc_dE[locFinalState]->Fill(m_sc_dE[sc_index]*1.e3, fill_weight);
+					h_sc_gg_deltaPhi[locFinalState]->Fill(fabs(m_sc_phi[sc_index]-prod_phi), fill_weight);
+				}
+				
+				// do the same, but with an elasticity cut and BCAL veto:
+				
+				if(elas_cut && loc_veto_options[m_n_vetos-1]) {
+					
+					h_n_sc_eta[locFinalState]->Fill(locNSCHits, fill_weight);
+					for(int isc=0; isc<locNSCHits; isc++) {
+						int sc_index = locGoodSCHits[isc];
+						h_sc_dE_eta[locFinalState]->Fill(m_sc_dE[sc_index]*1.e3, fill_weight);
+						h_sc_gg_deltaPhi_eta[locFinalState]->Fill(fabs(m_sc_phi[sc_index]-prod_phi), fill_weight);
+					}
+					
+					// if there's one BCAL shower, check if there's an extra hit in the SC and the deltaPhi:
+					if(locNBCALShowers==1) {
+						h_n_sc_eta_cut[locFinalState]->Fill(locNSCHits, fill_weight);
+						for(int isc=0; isc<locNSCHits; isc++) {
+							int sc_index = locGoodSCHits[isc];
+							h_sc_bcal_deltaPhi[locFinalState]->Fill(fabs(m_sc_phi[sc_index]-locBCALPhi), fill_weight);
+						}
+					}
+				}
+				
 				// apply elasticity cut and plot the invariant mass distriubtion:
 				if(elas_cut) {
 					
-					if(loc_bcal_vetos[3]) {
+					if(loc_veto_options[m_n_vetos-1]) {
 						// invariant mass vs. polar angle:
 						h_mgg->Fill(prod_th, invmass, fill_weight);
 						
@@ -363,12 +430,12 @@ void EtaAna::etaggAnalysis() {
 					if(eta_cut) {
 						
 						h_theta[locFinalState]->Fill(prod_th, fill_weight);
-						if(loc_bcal_vetos[3]) {
+						if(loc_veto_options[m_n_vetos-1]) {
 							h_accepted->Fill(locFinalState, fill_weight);
 						}
 						
-						for(int iveto=0; iveto<m_n_bcal_vetos; iveto++) {
-							if(loc_bcal_vetos[iveto]) h_theta_veto[locFinalState][iveto]->Fill(prod_th, fill_weight);
+						for(int iveto=0; iveto<m_n_vetos; iveto++) {
+							if(loc_veto_options[iveto]) h_theta_veto[locFinalState][iveto]->Fill(prod_th, fill_weight);
 						}
 						
 						// plot the distribution of BCAL showers for each reaction type:
@@ -773,6 +840,11 @@ void EtaAna::readEvent() {
 		m_tree->SetBranchAddress("tof_y",              &m_tof_y);
 		m_tree->SetBranchAddress("tof_z",              &m_tof_z);
 		m_tree->SetBranchAddress("tof_t",              &m_tof_t);
+		m_tree->SetBranchAddress("nsc",                &m_nsc);
+		m_tree->SetBranchAddress("sc_sector",          &m_sc_sector);
+		m_tree->SetBranchAddress("sc_phi",             &m_sc_phi);
+		m_tree->SetBranchAddress("sc_dE",              &m_sc_dE);
+		m_tree->SetBranchAddress("sc_t",               &m_sc_t);
 		m_tree->SetBranchAddress("nmc",                &m_nmc);
 		m_tree->SetBranchAddress("mc_pdgtype",         &m_mc_pdgtype);
 		m_tree->SetBranchAddress("mc_x",               &m_mc_x);
@@ -791,6 +863,8 @@ void EtaAna::readEvent() {
 }
 
 void EtaAna::initHistograms() {
+	
+	h_sc_rf_dt = new TH1F("sc_rf_dt", "SC - RF Time; t_{SC} - t_{RF} [ns]", 1000, -100., 100.);
 	
 	int n_reactions = (int)m_reaction_types.size();
 	
@@ -833,7 +907,7 @@ void EtaAna::initHistograms() {
 		h_theta.push_back(loc_h_theta);
 		
 		vector<TH1F*> loc_h_theta_veto_vec;
-		for(int iveto=0; iveto<m_n_bcal_vetos; iveto++) {
+		for(int iveto=0; iveto<m_n_vetos; iveto++) {
 			TH1F *loc_h_theta_veto = new TH1F(Form("theta_veto_%d_%s",iveto,hist_label.Data()),
 				Form("Angular Yield with BCAL Veto (option %d) (%s)",iveto,hist_title.Data()), 65, 0.0, 6.5);
 			loc_h_theta_veto_vec.push_back(loc_h_theta_veto);
@@ -869,6 +943,43 @@ void EtaAna::initHistograms() {
 		h_bcal_dt_vs_eta_angle.push_back(loc_h_bcal_dt_vs_eta_angle);
 		h_bcal_dt_vs_bcal_energy.push_back(loc_h_bcal_dt_vs_bcal_energy);
 		h_bcal_deltaPhi.push_back(loc_h_bcal_deltaPhi);
+		
+		// SC distributions:
+		
+		TH1F *loc_h_n_sc                = new TH1F(Form("nsc_%s",        hist_label.Data()),
+			Form("Number of SC Hits (%s)",hist_title.Data()), 20, -0.5, 19.5);
+		TH1F *loc_h_n_sc_eta            = new TH1F(Form("nsc_eta_%s",    hist_label.Data()),
+			Form("Number of SC Hits (BCAL Veto Applied) (%s)",hist_title.Data()), 20, -0.5, 19.5);
+		TH1F *loc_h_n_sc_eta_cut        = new TH1F(Form("nsc_eta_cut_%s",hist_label.Data()),
+			Form("Number of SC Hits (dE Cut) (%s)",hist_title.Data()), 20, -0.5, 19.5);
+		TH1F *loc_h_n_sc_eta_cut_single = new TH1F(Form("nsc_eta_cut_single_%s",hist_label.Data()),
+			Form("Number of SC Hits (dE Cut + Single BCAL Shower) (%s)",hist_title.Data()), 20, -0.5, 19.5);
+		
+		TH1F *loc_h_sc_dE     = new TH1F(Form("sc_dE_%s",hist_label.Data()),
+			Form("SC dE (%s)",hist_title.Data()), 1000, 0., 100.);
+		TH1F *loc_h_sc_dE_eta = new TH1F(Form("sc_dE_eta_%s",hist_label.Data()),
+			Form("SC dE (BCAL Veto Applied) (%s)",hist_title.Data()), 1000, 0., 100.);
+		
+		TH1F *loc_h_sc_gg_deltaPhi     = new TH1F(Form("sc_gg_deltaPhi_%s",hist_label.Data()),
+			Form("#left|#phi_{SC} - #phi_{#gamma#gamma}#right| (%s); [#circ]",hist_title.Data()), 
+			1800, 0.0, 360.0);
+		TH1F *loc_h_sc_gg_deltaPhi_eta = new TH1F(Form("sc_gg_deltaPhi_eta_%s",hist_label.Data()),
+			Form("#left|#phi_{SC} - #phi_{#gamma#gamma}#right| (BCAL Veto Applied) (%s); [#circ]",hist_title.Data()), 
+			1800, 0.0, 360.0);
+		
+		TH1F *loc_h_sc_bcal_deltaPhi = new TH1F(Form("sc_bcal_deltaPhi_%s",hist_label.Data()),
+			Form("#left|#phi_{SC} - #phi_{BCAL}#right| (%s); [#circ]",hist_title.Data()),
+			1800, 0.0, 360.0);
+		
+		h_n_sc.push_back(loc_h_n_sc);
+		h_n_sc_eta.push_back(loc_h_n_sc_eta);
+		h_n_sc_eta_cut.push_back(loc_h_n_sc_eta_cut);
+		h_n_sc_eta_cut_single.push_back(loc_h_n_sc_eta_cut_single);
+		h_sc_dE.push_back(loc_h_sc_dE);
+		h_sc_dE_eta.push_back(loc_h_sc_dE_eta);
+		h_sc_gg_deltaPhi.push_back(loc_h_sc_gg_deltaPhi);
+		h_sc_gg_deltaPhi_eta.push_back(loc_h_sc_gg_deltaPhi_eta);
+		h_sc_bcal_deltaPhi.push_back(loc_h_sc_bcal_deltaPhi);
 	}
 	
 	
@@ -953,18 +1064,30 @@ void EtaAna::initHistograms() {
 
 void EtaAna::resetHistograms() {
 	
+	h_sc_rf_dt->Reset();
+	
 	h_thrown->Reset();
 	h_accepted->Reset();
 	
 	for(int itype=0; itype<h_theta.size(); itype++) {
 		h_theta[itype]->Reset();
-		for(int iveto=0; iveto<m_n_bcal_vetos; iveto++) h_theta_veto[itype][iveto]->Reset();
+		for(int iveto=0; iveto<m_n_vetos; iveto++) h_theta_veto[itype][iveto]->Reset();
 		h_nbcal[itype]->Reset();
 		h_bcal_energy[itype]->Reset();
 		h_bcal_energy_single[itype]->Reset();
 		h_bcal_dt_vs_eta_angle[itype]->Reset();
 		h_bcal_dt_vs_bcal_energy[itype]->Reset();
 		h_bcal_deltaPhi[itype]->Reset();
+		
+		h_n_sc[itype]->Reset();
+		h_n_sc_eta[itype]->Reset();
+		h_n_sc_eta_cut[itype]->Reset();
+		h_n_sc_eta_cut_single[itype]->Reset();
+		h_sc_dE[itype]->Reset();
+		h_sc_dE_eta[itype]->Reset();
+		h_sc_gg_deltaPhi[itype]->Reset();
+		h_sc_gg_deltaPhi_eta[itype]->Reset();
+		h_sc_bcal_deltaPhi[itype]->Reset();
 	}
 	
 	h_elas_vs_mgg->Reset();
@@ -998,6 +1121,8 @@ void EtaAna::writeHistograms() {
 	TFile *fOut = new TFile(m_output_fname.c_str(), "RECREATE");
 	fOut->cd();
 	
+	h_sc_rf_dt->Write();
+	
 	h_thrown->Write();
 	h_accepted->Write();
 	
@@ -1014,13 +1139,24 @@ void EtaAna::writeHistograms() {
 		TDirectory *loc_dir = new TDirectoryFile(dir_label.Data(), dir_label.Data());
 		loc_dir->cd();
 		h_theta[itype]->Write();
-		for(int iveto=0; iveto<m_n_bcal_vetos; iveto++) h_theta_veto[itype][iveto]->Write();
+		for(int iveto=0; iveto<m_n_vetos; iveto++) h_theta_veto[itype][iveto]->Write();
 		h_nbcal[itype]->Write();
 		h_bcal_energy[itype]->Write();
 		h_bcal_energy_single[itype]->Write();
 		h_bcal_dt_vs_eta_angle[itype]->Write();
 		h_bcal_dt_vs_bcal_energy[itype]->Write();
 		h_bcal_deltaPhi[itype]->Write();
+		
+		h_n_sc[itype]->Write();
+		h_n_sc_eta[itype]->Write();
+		h_n_sc_eta_cut[itype]->Write();
+		h_n_sc_eta_cut_single[itype]->Write();
+		h_sc_dE[itype]->Write();
+		h_sc_dE_eta[itype]->Write();
+		h_sc_gg_deltaPhi[itype]->Write();
+		h_sc_gg_deltaPhi_eta[itype]->Write();
+		h_sc_bcal_deltaPhi[itype]->Write();
+		
 		loc_dir->cd("../");
 	}
 	

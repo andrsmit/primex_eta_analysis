@@ -1,10 +1,11 @@
 #ifndef _EtaAna_
 #define _EtaAna_
 
-#define MAX_BEAM 1000
-#define MAX_FCAL 100
-#define MAX_BCAL 100
-#define MAX_TOF  200
+#define MAX_BEAM 200
+#define MAX_FCAL 50
+#define MAX_BCAL 50
+#define MAX_TOF  50
+#define MAX_SC   20
 #define MAX_MC   20
 
 using namespace std;
@@ -117,8 +118,13 @@ class EtaAna {
 		double m_tof_y[MAX_TOF];
 		double m_tof_z[MAX_TOF];
 		double m_tof_t[MAX_TOF];
+		int    m_nsc;
+		int    m_sc_sector[MAX_SC];
+		double m_sc_phi[MAX_SC];
+		double m_sc_dE[MAX_SC];
+		double m_sc_t[MAX_SC];
 		int    m_nmc;
-		double m_mc_pdgtype[MAX_MC];
+		int    m_mc_pdgtype[MAX_MC];
 		double m_mc_x[MAX_MC];
 		double m_mc_y[MAX_MC];
 		double m_mc_z[MAX_MC];
@@ -130,17 +136,24 @@ class EtaAna {
 		
 		// Histograms:
 		
+		TH1F *h_sc_rf_dt;
+		
 		vector<vector<Particle_t>> m_reaction_types;
 		
 		TH1F *h_thrown;
 		TH1F *h_accepted;
 		
 		vector<TH1F*> h_theta;
-		int m_n_bcal_vetos = 4;
+		int m_n_vetos = 6;
 		vector<vector<TH1F*>> h_theta_veto;
 		vector<TH1F*> h_nbcal, h_bcal_energy, h_bcal_energy_single;
 		vector<TH2F*> h_bcal_dt_vs_eta_angle, h_bcal_dt_vs_bcal_energy;
 		vector<TH1F*> h_bcal_deltaPhi;
+		
+		vector<TH1F*> h_n_sc, h_n_sc_eta, h_n_sc_eta_cut, h_n_sc_eta_cut_single;
+		vector<TH1F*> h_sc_dE, h_sc_dE_eta;
+		vector<TH1F*> h_sc_gg_deltaPhi, h_sc_gg_deltaPhi_eta;
+		vector<TH1F*> h_sc_bcal_deltaPhi;
 		
 		TH2F *h_elas_vs_mgg;
 		
