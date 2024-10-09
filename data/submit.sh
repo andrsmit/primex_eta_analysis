@@ -1,6 +1,6 @@
 #!/usr/bin/sh
 #
-pass=1
+pass=2
 
 # set which run period you want to analyze:
 phase=$1
@@ -9,7 +9,7 @@ phase=$1
 outdir=/work/halld/home/andrsmit/primex_eta_analysis/data
 
 # script that will execute the commands for each job:
-script=${outdir}/run_analysis_tree.csh
+script=${outdir}/run_analysis.csh
 
 # set this to "go" to actually submit the jobs:
 submit_runs=go
@@ -66,10 +66,6 @@ do
 			continue
 		fi
 		
-		# set up output directory where rootTrees will be written:
-		dir_tree=${outdir}/pass${pass}/rootTrees/phase${phase}/${target}_target_${field}
-		mkdir -p $dir_tree
-		
 		# set up output directory where hd_root files will be written:
 		dir_rfile=${outdir}/pass${pass}/rootFiles/phase${phase}/${target}_target_${field}
 		mkdir -p $dir_rfile
@@ -86,12 +82,6 @@ do
 			run_number=$run
 			if [[ $run_number -lt "100000" ]]; then
 				run_number="0$run"
-			fi
-			
-			# set up output root tree file name:
-			tree_file=${dir_tree}/${run_number}.root
-			if [ -f $tree_file ]; then
-				continue
 			fi
 			
 			# set up output hd_root file name:
@@ -142,7 +132,7 @@ do
 					#echo "  `basename $file`"
 				fi
 			done
-			command="$command $script $skim $run_number $tree_file $root_file $cfg_file $jsub_file"
+			command="$command $script $skim $run_number $root_file $cfg_file $jsub_file"
 			
 			if [ $submit_runs == "go" ]; then
 				echo "$command" > $jsub_file

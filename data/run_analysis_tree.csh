@@ -5,9 +5,10 @@
 
 set skim_type = $1
 set runnumber = $2
-set root_file = $3
-set  cfg_file = $4
-set jsub_file = $5
+set tree_file = $3
+set root_file = $4
+set  cfg_file = $5
+set jsub_file = $6
 
 # source GlueX setup scripts:
 
@@ -36,6 +37,12 @@ set bin = ${HALLD_RECON_HOME}/Linux_Alma9-x86_64-gcc11.4.1/bin/hd_root
 
 echo "$bin --config=jana.config ${skim_type}_${runnumber}_*.evio"
 $bin --config=jana.config ${skim_type}_${runnumber}_*.evio
+
+# move output root tree to appropriate directory:
+if ( -f eta_gg.root ) then
+	echo "mv eta_gg.root ${tree_file}"
+	mv eta_gg.root ${tree_file}
+endif
 
 # move output root file to appropriate directory:
 if ( -f hd_root.root ) then
