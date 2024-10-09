@@ -145,113 +145,116 @@ jerror_t JEventProcessor_eta_gg_tree::brun(JEventLoop *eventLoop, int32_t runnum
 	DApplication* dapp = dynamic_cast<DApplication*>(eventLoop->GetJApplication());
 	if(dapp)     dgeom = dapp->GetDGeometry(runnumber);
 	
-	if(dgeom){
-		dgeom->GetTargetZ(m_beamZ);
-		dgeom->GetFCALPosition(m_fcalX, m_fcalY, m_fcalZ);
-		dgeom->GetCCALPosition(m_ccalX, m_ccalY, m_ccalZ);
-	} else{
+	double loc_targetZ = 65.0;
+	double loc_x, loc_y, loc_z;
+	
+	if(dgeom==NULL) {
 		cerr << "No geometry accessbile to plugin." << endl;
 		return RESOURCE_UNAVAILABLE;
 	}
 	
+	// Get target position:
+	dgeom->GetTargetZ(loc_targetZ);
+	
+	// Get position of FCAL face:
+	dgeom->GetFCALPosition(loc_x, loc_y, loc_z);
+	m_fcalFace.SetXYZ(loc_x, loc_y, loc_z);
+	
+	// Get position of CCAL face:
+	dgeom->GetCCALPosition(loc_x, loc_y, loc_z);
+	m_ccalFace.SetXYZ(loc_x, loc_y, loc_z);
+	
+	// Get beam spot on center of target:
 	jana::JCalibration *jcalib = japp->GetJCalibration(runnumber);
 	std::map<string, float> beam_spot;
 	jcalib->Get("PHOTON_BEAM/beam_spot", beam_spot);
-	m_beamX = beam_spot.at("x");
-	m_beamY = beam_spot.at("y");
+	m_beamSpot.SetXYZ(beam_spot.at("x"), beam_spot.at("y"), loc_targetZ);
 	
 	// Get start counter geomety:
 	dgeom->GetStartCounterGeom(m_sc_pos, m_sc_norm);
 	
 	//--------------------------------------------------------------//
-	// Set the target mass depending on run number:
+	// Set the target according to the run number:
 	
 	if(runnumber < 60000 || 
 		( 70000 <= runnumber && runnumber <=  79999) || 
 		(120000 <= runnumber && runnumber <= 129999)
 	) {
-		m_Target = m_Proton;
+		m_Target = Proton;
 	} else if(
 		( 60000 <= runnumber && runnumber <=  61354) || 
 		( 80000 <= runnumber && runnumber <=  81381) || 
 		(110000 <= runnumber && runnumber <= 110621)
 	) { 
-		m_Target = m_Be9;
+		m_Target = Be9;
 	} else if(
 		( 60000 <= runnumber && runnumber <=  69999) || 
 		( 80000 <= runnumber && runnumber <=  81716) || 
 		(110000 <= runnumber && runnumber <= 112001) || 
 		( 90034 <= runnumber && runnumber <=  90200) || 
 		( 90607 <= runnumber && runnumber <=  90660)) {
-		m_Target = m_He4;
+		m_Target = Helium;
 	} else if(
 		( 90207 <= runnumber && runnumber <=  90249) || 
 		( 90558 <= runnumber && runnumber <=  90601)
 	) {
-		m_Target = m_Deuteron;
+		m_Target = Deuteron;
 	} else if(90263 <= runnumber && runnumber <= 90536) {
-		m_Target = m_C12;
+		m_Target = C12;
 	} else {
-		m_Target = m_He4;
+		m_Target = Proton;
 	}
 	
 	//--------------------------------------------------------------//
-	// Manually update the geometry information from the CCDB with more accurate values:
 	
 	if(runnumber>60000 && runnumber<69999) 
 	{
 		m_phase_val = 1;
 		
-		m_fcalX_new =  0.455;
-		m_fcalY_new = -0.032;
+		//--------------------------------------------------------------------//
+		// For phase 1, update the geometry from Compton alignment studies:
 		
-		m_ccalX_new = -0.082;
-		if(runnumber<61483) m_ccalY_new = 0.061;
-		else                m_ccalY_new = 0.051;
+		// (2/4/2024): Correction to alignment after Simon updated beam spot with new CDC alignment:
 		
-		if(runnumber<61483) {
-			m_beamX =  0.027;
-			m_beamY = -0.128;
-		} else if(runnumber<61774) {
-			m_beamX =  0.001;
-			m_beamY = -0.077;
-		} else {
-			m_beamX =  0.038;
-			m_beamY = -0.095;
+		m_fcal_correction.SetXYZ(0.455 - m_fcalFace.X(), -0.032 - m_fcalFace.Y(), 0.0);
+		m_fcalFace += m_fcal_correction;
+		
+		m_ccal_correction.SetXYZ(-0.082 - m_ccalFace.X(), 0.061 - m_ccalFace.Y(), 0.0);
+		if(runnumber>=61483) m_ccal_correction.SetY(0.051 - m_ccalFace.Y());
+		m_ccalFace += m_ccal_correction;
+		
+		if(runnumber<61483) 
+		{
+			m_beamSpot.SetX( 0.027);
+			m_beamSpot.SetY(-0.128);
+		} else if(runnumber<61774) 
+		{
+			m_beamSpot.SetX( 0.001);
+			m_beamSpot.SetY(-0.077);
+		} else 
+		{
+			m_beamSpot.SetX( 0.038);
+			m_beamSpot.SetY(-0.095);
 		}
 	}
 	else if(runnumber>80000 && runnumber < 89999) 
 	{
 		m_phase_val = 2;
-		
-		m_fcalX_new = m_fcalX;
-		m_fcalY_new = m_fcalY;
-		m_ccalX_new = m_ccalX;
-		m_ccalY_new = m_ccalY;
+		m_fcal_correction.SetXYZ(0.0, 0.0, 0.0);
+		m_ccal_correction.SetXYZ(0.0, 0.0, 0.0);
 	} 
 	else if(runnumber>110000 && runnumber < 119999) 
 	{
 		m_phase_val = 3;
-		
-		m_fcalX_new = m_fcalX;
-		m_fcalY_new = m_fcalY;
-		m_ccalX_new = m_ccalX;
-		m_ccalY_new = m_ccalY;
+		m_fcal_correction.SetXYZ(0.0, 0.0, 0.0);
+		m_ccal_correction.SetXYZ(0.0, 0.0, 0.0);
 	}
 	else 
 	{
 		m_phase_val = 0;
-		
-		m_fcalX_new = m_fcalX;
-		m_fcalY_new = m_fcalY;
-		m_ccalX_new = m_ccalX;
-		m_ccalY_new = m_ccalY;
+		m_fcal_correction.SetXYZ(0.0, 0.0, 0.0);
+		m_ccal_correction.SetXYZ(0.0, 0.0, 0.0);
 	}
-	
-	// these objects will be used to correct the shower positions event-by-event with the updated geometry:
-	
-	m_fcal_correction.SetXYZ(m_fcalX_new-m_fcalX, m_fcalY_new-m_fcalY, 0.);
-	m_ccal_correction.SetXYZ(m_ccalX_new-m_ccalX, m_ccalY_new-m_ccalY, 0.);
 	
 	/*------------------------------------------------------------------------------------------------------*/
 	// Code to obtain the scaling factors for accidental beam bunches 
@@ -422,8 +425,6 @@ jerror_t JEventProcessor_eta_gg_tree::evnt(JEventLoop *eventLoop, uint64_t event
 	//-----------------------------------------------------//
 	// Data objects
 	
-	DVector3 locVertex(m_beamX, m_beamY, m_beamZ);
-	
 	vector<const DBeamPhoton*> locBeamPhotons;
 	eventLoop->Get(locBeamPhotons);
 	
@@ -458,7 +459,7 @@ jerror_t JEventProcessor_eta_gg_tree::evnt(JEventLoop *eventLoop, uint64_t event
 		} else {
 			pos1 = show1->getPosition();
 		}
-		pos1 = pos1 - locVertex + m_fcal_correction;
+		pos1 = pos1 - m_beamSpot + m_fcal_correction;
 		
 		double t1 = show1->getTime() - (pos1.Mag()/m_c) - locRFTime;
 		if(fabs(t1) > m_FCAL_RF_CUT) continue;
@@ -477,7 +478,7 @@ jerror_t JEventProcessor_eta_gg_tree::evnt(JEventLoop *eventLoop, uint64_t event
 			} else {
 				pos2 = show2->getPosition();
 			}
-			pos2 = pos2 - locVertex + m_fcal_correction;
+			pos2 = pos2 - m_beamSpot + m_fcal_correction;
 			
 			double t2 = show2->getTime() - (pos2.Mag()/m_c) - locRFTime;
 			if(fabs(t2) > m_FCAL_RF_CUT) continue;
@@ -611,7 +612,7 @@ void JEventProcessor_eta_gg_tree::write_events(uint64_t eventnumber, double rfTi
 	size_t n_mc_thrown = 0;
 	for(vector<const DMCThrown*>::const_iterator mc = mc_thrown.begin(); mc != mc_thrown.end(); mc++) {
 		
-		dTreeFillData.Fill_Array<Double_t>("mc_pdgtype", (*mc)->pdgtype, n_mc_thrown);
+		dTreeFillData.Fill_Array<Int_t>("mc_pdgtype",    (*mc)->pdgtype, n_mc_thrown);
 		dTreeFillData.Fill_Array<Double_t>("mc_x",       (*mc)->position().X(),                n_mc_thrown);
 		dTreeFillData.Fill_Array<Double_t>("mc_y",       (*mc)->position().Y(),                n_mc_thrown);
 		dTreeFillData.Fill_Array<Double_t>("mc_z",       (*mc)->position().Z(),                n_mc_thrown);
@@ -695,7 +696,6 @@ void JEventProcessor_eta_gg_tree::write_events(uint64_t eventnumber, double rfTi
 	}
 	dTreeFillData.Fill_Single<Int_t>("nfcal", n_fcal_shower);
 	
-	
 	// BCAL Showers:
 	size_t n_bcal_shower = 0;
 	for(vector<const DBCALShower*>::const_iterator show = bcal_showers.begin(); 
@@ -746,7 +746,7 @@ void JEventProcessor_eta_gg_tree::write_events(uint64_t eventnumber, double rfTi
 	size_t n_mc_thrown = 0;
 	for(vector<const DMCThrown*>::const_iterator mc = mc_thrown.begin(); mc != mc_thrown.end(); mc++) {
 		
-		dTreeFillData.Fill_Array<Double_t>("mc_pdgtype", (*mc)->pdgtype, n_mc_thrown);
+		dTreeFillData.Fill_Array<Int_t>("mc_pdgtype",    (*mc)->pdgtype, n_mc_thrown);
 		dTreeFillData.Fill_Array<Double_t>("mc_x",       (*mc)->position().X(),                n_mc_thrown);
 		dTreeFillData.Fill_Array<Double_t>("mc_y",       (*mc)->position().Y(),                n_mc_thrown);
 		dTreeFillData.Fill_Array<Double_t>("mc_z",       (*mc)->position().Z(),                n_mc_thrown);

@@ -28,6 +28,7 @@
 #include "PID/DEventRFBunch.h"
 #include "DVector3.h"
 #include "DLorentzVector.h"
+#include "particleType.h"
 #include "ANALYSIS/DTreeInterface.h"
 
 // ROOT headers:
@@ -71,16 +72,11 @@ class JEventProcessor_eta_gg_tree:public jana::JEventProcessor{
 		//---------------------------------------//
 		// Geometry
 		
-		double m_beamX, m_beamY, m_beamZ;
-		double m_fcalX, m_fcalY, m_fcalZ;
-		double m_ccalX, m_ccalY, m_ccalZ;
-		
-		double m_fcalX_new, m_fcalY_new;
-		double m_ccalX_new, m_ccalY_new;
+		DVector3 m_beamSpot;
+		DVector3 m_fcalFace, m_ccalFace;
+		DVector3 m_fcal_correction, m_ccal_correction;
 		
 		vector<vector<DVector3>> m_sc_pos, m_sc_norm;
-		
-		DVector3 m_fcal_correction, m_ccal_correction;
 		
 		int m_phase_val = 0;
 		
@@ -106,7 +102,7 @@ class JEventProcessor_eta_gg_tree:public jana::JEventProcessor{
 		//---------------------------------------//
 		// Constants 
 		
-		double m_Target;
+		Particle_t m_Target;
 		
 		const double m_pi0      =  0.1349770;   // [GeV]
 		const double m_eta      =  0.547862;    // [GeV]
