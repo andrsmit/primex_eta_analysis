@@ -430,38 +430,6 @@ jerror_t JEventProcessor_primex_eta_analysis_TOF::evnt(JEventLoop *eventLoop, ui
 	eventLoop->Get(locDMCThrown);
 	
 	//-----------------------------------------------------//
-	// Trigger information
-	/*
-	bool trig_conditions[N_TRIGS];
-	for(int itrig=0; itrig<N_TRIGS; itrig++) { trig_conditions[itrig] = false; }
-	
-	if(locDMCThrown.size() > 0) 
-	{
-		trig_conditions[0] = true;
-		trig_conditions[1] = true;
-	} else if(m_BYPASS_TRIGGER) {
-		trig_conditions[0] = true;
-		trig_conditions[1] = true;
-	} else {
-		const DL1Trigger *trig = NULL;
-		try {
-			eventLoop->GetSingle(trig);
-		} catch (...) {}
-		if (trig == NULL) { return NOERROR; }
-		
-		uint32_t trigmask    = trig->trig_mask;	
-		uint32_t fp_trigmask = trig->fp_trig_mask;
-		
-		if(!trigmask)   return NOERROR;
-		if(fp_trigmask) return NOERROR;
-		
-		if(trigmask & (1 <<  1)) trig_conditions[0] = true; // FCAL Energy Sum
-		if(trigmask & (1 <<  2)) trig_conditions[1] = true; // FCAL Energy Sum (low-threshold, phase 3 only)
-		if(trigmask & (1 <<  3)) trig_conditions[2] = true; // PS
-		if(trigmask & (1 << 10)) trig_conditions[3] = true; // CCAL Energy Sum
-	}
-	*/
-	//-----------------------------------------------------//
 	// Apply fill lock for multi-threaded running:
 	
 	japp->RootFillLock(this);
@@ -604,11 +572,10 @@ void JEventProcessor_primex_eta_analysis_TOF::eta_gg_analysis(
 	vector<const DSCHit*> sc_hits, 
 	int n_fcal_showers, int n_good_fcal_showers, 
 	double bcal_energy_sum, int n_bcal_showers, int n_bcal_showers_1ns, double bcal_phi, double bcal_rfdt,
-	double rfTime, bool is_mc, double thrown_beam_energy, double thrown_eta_angle
-)
+	double rfTime, bool is_mc, double thrown_beam_energy, double thrown_eta_angle)
 {
 	// Reject events with more than 1 shower in the BCAL:
-	if(n_bcal_showers>1) return;
+	//if(n_bcal_showers>1) return;
 	
 	// Apply multiplicity cut on the number of FCAL showers:
 	if(!(n_fcal_showers==2 && n_good_fcal_showers==2)) return;
@@ -800,7 +767,7 @@ void JEventProcessor_primex_eta_analysis_TOF::eta_gg_analysis(
 				else { continue; }
 				
 				// Calculate the energy of the eta meson, assuming a coherent production process:
-				//double eeta = energy_after_recoil(eb, prod_th, m_eta, m_Target);
+				//double eeta = energy_after_recoil(eb, prod_th, m_eta, ParticleMass(m_Target));
 				double eeta = energy_after_recoil(eb, prod_th, m_eta, m_Proton);
 				
 				// Apply a cut on the elasticity
@@ -942,8 +909,8 @@ int JEventProcessor_primex_eta_analysis_TOF::fcal_fiducial_cut(DVector3 pos, dou
 }
 
 void JEventProcessor_primex_eta_analysis_TOF::check_TOF_match(DVector3 pos1, double rfTime, 
-	vector<const DTOFPoint*> tof_points, double &dx_min, double &dy_min, 
-	double &dt_min, double rf_time_cut) {
+	vector<const DTOFPoint*> tof_points, 
+	double &dx_min, double &dy_min, double &dt_min, double rf_time_cut) {
 	
 	dx_min = 1000.;
 	dy_min = 1000.;

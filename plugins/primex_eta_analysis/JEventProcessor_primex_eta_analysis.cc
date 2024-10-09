@@ -226,7 +226,8 @@ jerror_t JEventProcessor_primex_eta_analysis::init(void)
 		h_elas_veto[ihist] = new TH2F(Form("elas_veto_%d",ihist), 
 			Form("Elasticity (Veto Option %d)", ihist+1), 650, 0., 6.5, 1000, 0., 2.0);
 		h_elas_veto[ihist]->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
-		h_elas_veto[ihist]->GetYaxis()->SetTitle("E_{#gamma#gamma}/E_{#eta}#left(E_{#gamma},#theta_{#gamma#gamma}#right)");
+		h_elas_veto[ihist]->GetYaxis()->SetTitle(
+			"E_{#gamma#gamma}/E_{#eta}#left(E_{#gamma},#theta_{#gamma#gamma}#right)");
 		
 		h_mgg_veto[ihist] = new TH2F(Form("mgg_veto_%d",ihist), 
 			Form("Two-Photon Invariant Mass (Veto Option %d)", ihist+1), 650, 0., 6.5, 600, 0., 1.2);
@@ -235,13 +236,98 @@ jerror_t JEventProcessor_primex_eta_analysis::init(void)
 		h_mgg_veto[ihist]->Sumw2();
 		
 		h_mgg_const_veto[ihist] = new TH2F(Form("mgg_const_veto_%d",ihist), 
-			Form("Energy-Constrained Invariant Invariant Mass (Veto Option %d)", ihist+1), 650, 0., 6.5, 600, 0., 1.2);
+			Form("Energy-Constrained Invariant Mass (Veto Option %d)", ihist+1), 650, 0., 6.5, 600, 0., 1.2);
 		h_mgg_const_veto[ihist]->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
 		h_mgg_const_veto[ihist]->GetYaxis()->SetTitle("M_{#gamma#gamma}^{constr} [GeV/c^{2}]");
 		h_mgg_const_veto[ihist]->Sumw2();
+		
+		h_mgg_const_coh_veto[ihist] = new TH2F(Form("mgg_const_coh_veto_%d",ihist), 
+			Form("Energy-Constrained Invariant Mass (Veto Option %d)", ihist+1), 650, 0., 6.5, 600, 0., 1.2);
+		h_mgg_const_coh_veto[ihist]->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
+		h_mgg_const_coh_veto[ihist]->GetYaxis()->SetTitle("M_{#gamma#gamma}^{constr} [GeV/c^{2}]");
+		h_mgg_const_coh_veto[ihist]->Sumw2();
+		
+		h_mm_veto[ihist] = new TH2F(Form("mm_veto_%d",ihist),
+			Form("Missing Mass Squared (Veto Option %d)", ihist+1), 650, 0., 6.5, 1500, 0., 30.0);
+		h_mm_veto[ihist]->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
+		h_mm_veto[ihist]->GetYaxis()->SetTitle("M_{miss}^{2} [GeV^{2}/c^{4}]");
+		h_mm_veto[ihist]->Sumw2();
+		
+		h_mm_const_veto[ihist] = new TH2F(Form("mm_const_veto_%d",ihist),
+			Form("Missing Mass Squared (Energy-constrained) (Veto Option %d)", ihist+1), 650, 0., 6.5, 1500, 0., 30.0);
+		h_mm_const_veto[ihist]->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
+		h_mm_const_veto[ihist]->GetYaxis()->SetTitle("M_{miss}^{2} [GeV^{2}/c^{4}]");
+		h_mm_const_veto[ihist]->Sumw2();
+		
+		h_mm_const_coh_veto[ihist] = new TH2F(Form("mm_const_coh_veto_%d",ihist),
+			Form("Missing Mass Squared (Energy-constrained) (Veto Option %d)", ihist+1), 650, 0., 6.5, 1500, 0., 30.0);
+		h_mm_const_coh_veto[ihist]->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
+		h_mm_const_coh_veto[ihist]->GetYaxis()->SetTitle("M_{miss}^{2} [GeV^{2}/c^{4}]");
+		h_mm_const_coh_veto[ihist]->Sumw2();
 	}
 	
 	//------------------------------------//
+	
+	// Missing-mass vs. angle:
+	
+	h_mm_vs_theta = new TH2F("mm_vs_theta", 
+		"Squared Missing Mass", 650, 0., 6.5, 1500, 0., 30.);
+	h_mm_vs_theta->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
+	h_mm_vs_theta->GetYaxis()->SetTitle("#Deltam^{2} [GeV^{2}/c^{4}]");
+	h_mm_vs_theta->Sumw2();
+	
+	h_mm_const_vs_theta = new TH2F("mm_const_vs_theta", 
+		"Squared Missing Mass", 650, 0., 6.5, 1500, 0., 30.);
+	h_mm_const_vs_theta->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
+	h_mm_const_vs_theta->GetYaxis()->SetTitle("#Deltam^{2} [GeV^{2}/c^{4}]");
+	h_mm_const_vs_theta->Sumw2();
+	
+	h_mm_const_coh_vs_theta = new TH2F("mm_const_coh_vs_theta", 
+		"Squared Missing Mass", 650, 0., 6.5, 1500, 0., 30.);
+	h_mm_const_coh_vs_theta->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
+	h_mm_const_coh_vs_theta->GetYaxis()->SetTitle("#Deltam^{2} [GeV^{2}/c^{4}]");
+	h_mm_const_coh_vs_theta->Sumw2();
+	
+	// With cut on invariant mass of 2-photon pair:
+	
+	h_mm_vs_theta_eta_cut = new TH2F("mm_vs_theta_eta_cut", 
+		"Squared Missing Mass (m_{#gamma#gamma} cut)", 650, 0., 6.5, 1500, 0., 30.);
+	h_mm_vs_theta_eta_cut->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
+	h_mm_vs_theta_eta_cut->GetYaxis()->SetTitle("#Deltam^{2} [GeV^{2}/c^{4}]");
+	h_mm_vs_theta_eta_cut->Sumw2();
+	
+	h_mm_const_vs_theta_eta_cut = new TH2F("mm_const_vs_theta_eta_cut", 
+		"Squared Missing Mass (m_{#gamma#gamma} cut)", 650, 0., 6.5, 1500, 0., 30.);
+	h_mm_const_vs_theta_eta_cut->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
+	h_mm_const_vs_theta_eta_cut->GetYaxis()->SetTitle("#Deltam^{2} [GeV^{2}/c^{4}]");
+	h_mm_const_vs_theta_eta_cut->Sumw2();
+	
+	h_mm_const_coh_vs_theta_eta_cut = new TH2F("mm_const_coh_vs_theta_eta_cut", 
+		"Squared Missing Mass (m_{#gamma#gamma} cut)", 650, 0., 6.5, 1500, 0., 30.);
+	h_mm_const_coh_vs_theta_eta_cut->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
+	h_mm_const_coh_vs_theta_eta_cut->GetYaxis()->SetTitle("#Deltam^{2} [GeV^{2}/c^{4}]");
+	h_mm_const_coh_vs_theta_eta_cut->Sumw2();
+	
+	// apply elasticity cut to both:
+	
+	h_mm_vs_theta_eta_elas_cut = new TH2F("mm_vs_theta_eta_elas_cut", 
+		"Squared Missing Mass (m_{#gamma#gamma} + elasticity cut)", 650, 0., 6.5, 1500, 0., 30.);
+	h_mm_vs_theta_eta_elas_cut->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
+	h_mm_vs_theta_eta_elas_cut->GetYaxis()->SetTitle("#Deltam^{2} [GeV^{2}/c^{4}]");
+	h_mm_vs_theta_eta_elas_cut->Sumw2();
+	
+	h_mm_const_vs_theta_eta_elas_cut = new TH2F("mm_const_vs_theta_eta_elas_cut", 
+		"Squared Missing Mass (m_{#gamma#gamma} + elasticity cut)", 650, 0., 6.5, 1500, 0., 30.);
+	h_mm_const_vs_theta_eta_elas_cut->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
+	h_mm_const_vs_theta_eta_elas_cut->GetYaxis()->SetTitle("#Deltam^{2} [GeV^{2}/c^{4}]");
+	h_mm_const_vs_theta_eta_elas_cut->Sumw2();
+	
+	h_mm_const_coh_vs_theta_eta_elas_cut = new TH2F("mm_const_coh_vs_theta_eta_elas_cut", 
+		"Squared Missing Mass (m_{#gamma#gamma} + elasticity cut)", 650, 0., 6.5, 1500, 0., 30.);
+	h_mm_const_coh_vs_theta_eta_elas_cut->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
+	h_mm_const_coh_vs_theta_eta_elas_cut->GetYaxis()->SetTitle("#Deltam^{2} [GeV^{2}/c^{4}]");
+	h_mm_const_coh_vs_theta_eta_elas_cut->Sumw2();
+	
 	/*
 	// Hybrid (rotated) mass:
 	h_hmass = new TH2F("hmass", "Hybrid Mass", 
@@ -250,14 +336,7 @@ jerror_t JEventProcessor_primex_eta_analysis::init(void)
 	h_hmass->GetYaxis()->SetTitle("Hybrid Mass");
 	h_hmass->Sumw2();
 	
-	// Missing-mass vs. angle:
-	h_mm_vs_theta = new TH2F("mm_vs_theta", "Squared Missing Mass", 
-		650, 0., 6.5, 4000, 0., 40.);
-	h_mm_vs_theta->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
-	h_mm_vs_theta->GetYaxis()->SetTitle("#Deltam^{2} [GeV^{2}/c^{4}]");
-	h_mm_vs_theta->Sumw2();
-	
-	// apply eta invariant mass cut to both:
+	// apply eta invariant mass cut:
 	
 	h_hmass_eta_cut = new TH2F("hmass_eta_cut", "Hybrid Mass (m_{#gamma#gamma} cut)", 
 		650, 0., 6.5, 1000, -1.0, 1.0);
@@ -265,25 +344,13 @@ jerror_t JEventProcessor_primex_eta_analysis::init(void)
 	h_hmass_eta_cut->GetYaxis()->SetTitle("Hybrid Mass");
 	h_hmass_eta_cut->Sumw2();
 	
-	h_mm_vs_theta_eta_cut = new TH2F("mm_vs_theta_eta_cut", "Squared Missing Mass (m_{#gamma#gamma} cut)", 
-		650, 0., 6.5, 4000, 0., 40.);
-	h_mm_vs_theta_eta_cut->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
-	h_mm_vs_theta_eta_cut->GetYaxis()->SetTitle("#Deltam^{2} [GeV^{2}/c^{4}]");
-	h_mm_vs_theta_eta_cut->Sumw2();
-	
-	// apply elasticity cut to both:
+	// apply elasticity cut:
 	
 	h_hmass_eta_elas_cut = new TH2F("hmass_eta_elas_cut", "Hybrid Mass (m_{#gamma#gamma} + elasticity cut)", 
 		650, 0., 6.5, 1000, -1.0, 1.0);
 	h_hmass_eta_elas_cut->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
 	h_hmass_eta_elas_cut->GetYaxis()->SetTitle("Hybrid Mass");
 	h_hmass_eta_elas_cut->Sumw2();
-	
-	h_mm_vs_theta_eta_elas_cut = new TH2F("mm_vs_theta_eta_elas_cut", 
-		"Squared Missing Mass (m_{#gamma#gamma} + elasticity cut)", 650, 0., 6.5, 4000, 0., 40.);
-	h_mm_vs_theta_eta_elas_cut->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
-	h_mm_vs_theta_eta_elas_cut->GetYaxis()->SetTitle("#Deltam^{2} [GeV^{2}/c^{4}]");
-	h_mm_vs_theta_eta_elas_cut->Sumw2();
 	*/
 	//------------------------------------//
 	
@@ -959,6 +1026,30 @@ void JEventProcessor_primex_eta_analysis::eta_gg_analysis(
 			//-----------------------------------------------------//
 			// check different veto options:
 			
+			//----------------------------------------------------//
+			// Check SC Matches:
+			
+			int loc_n_sc_hits = 0;
+			int loc_n_sc_hits_coplanar = 0;
+			for(vector<const DSCHit*>::const_iterator sc = sc_hits.begin(); sc != sc_hits.end(); sc++) {
+				
+				// only check hits between 1ns < (t_sc - t_RF) < 7ns 
+				//    and with dE > 0.0002 (from DNeutralShower_factory)
+				
+				double loc_t  = (*sc)->t - rfTime;
+				double loc_dE = (*sc)->dE;
+				
+				if((0.5<invmass) && (invmass<0.60)) h_sc_rf_dt_cut->Fill(loc_t);
+				
+				if((1.0 < loc_t) && (loc_t < 7.0) && (loc_dE > 0.0002)) {
+					int sector = (*sc)->sector;
+					double phi = m_sc_pos[sector-1][0].Phi() * (180./TMath::Pi());
+					loc_n_sc_hits++;
+					if(fabs(fabs(phi-prod_phi)-180.0) < 36.0) loc_n_sc_hits_coplanar++;
+				}
+			}
+			//----------------------------------------------------//
+			
 			vector<int> loc_veto_options;
 			for(int iveto=0; iveto<m_n_vetos; iveto++) loc_veto_options.push_back(0);
 			
@@ -983,28 +1074,16 @@ void JEventProcessor_primex_eta_analysis::eta_gg_analysis(
 				(n_bcal_showers==1 && fabs(fabs(bcal_phi-prod_phi)-180.0) < 30.0 && bcal_rfdt>1.0)) {
 				loc_veto_options[4] = 1;
 				
-				int loc_sc_veto = 0;
-				for(vector<const DSCHit*>::const_iterator sc = sc_hits.begin(); sc != sc_hits.end(); sc++) {
-					
-					// only check hits between 1ns < (t_sc - t_RF) < 7ns 
-					//    and with dE > 0.0002 (from DNeutralShower_factory)
-					
-					double loc_t  = (*sc)->t - rfTime;
-					double loc_dE = (*sc)->dE;
-					
-					if((0.5<invmass) && (invmass<0.60)) h_sc_rf_dt_cut->Fill(loc_t);
-					
-					if((1.0 < loc_t) && (loc_t < 7.0) && (loc_dE > 0.0002)) {
-						int sector = (*sc)->sector;
-						double phi = m_sc_pos[sector-1][0].Phi() * (180./TMath::Pi());
-						if(fabs(fabs(phi-prod_phi)-180.0) > 36.0) loc_sc_veto++;
-					}
-				}
-				
-				// Option 5 (add in SC Veto): Remove events where there is a hit in the SC with outside of the range:
+				// Option 5 (add in SC Veto): Remove events where there is a hit in the SC outside of the range:
 				//          150 < |phi_SC - phi_FCAL| < 210:
-				if(loc_sc_veto==0) loc_veto_options[5] = 1;
+				if(loc_n_sc_hits_coplanar==loc_n_sc_hits) loc_veto_options[5] = 1;
 			}
+			
+			// Option 6: Use tight veto on SC only:
+			if(loc_n_sc_hits==0) loc_veto_options[6] = 1;
+			
+			// Option 7: tight SC + tight BCAL vetos:
+			if(loc_n_sc_hits==0 && n_bcal_showers==0) loc_veto_options[7] = 1;
 			
 			//-----------------------------------------------------//
 			// Loop over Beam photons
@@ -1039,7 +1118,9 @@ void JEventProcessor_primex_eta_analysis::eta_gg_analysis(
 				//else { continue; }
 				
 				// Calculate the energy of the eta meson, assuming a coherent production process:
-				//double eeta = energy_after_recoil(eb, prod_th, m_eta, m_Target);
+				double eeta_coh = energy_after_recoil(eb, prod_th, m_eta, ParticleMass(m_Target));
+				
+				// Calculate the energy of the eta meson, assuming production on a free nucleon:
 				double eeta = energy_after_recoil(eb, prod_th, m_eta, m_Proton);
 				
 				// Apply a cut on the elasticity
@@ -1051,7 +1132,7 @@ void JEventProcessor_primex_eta_analysis::eta_gg_analysis(
 				if(fabs((Egg/eeta)-loc_elas_mean)<loc_elas_width) elas_cut = true;
 				
 				// set a variable to indicate if the two-photon mass is consistent with an eta meson:
-				bool  eta_cut = false;
+				bool eta_cut = false;
 				if(0.497862<invmass && invmass<0.597862) eta_cut = true;
 				
 				// Plot timing distribution of beam photons after elasticity cut to see the level of accidentals:
@@ -1072,9 +1153,15 @@ void JEventProcessor_primex_eta_analysis::eta_gg_analysis(
 				double sig2 = fcal_energy_res(e2);
 				double sigr = pow(sig1/sig2,2.0);
 				
+				// Energy-constrained invariant mass assuming production on free nucleon:
 				double e1c = e1/(1.+sigr) + (eeta-e2)/(1.+(1./sigr));
 				double e2c = eeta - e1c;
-				double invmass_const = sqrt(2.*e1c*e2c*(1.-cos12)); // energy-constrained invariant mass
+				double invmass_const = sqrt(2.*e1c*e2c*(1.-cos12));
+				
+				// Energy-constrained invariant mass assuming coherent production on nucleus:
+				double e1c_coh = e1/(1.+sigr) + (eeta_coh-e2)/(1.+(1./sigr));
+				double e2c_coh = eeta_coh - e1c;
+				double invmass_const_coh = sqrt(2.*e1c_coh*e2c_coh*(1.-cos12)); // energy-constrained invariant mass
 				
 				// re-compute the polar angle of the two-photon pair using these adjusted energies:
 				double px1c  = e1c*pos1.X()/pos1.Mag();
@@ -1101,6 +1188,20 @@ void JEventProcessor_primex_eta_analysis::eta_gg_analysis(
 				
 				//double mmsq = 2.0*m_Proton*eb - 2.0*eb*Egg + m_Proton*m_Proton + m_eta*m_eta 
 				//	- 2.0*m_Proton*Egg + 2.0*eb*cos(prod_th*TMath::Pi()/180.)*sqrt(Egg*Egg - m_eta*m_eta);
+				double sinth = pggt / sqrt(pow(pggt,2.0) + pow(pggz,2.0));
+				double costh = sqrt(1.0 - pow(sinth,2.0));
+				
+				double  mmsq = pow(ParticleMass(m_Target),2.0) + pow(m_eta,2.0) 
+					- 2.0*(Egg*(eb+ParticleMass(m_Target)) 
+					- eb*(sqrt(pow(Egg,2.0)-pow(m_eta,2.0))*costh + ParticleMass(m_Target)));
+				
+				double mmsq_const = pow(ParticleMass(m_Target),2.0) + pow(m_eta,2.0) 
+					- 2.0*(eeta*(eb+ParticleMass(m_Target)) 
+					- eb*(sqrt(pow(eeta,2.0)-pow(m_eta,2.0))*costh + ParticleMass(m_Target)));
+				
+				double mmsq_const_coh = pow(ParticleMass(m_Target),2.0) + pow(m_eta,2.0) 
+					- 2.0*(eeta_coh*(eb+ParticleMass(m_Target)) 
+					- eb*(sqrt(pow(eeta_coh,2.0)-pow(m_eta,2.0))*costh + ParticleMass(m_Target)));
 				
 				//-----------------------------------------------------//
 				// Default Cuts
@@ -1160,12 +1261,30 @@ void JEventProcessor_primex_eta_analysis::eta_gg_analysis(
 					}
 				}
 				
+				h_mm_vs_theta->Fill(prod_th, mmsq, fill_weight);
+				h_mm_const_vs_theta->Fill(prod_th, mmsq_const, fill_weight);
+				h_mm_const_coh_vs_theta->Fill(prod_th, mmsq_const_coh, fill_weight);
+				if(eta_cut) {
+					h_mm_vs_theta_eta_cut->Fill(prod_th, mmsq, fill_weight);
+					h_mm_const_vs_theta_eta_cut->Fill(prod_th, mmsq_const, fill_weight);
+					if(elas_cut) {
+						h_mm_vs_theta_eta_elas_cut->Fill(prod_th, mmsq, fill_weight);
+						h_mm_const_vs_theta_eta_elas_cut->Fill(prod_th, mmsq_const, fill_weight);
+					}
+				}
+				
 				for(int iveto=0; iveto<m_n_vetos; iveto++) {
 					if(loc_veto_options[iveto]) {
 						if(eta_cut) h_elas_veto[iveto]->Fill(prod_th, Egg/eeta, fill_weight);
 						if(elas_cut) {
 							h_mgg_veto[iveto]->Fill(prod_th, invmass, fill_weight);
 							h_mgg_const_veto[iveto]->Fill(prod_th, invmass_const, fill_weight);
+							h_mgg_const_coh_veto[iveto]->Fill(prod_th, invmass_const_coh, fill_weight);
+							if(eta_cut) {
+								h_mm_veto[iveto]->Fill(prod_th, mmsq, fill_weight);
+								h_mm_const_veto[iveto]->Fill(prod_th, mmsq_const, fill_weight);
+								h_mm_const_coh_veto[iveto]->Fill(prod_th, mmsq_const_coh, fill_weight);
+							}
 						}
 					}
 				}

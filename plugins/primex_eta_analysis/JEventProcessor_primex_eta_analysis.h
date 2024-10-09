@@ -163,19 +163,32 @@ class JEventProcessor_primex_eta_analysis:public jana::JEventProcessor{
 		TH2F *h_mgg_const_corr;
 		
 		// plots 
-		static const int m_n_vetos = 6;
+		static const int m_n_vetos = 8;
 		
 		TH2F *h_elas_veto[m_n_vetos];
 		TH2F *h_mgg_veto[m_n_vetos];
 		TH2F *h_mgg_const_veto[m_n_vetos];
+		TH2F *h_mgg_const_coh_veto[m_n_vetos];
+		TH2F *h_mm_veto[m_n_vetos];
+		TH2F *h_mm_const_veto[m_n_vetos];
+		TH2F *h_mm_const_coh_veto[m_n_vetos];
 		
 		TH2F *h_rec_vs_thrown;
 		TH2F *h_mgg_thrown;
 		TH2F *h_mgg_const_thrown;
 		
-		TH2F *h_hmass,              *h_mm_vs_theta;
-		TH2F *h_hmass_eta_cut,      *h_mm_vs_theta_eta_cut;
-		TH2F *h_hmass_eta_elas_cut, *h_mm_vs_theta_eta_elas_cut;
+		TH2F *h_hmass;
+		TH2F *h_hmass_eta_cut;
+		TH2F *h_hmass_eta_elas_cut;
+		
+		TH2F *h_mm_vs_theta, *h_mm_const_vs_theta;
+		TH2F *h_mm_const_coh_vs_theta;
+		
+		TH2F *h_mm_vs_theta_eta_cut, *h_mm_const_vs_theta_eta_cut;
+		TH2F *h_mm_const_coh_vs_theta_eta_cut;
+		
+		TH2F *h_mm_vs_theta_eta_elas_cut, *h_mm_const_vs_theta_eta_elas_cut;
+		TH2F *h_mm_const_coh_vs_theta_eta_elas_cut;
 		
 		TH2F *h_xy_1, *h_xy_2;
 };
