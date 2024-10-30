@@ -88,6 +88,8 @@ def main():
     htagm_flux      =  TH1F("TAGM Tagged Flux","TAGM Tagged Flux",102,0.5,102.5)
     htagm_flux_cor  =  TH1F("TAGM Tagged Flux Cor","TAGM Tagged Flux Cor",102,0.5,102.5)
     
+    h_flux_vs_egamma = TH1F("flux_vs_egamma", "PS-Acceptance-Corrected Flux vs. Beam Energy; E_{#gamma} [GeV]", 12000, 0., 12.)
+    
     photon_endpoint_assignment = ccdb_conn.get_assignment("/PHOTON_BEAM/endpoint_energy",
                                                           run_number, VARIATION)
     photon_endpoint_calib_assignment = ccdb_conn.get_assignment("/PHOTON_BEAM/hodoscope/endpoint_calib",
@@ -145,6 +147,10 @@ def main():
         htagh_flux_cor.SetBinContent(int(tagh_tagged_flux[ii][0]),float(tagh_tagged_flux[ii][1])*ps_scale/ps_acc)
         htagh_flux_cor.SetBinError(int(tagh_tagged_flux[ii][0]),float(tagh_tagged_flux[ii][2])*ps_scale/ps_acc)
         
+        flux_bin = h_flux_vs_egamma.FindBin(tagh_energy)
+        h_flux_vs_egamma.SetBinContent(flux_bin, h_flux_vs_egamma.GetBinContent(flux_bin) + float(tagh_tagged_flux[ii][1])*ps_scale/ps_acc)
+        h_flux_vs_egamma.SetBinError(flux_bin, math.sqrt(h_flux_vs_egamma.GetBinError(flux_bin)**2 + (float(tagh_tagged_flux[ii][2])*ps_scale/ps_acc)**2))
+        
         data_file_tagh.write("%4d  %10.3f  %10.3f \n" %(int(tagh_tagged_flux[ii][0]),float(tagh_tagged_flux[ii][1])*ps_scale/ps_acc,float(tagh_tagged_flux[ii][2])*ps_scale/ps_acc))
         
     
@@ -167,6 +173,10 @@ def main():
         htagm_flux_cor.SetBinContent(int(tagm_tagged_flux[jj][0]),float(tagm_tagged_flux[jj][1])*ps_scale/ps_acc)
         htagm_flux_cor.SetBinError(int(tagm_tagged_flux[jj][0]),float(tagm_tagged_flux[jj][2])*ps_scale/ps_acc)
         
+        flux_bin = h_flux_vs_egamma.FindBin(tagm_energy)
+        h_flux_vs_egamma.SetBinContent(flux_bin, h_flux_vs_egamma.GetBinContent(flux_bin) + float(tagm_tagged_flux[jj][1])*ps_scale/ps_acc)
+        h_flux_vs_egamma.SetBinError(flux_bin, math.sqrt(h_flux_vs_egamma.GetBinError(flux_bin)**2 + (float(tagm_tagged_flux[jj][2])*ps_scale/ps_acc)**2))
+        
         data_file_tagm.write("%4d  %10.3f  %10.3f \n" %(int(tagm_tagged_flux[jj][0]),float(tagm_tagged_flux[jj][1])*ps_scale/ps_acc,float(tagm_tagged_flux[jj][2])*ps_scale/ps_acc))
         
     
@@ -177,6 +187,8 @@ def main():
     
     htagm_flux.Write()
     htagm_flux_cor.Write()
+    
+    h_flux_vs_egamma.Write()
     
     froot_out.Close()
     
