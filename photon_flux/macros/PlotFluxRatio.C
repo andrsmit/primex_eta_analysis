@@ -1,10 +1,5 @@
 /*
-ROOT Macro to calculate the integrated photon flux within a specified energy range for the PrimEx run periods.
-Example usage:
-	root -l -b -q 'GetIntegratedFlux_PrimEx(1, 8.0, 10.9)'
-
-This will sum the total flux measured in the energy range 8-10.9 GeV for the first phase of PrimEx.
-Note: To run, the relevant run lists (stored on the /work disk must be accessible).
+ROOT Macro to plot the photon flux ratio between full target and empty target runs as a function of the beam energy.
 */
 
 #include <stdio.h>
@@ -19,21 +14,81 @@ Note: To run, the relevant run lists (stored on the /work disk must be accessibl
 double tagh_en[274], tagm_en[102];
 double endpointEnergy, endpointEnergyCalib;
 
-TString fluxDir = "/work/halld/home/andrsmit/primex_eta_analysis/photon_flux";
-TString runListDirectory = "/work/halld/home/andrsmit/run_lists";
+TString fluxDir, runListDirectory;
 TString targetStr[2]     = {"full","empty"};
 
 double targetThickness = 5.408e+23;
 	// number of atoms per cm^2, assuming density = 0.1217 g/cm3 and length = 29.535cm
 
 double cm2pb = 1.e-36;
+	// conversion factor: 1 pb = 10^-36 cm2
 
 int GetCounterEnergies(int phase, int run);
-int GetIntegratedFlux(int phase, int run, double minE, double maxE, double &flux, double &fluxE);
+int IntegrateFlux(TString fluxDirectory, int runNumber, double minEnergy, double maxEnergy, double &flux, double &fluxE);
 
-void GetIntegratedFlux_PrimEx(int primexPhase=1, double minBeamEnergy=8.0, double maxBeamEnergy=12.0) 
+double GetFluxRatio(int primexPhase=1, double minBeamEnergy=8.0, double maxBeamEnergy=12.0);
+
+void PlotFluxRatio(int primexPhase=1) {
+	
+	vector<double> beamEnergyVec, fluxRatioVec;
+	
+	double locMinBeamEnergy = 6.0, locMaxBeamEnergy = 11.2;
+	double locBeamEnergyBinSize = 0.05;
+	
+	double locBeamEnergy = locMinBeamEnergy + 0.5*locBeamEnergyBinSize;
+	while(locBeamEnergy<locMaxBeamEnergy) {
+		
+		double locFluxRatio = GetFluxRatio(primexPhase, locBeamEnergy-0.5*locBeamEnergyBinSize, locBeamEnergy+0.5*locBeamEnergyBinSize);
+		
+		beamEnergyVec.push_back(locBeamEnergy);
+		fluxRatioVec.push_back(locFluxRatio);
+		
+		locBeamEnergy += locBeamEnergyBinSize;
+	}
+	
+	int n_bins = (int)beamEnergyVec.size();
+	double *beamEnergy    = new double[n_bins];
+	double *beamEnergyErr = new double[n_bins];
+	double *fluxRatio     = new double[n_bins];
+	double *fluxRatioErr  = new double[n_bins];
+	for(int ib=0; ib<n_bins; ib++) {
+		beamEnergy[ib]    = beamEnergyVec[ib];
+		beamEnergyErr[ib] = 0.5*locBeamEnergyBinSize;
+		fluxRatio[ib]     = fluxRatioVec[ib];
+		fluxRatioErr[ib]  = 0.02*fluxRatioVec[ib];
+	}
+	
+	TGraphErrors *gRatio = new TGraphErrors(n_bins, beamEnergy, fluxRatio, beamEnergyErr, fluxRatioErr);
+	gRatio->GetXaxis()->SetTitle("Beam Energy [GeV]");
+	gRatio->GetXaxis()->SetTitleSize(0.05);
+	gRatio->GetXaxis()->SetTitleOffset(1.0);
+	gRatio->GetXaxis()->CenterTitle(true);
+	gRatio->GetYaxis()->SetTitle("#Gamma(full) / #Gamma(empty)");
+	gRatio->GetYaxis()->SetTitleSize(0.05);
+	gRatio->GetYaxis()->SetTitleOffset(1.0);
+	gRatio->GetYaxis()->CenterTitle(true);
+	gRatio->SetTitle("Full/Empty Flux Ratio vs. Energy");
+	
+	gRatio->SetMarkerStyle(8);
+	gRatio->SetMarkerColor(kBlue);
+	gRatio->SetLineColor(kBlue);
+	gRatio->SetMarkerSize(1.0);
+	
+	TCanvas *cRatio = new TCanvas("cRatio", "Flux Ratio", 950, 700);
+	cRatio->SetTickx(); cRatio->SetTicky();
+	cRatio->SetBottomMargin(0.13);
+	cRatio->SetLeftMargin(0.13); cRatio->SetRightMargin(0.07);
+	gRatio->Draw("AP");
+}
+
+double GetFluxRatio(int primexPhase=1, double minBeamEnergy=8.0, double maxBeamEnergy=12.0) 
 {
-	printf("\nSumming photon flux between %f-%f GeV for PrimEx-eta phase %d\n", minBeamEnergy, maxBeamEnergy, primexPhase);
+	TString primexDir = getenv("PRIMEXDIR");
+	
+	fluxDir          = primexDir+"/photon_flux";
+	runListDirectory = primexDir+"/run_lists";
+	
+	printf("\nSumming photon flux between %.2f-%.2f GeV for PrimEx-eta phase %d\n", minBeamEnergy, maxBeamEnergy, primexPhase);
 	std::cout << "" << std::endl;
 	
 	//---------------------------------------------------------------//
@@ -42,13 +97,13 @@ void GetIntegratedFlux_PrimEx(int primexPhase=1, double minBeamEnergy=8.0, doubl
 	switch(primexPhase) {
 		case 1:
 			for(int i=0; i<2; i++) {
-				locRunList[i] = Form("%s/primex_phase1/he_%s_nobfield.txt", 
+				locRunList[i] = Form("%s/phase1/he_%s_nobfield.txt", 
 					runListDirectory.Data(), targetStr[i].Data());
 			}
 			break;
 		case 2:
 			for(int i=0; i<2; i++) {
-				locRunList[i] = Form("%s/primex_phase2/he_%s_bfield.txt", 
+				locRunList[i] = Form("%s/phase2/he_%s_bfield.txt", 
 					runListDirectory.Data(), targetStr[i].Data());
 				//locRunList[i] = Form("%s/primex_phase2/he_%s_nobfield.txt", 
 				//	runListDirectory.Data(), targetStr[i].Data());
@@ -56,7 +111,7 @@ void GetIntegratedFlux_PrimEx(int primexPhase=1, double minBeamEnergy=8.0, doubl
 			break;
 		case 3:
 			for(int i=0; i<2; i++) {
-				locRunList[i] = Form("%s/primex_phase3/he_%s_bfield.txt", 
+				locRunList[i] = Form("%s/phase3/he_%s_bfield.txt", 
 					runListDirectory.Data(), targetStr[i].Data());
 			}
 			break;
@@ -71,13 +126,15 @@ void GetIntegratedFlux_PrimEx(int primexPhase=1, double minBeamEnergy=8.0, doubl
 	pair<double,double> emptyTargetFlux = {0.0, 0.0};
 	
 	for(int itarget=0; itarget<2; itarget++) {
-		printf("Processing %s target runs...\n",targetStr[itarget].Data());
+		//printf("Processing %s target runs...\n",targetStr[itarget].Data());
 		ifstream locInf(locRunList[itarget].Data());
 		if(!locInf.is_open()) {
 			std::cout << "Problem accessing run list." << std::endl;
 			std::cout << "  filename: " << locRunList[itarget] << std::endl;
 			exit(1);
 		}
+		
+		TString locFluxDirectory = fluxDir+Form("/txtFiles/phase%d/%s",primexPhase,targetStr[itarget].Data());
 		
 		double locIntegratedFlux  = 0.0;
 		double locIntegratedFluxE = 0.0;
@@ -91,7 +148,7 @@ void GetIntegratedFlux_PrimEx(int primexPhase=1, double minBeamEnergy=8.0, doubl
 			}
 			//std::cout << "  " << locRun << std::endl;
 			//std::cout << "    endpoint_energy = " << endpointEnergy << " GeV" << std::endl;
-			if(GetIntegratedFlux(primexPhase, locRun, minBeamEnergy, maxBeamEnergy, locFlux, locFluxE)) {
+			if(IntegrateFlux(locFluxDirectory, locRun, minBeamEnergy, maxBeamEnergy, locFlux, locFluxE)) {
 				std::cout << "Problem getting flux for run " << locRun << std::endl;
 				continue;
 			}
@@ -109,15 +166,7 @@ void GetIntegratedFlux_PrimEx(int primexPhase=1, double minBeamEnergy=8.0, doubl
 		}
 	}
 	
-	double integratedLum = fullTargetFlux.first * targetThickness * cm2pb;
-	
-	printf("\n\n\n");
-	printf("Integrated flux for full target runs: %e +/- %e\n", fullTargetFlux.first, fullTargetFlux.second);
-	printf("Integrated luminosity: %f pb-1\n", integratedLum);
-	printf("  Empty-target flux ratio (full/empty): %f\n", fullTargetFlux.first/emptyTargetFlux.first);
-	printf("\n\n\n");
-	
-	return 0;
+	return (fullTargetFlux.first/emptyTargetFlux.first);
 }
 
 int GetCounterEnergies(int phase, int run) {
@@ -141,8 +190,9 @@ int GetCounterEnergies(int phase, int run) {
 	// Get endpoint_energy from txtFile:
 	
 	endpointEnergy = 0.0;
-	TString endpointFilename = fluxDir+Form("/endpointEnergies/phase%d/%d.txt", phase, run);
+	TString endpointFilename = fluxDir+Form("/old/endpointEnergies/phase%d/%d.txt", phase, run);
 	if(gSystem->AccessPathName(endpointFilename.Data())) {
+		cout << "  endpoint energy file doesn't exist" << endl;
 		return 1;
 	}
 	ifstream infEndpoint(endpointFilename.Data());
@@ -156,8 +206,8 @@ int GetCounterEnergies(int phase, int run) {
 	//---------------------------------------//
 	// Get energy scales from txtFile:
 	
-	TString tagh_xscale_fname = fluxDir+Form("/xscales/phase%d/primex_tagh.txt", phase);
-	TString tagm_xscale_fname = fluxDir+Form("/xscales/phase%d/primex_tagm.txt", phase);
+	TString tagh_xscale_fname = fluxDir+Form("/old/xscales/phase%d/primex_tagh.txt", phase);
+	TString tagm_xscale_fname = fluxDir+Form("/old/xscales/phase%d/primex_tagm.txt", phase);
 	
 	ifstream infTAGH(tagh_xscale_fname.Data());
 	ifstream infTAGM(tagm_xscale_fname.Data());
@@ -190,25 +240,26 @@ int GetCounterEnergies(int phase, int run) {
 	return 0;
 }
 
-int GetIntegratedFlux(int phase, int run, double minE, double maxE, double &flux, double &fluxE) {
+int IntegrateFlux(TString fluxDirectory, int runNumber, double minEnergy, double maxEnergy, double &flux, double &fluxE) {
 	
 	/*
-	Function to get the integrated flux between 'minE' and 'maxE' for specified 'run'.
+	Function to get the integrated flux between 'minEnergy' and 'maxEnergy' for specified 'run'.
 	This function will attempt to read the total flux for each counter stored in text files for each
 	run in this directory: "/work/halld/home/andrsmit/primex_eta_analysis/photon_flux/txtFiles"
 	For each run, the endpoint energy is needed to calculate the energy associated with each tagger counter.
-	If the midpoint energy of the counter is between minE and maxE, the flux of photons measured
+	If the midpoint energy of the counter is between minEnergy and maxEnergy, the flux of photons measured
 	by that counter is added into the total 'flux' for each run.
 	*/
 	
-	TString tagh_flux_filename = fluxDir+Form("/txtFiles/phase%d/%d_tagh_ps_acc_cor.txt", phase, run);
-	TString tagm_flux_filename = fluxDir+Form("/txtFiles/phase%d/%d_tagm_ps_acc_cor.txt", phase, run);
+	TString tagh_flux_filename = fluxDirectory+Form("/%d_tagh_ps_acc_cor.txt", runNumber);
+	TString tagm_flux_filename = fluxDirectory+Form("/%d_tagm_ps_acc_cor.txt", runNumber);
 	
 	ifstream infTAGH(tagh_flux_filename.Data());
 	ifstream infTAGM(tagm_flux_filename.Data());
 	
 	// first check that input filenames exist:
 	if(!infTAGH.good() || !infTAGM.good()) {
+		cout << tagh_flux_filename << endl;
 		return 1;
 	}
 	
@@ -218,7 +269,7 @@ int GetIntegratedFlux(int phase, int run, double minE, double maxE, double &flux
 	for(int tagh_counter=1; tagh_counter<=274; tagh_counter++) {
 		infTAGH >> a >> b >> c;
 		double locE = tagh_en[tagh_counter-1];
-		if((minE<=locE) && (locE<maxE)) {
+		if((minEnergy<=locE) && (locE<maxEnergy)) {
 			flux  += b;
 			fluxE += pow(c,2.0);
 		}
@@ -226,7 +277,7 @@ int GetIntegratedFlux(int phase, int run, double minE, double maxE, double &flux
 	for(int tagm_counter=1; tagm_counter<=102; tagm_counter++) {
 		infTAGM >> a >> b >> c;
 		double locE = tagm_en[tagm_counter-1];
-		if((minE<=locE) && (locE<maxE)) {
+		if((minEnergy<=locE) && (locE<maxEnergy)) {
 			flux  += b;
 			fluxE += pow(c,2.0);
 		}
