@@ -33,6 +33,7 @@ struct anaSettings_t {
 	int runNumber;
 	string  inputFileName;
 	string outputFileName;
+	string configFileName;
 };
 
 int GetMinRunNumber(int phase) {

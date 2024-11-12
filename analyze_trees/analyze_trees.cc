@@ -5,11 +5,12 @@ int main(int argc, char **argv) {
 	
 	anaSettings_t locSettings;
 	locSettings.primexPhase    =     1;
-	locSettings.minRunNumber   = 61462;
+	locSettings.minRunNumber   = 61355;
 	locSettings.maxRunNumber   = 61956;
 	locSettings.runNumber      =     0;
 	locSettings.inputFileName  = "none";
 	locSettings.outputFileName = "eta_ana.root";
+	locSettings.configFileName = "eta_ana.config";
 	
 	// parse command line:
 	char *argptr;
@@ -28,6 +29,9 @@ int main(int argc, char **argv) {
 				break;
 			case 'e':
 				locSettings.maxRunNumber = atoi(++argptr);
+				break;
+			case 'c':
+				locSettings.configFileName = ++argptr;
 				break;
 			case 'i':
 				locSettings.inputFileName = ++argptr;
@@ -56,10 +60,18 @@ int main(int argc, char **argv) {
 	// Directory where output ROOT files will be stored:
 	sprintf(rootFilePathName, "/work/halld/home/andrsmit/primex_eta_analysis/analyze_trees/rootFiles");
 	
-	// Initialize histograms to be filled:
-	
+	// Initialize analysis object:
 	EtaAna locAna;
+	
+	// Read cut values from config file:
+	TString locConfigFileName(locSettings.configFileName);
+	locAna.SetCuts(locConfigFileName);
+	
+	// Initialize histograms to be filled:
 	locAna.InitHistograms();
+	
+	// Optionally fill 3-d matrix of Angle vs. Invariant Mass vs. BeamEnergy:
+	locAna.SetFillInvmassMatrix(true);
 	
 	//
 	// Check if an input filename was specificed at runtime. 
@@ -85,7 +97,7 @@ int main(int argc, char **argv) {
 		
 		int locPhase = locSettings.primexPhase;
 		
-		vector<TString> targetStrings = {"full", "empty"};
+		vector<TString> targetStrings = {"full","empty"};
 		
 		vector<TString>  fieldStrings; fieldStrings.clear();
 		if(locPhase==1) {
@@ -142,6 +154,7 @@ void printUsage(anaSettings_t anaSettings, int goYes) {
 		fprintf(stderr,"-p<arg>\tPrimEx-eta phase number (default=1, choose between 1,2,or3)\n");
 		fprintf(stderr,"-b<arg>\tMinimum run number to process\n");
 		fprintf(stderr,"-e<arg>\tMaximum run number to process\n");
+		fprintf(stderr,"-c<arg>\tConfiguration file name\n");
 		fprintf(stderr,"-r<arg>\tRun number for specified input file\n");
 		fprintf(stderr,"-i<arg>\tInput file name (default is none)\n");
 		fprintf(stderr,"-o<arg>\tOutput file name (default is compton_ana.root)\n\n\n");
