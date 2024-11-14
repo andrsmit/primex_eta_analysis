@@ -32,7 +32,7 @@ void EtaAna::EtaggAnalysis() {
 	int locNBCALShowers_1ns = 0.;
 	double locBCALRFDT = 0., locBCALPhi = 0.; // only useful when there's exactly 1 BCAL shower within timing cut
 	
-	for(int ishow=0; ishow<locNBCALShowers; ishow++) {
+	for(int ishow=0; ishow<locGoodBCALShowers.size(); ishow++) {
 		int showIndex = locGoodBCALShowers[ishow];
 		TVector3 locPos = GetBCALPosition(showIndex);
 		double locT = m_bcalT[showIndex] - (locPos.Mag()/m_c) - m_rfTime;
@@ -290,7 +290,7 @@ void EtaAna::EtaggAnalysis() {
 					}
 					
 					// plot BCAL-DeltaPhi:
-					for(int ibcal = 0; ibcal < locNBCALShowers; ibcal++) {
+					for(int ibcal = 0; ibcal < locGoodBCALShowers.size(); ibcal++) {
 						double deltaPhi = GetBCALPosition(locGoodBCALShowers[ibcal]).Phi() * TMath::RadToDeg() - prodPhi;
 						h_bcalDeltaPhi->Fill(prodTheta, deltaPhi);
 					}

@@ -340,16 +340,20 @@ void EtaAna::FillInvmassMatrix(double theta, double mgg, double beamEnergy, doub
 		h_invmassMatrix = new TH3F("invmassMatrix", 
 			"Invariant Mass Matrix; #theta(rec) [#circ]; m_{#gamma#gamma}^{Constr} [GeV/c^{2}]; E_{#gamma} [GeV]",
 			650, 0.0, 6.5, 600, 0.0, 1.2, 50, 7.0, 12.0);
+		h_invmassMatrix->Sumw2();
 		h_invmassMatrix->SetDirectory(0);
-		
+		/*
 		h_invmassMatrix_acc = new TH3F("invmassMatrix_acc", 
 			"Invariant Mass Matrix; #theta(rec) [#circ]; m_{#gamma#gamma}^{Constr} [GeV/c^{2}]; E_{#gamma} [GeV]",
 			650, 0.0, 6.5, 600, 0.0, 1.2, 50, 7.0, 12.0);
 		h_invmassMatrix_acc->SetDirectory(0);
+		*/
 	}
-	
+	/*
 	if(weight<0.0) h_invmassMatrix_acc->Fill(theta, mgg, beamEnergy);
 	else h_invmassMatrix->Fill(theta, mgg, beamEnergy);
+	*/
+	h_invmassMatrix->Fill(theta, mgg, beamEnergy, weight);
 	
 	return;
 }
@@ -847,7 +851,7 @@ void EtaAna::InitHistograms(int analysisOption) {
 			// vary the size of the fiducial cut:
 			
 			m_fcalFiducialCuts.clear();
-			for(int icut=0; icut<13; icut++) {
+			for(int icut=0; icut<17; icut++) {
 				double locCut = 0.0 + 0.25*(double)(icut);
 				m_fcalFiducialCuts.push_back(locCut);
 			}
@@ -979,7 +983,7 @@ void EtaAna::ResetHistograms(int analysisOption) {
 	
 	if(h_invmassMatrix!=NULL) {
 		h_invmassMatrix->Reset();
-		h_invmassMatrix_acc->Reset();
+		//h_invmassMatrix_acc->Reset();
 	}
 	
 	return;
@@ -1088,7 +1092,7 @@ void EtaAna::WriteHistograms(int analysisOption) {
 	
 	if(h_invmassMatrix!=NULL) {
 		h_invmassMatrix->Write();
-		h_invmassMatrix_acc->Write();
+		//h_invmassMatrix_acc->Write();
 	}
 	
 	fOut->Write();

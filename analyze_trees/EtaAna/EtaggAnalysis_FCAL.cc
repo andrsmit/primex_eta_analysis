@@ -6,6 +6,7 @@ void EtaAna::EtaggAnalysis_FCAL() {
 	if(m_nmc>0) {
 		if(AcceptRejectEvent()) return;
 		GetThrownEnergyAndAngle(locThrownBeamEnergy, locThrownAngle);
+		if((locThrownBeamEnergy < m_minBeamEnergyCut) || (locThrownBeamEnergy >= m_maxBeamEnergyCut)) return;
 		PlotThrown(locThrownBeamEnergy, locThrownAngle);
 		if(h_AngularMatrix_FCALECut.size()==0) {
 			InitializeAngularMatrices_FCAL();

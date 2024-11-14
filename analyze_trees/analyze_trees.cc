@@ -98,7 +98,7 @@ int main(int argc, char **argv) {
 	locAna.InitHistograms(locSettings.analysisOption);
 	
 	// Optionally fill 3-d matrix of Angle vs. Invariant Mass vs. BeamEnergy:
-	//locAna.SetFillInvmassMatrix(true);
+	if(locSettings.analysisOption==0) locAna.SetFillInvmassMatrix(true);
 	
 	//
 	// Check if an input filename was specificed at runtime. 
