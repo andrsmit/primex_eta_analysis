@@ -8,6 +8,7 @@ int main(int argc, char **argv) {
 	locSettings.minRunNumber   = 61355;
 	locSettings.maxRunNumber   = 61956;
 	locSettings.runNumber      =     0;
+	locSettings.analysisOption =     0;
 	locSettings.inputFileName  = "none";
 	locSettings.outputFileName = "eta_ana.root";
 	locSettings.configFileName = "eta_ana.config";
@@ -32,6 +33,9 @@ int main(int argc, char **argv) {
 				break;
 			case 'c':
 				locSettings.configFileName = ++argptr;
+				break;
+			case 'a':
+				locSettings.analysisOption = atoi(++argptr);
 				break;
 			case 'i':
 				locSettings.inputFileName = ++argptr;
@@ -63,15 +67,38 @@ int main(int argc, char **argv) {
 	// Initialize analysis object:
 	EtaAna locAna;
 	
+	TString analysisStr = "";
+	switch(locSettings.analysisOption) {
+		case 0:
+			analysisStr = "";
+			break;
+		case 1:
+			analysisStr = "_FCAL";
+			break;
+		case 2:
+			analysisStr = "_BCAL";
+			break;
+		case 3:
+			analysisStr = "_BEAM";
+			break;
+		case 4:
+			analysisStr = "_TOF";
+			break;
+		default:
+			std::cout << "Invalid analysis option provided." << std::endl;
+			exit(0);
+	}
+	
 	// Read cut values from config file:
 	TString locConfigFileName(locSettings.configFileName);
 	locAna.SetCuts(locConfigFileName);
+	locAna.DumpCuts();
 	
 	// Initialize histograms to be filled:
-	locAna.InitHistograms();
+	locAna.InitHistograms(locSettings.analysisOption);
 	
 	// Optionally fill 3-d matrix of Angle vs. Invariant Mass vs. BeamEnergy:
-	locAna.SetFillInvmassMatrix(true);
+	//locAna.SetFillInvmassMatrix(true);
 	
 	//
 	// Check if an input filename was specificed at runtime. 
@@ -90,8 +117,8 @@ int main(int argc, char **argv) {
 		}
 		if(locAna.SetRunNumber(locSettings.runNumber)) return 0;
 		locAna.SetOutputFileName(Form("%s",locSettings.outputFileName.c_str()));
-		locAna.RunAnalysis(inputFileName.Data());
-		locAna.WriteHistograms();
+		locAna.RunAnalysis(inputFileName.Data(), locSettings.analysisOption);
+		locAna.WriteHistograms(locSettings.analysisOption);
 		
 	} else {
 		
@@ -112,8 +139,8 @@ int main(int argc, char **argv) {
 		for(int itarget=0; itarget<targetStrings.size(); itarget++) {
 			for(int ifield=0; ifield<fieldStrings.size(); ifield++) {
 				
-				TString outputFileName = Form("%s/phase%d/%s_target_%s.root", rootFilePathName, locPhase, 
-					targetStrings[itarget].Data(), fieldStrings[ifield].Data());
+				TString outputFileName = Form("%s/phase%d/%s_target_%s%s.root", rootFilePathName, locPhase, 
+					targetStrings[itarget].Data(), fieldStrings[ifield].Data(), analysisStr.Data());
 				
 				if(!gSystem->AccessPathName(outputFileName.Data())) continue;
 				locAna.SetOutputFileName(outputFileName.Data());
@@ -131,13 +158,13 @@ int main(int argc, char **argv) {
 					
 					std::cout << "  processing run number " << locRun << std::endl;
 					if(locAna.SetRunNumber(locRun)) continue;
-					locAna.RunAnalysis(inputFileName.Data());
+					locAna.RunAnalysis(inputFileName.Data(), locSettings.analysisOption);
 					nRunsProcessed++;
 				}
 				
 				if(nRunsProcessed>0) {
-					locAna.WriteHistograms();
-					locAna.ResetHistograms();
+					locAna.WriteHistograms(locSettings.analysisOption);
+					locAna.ResetHistograms(locSettings.analysisOption);
 				}
 			}
 		}
@@ -155,6 +182,7 @@ void printUsage(anaSettings_t anaSettings, int goYes) {
 		fprintf(stderr,"-b<arg>\tMinimum run number to process\n");
 		fprintf(stderr,"-e<arg>\tMaximum run number to process\n");
 		fprintf(stderr,"-c<arg>\tConfiguration file name\n");
+		fprintf(stderr,"-a<arg>\tAnalysis Option (0: default, 1: FCAL cuts, 2: BCAL cuts, 3: BEAM cuts, 4: TOF cuts)\n");
 		fprintf(stderr,"-r<arg>\tRun number for specified input file\n");
 		fprintf(stderr,"-i<arg>\tInput file name (default is none)\n");
 		fprintf(stderr,"-o<arg>\tOutput file name (default is compton_ana.root)\n\n\n");

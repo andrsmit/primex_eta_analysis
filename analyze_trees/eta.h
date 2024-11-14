@@ -31,6 +31,7 @@ struct anaSettings_t {
 	int minRunNumber;
 	int maxRunNumber;
 	int runNumber;
+	int analysisOption;
 	string  inputFileName;
 	string outputFileName;
 	string configFileName;

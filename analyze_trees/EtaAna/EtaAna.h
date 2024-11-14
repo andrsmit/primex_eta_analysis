@@ -41,7 +41,7 @@ class EtaAna {
 		
 		// Geometry:
 		
-		int    m_phaseVal;
+		int m_phaseVal;
 		Particle_t m_Target;
 		double m_targetLength, m_targetDensity, m_targetAtten;
 		
@@ -67,18 +67,25 @@ class EtaAna {
 		
 		int m_event;
 		
-		int  LoadTree();
-		int  SetGeometry();
+		// Common Functions:
+		
+		int SetGeometry();
+		
+		int LoadTree();
+		int CheckEventMultiplicities();
+		int AcceptRejectEvent();
+		
 		void ReadEvent();
-		int  CheckEventMultiplicities();
-		void EtaggAnalysis();
-		void EtaggAnalysis_EnergyBins();
-		int  AcceptRejectEvent();
 		
 		void PlotThrown(double, double);
 		void FillAngularMatrix(int vetoOption, double thrownEnergy, double thrownAngle, 
 			double recAngle, double weight);
 		void FillInvmassMatrix(double theta, double mgg, double beamEnergy, double weight);
+		
+		int GetFCALShowerList(vector<int> &goodShowers, int &nFCALShowers_EnergyCut, 
+			double energyCut, double extraEnergyCut, double fiducialCut, double timingCut);
+		int GetBCALShowerList(vector<int> &goodShowers, double energyCut, double timingCut);
+		int GetBeamPhotonList(vector<pair<int,double>> &goodPhotons, double minEnergyCut, double maxEnergyCut);
 		
 		TVector3 GetFCALPosition(int index);
 		TVector3 GetBCALPosition(int index);
@@ -91,7 +98,21 @@ class EtaAna {
 		double GetFCALEnergyResolution(double e);
 		void GetThrownEnergyAndAngle(double &thrownEnergy, double &thrownAngle);
 		
+		bool IsElasticCut(double Egg, double Eeta, double theta);
+		bool IsEtaCut(double invmass);
+		
+		void InitializeAngularMatrices_FCAL();
+		
+		// Different ways to do analysis (each function is defined in it's own .cc file):
+		void EtaggAnalysis();
+		void EtaggAnalysis_FCAL();
+		void EtaggAnalysis_BCAL();
+		void EtaggAnalysis_BEAM();
+		void EtaggAnalysis_TOF();
+		
+		//-------------------------------------------------------------------//
 		// TTree Variables:
+		
 		int    m_eventNum;
 		double m_rfTime;
 		int    m_nbeam;
@@ -142,15 +163,11 @@ class EtaAna {
 		double m_mcTheta[MAX_MC];
 		double m_mcPhi[MAX_MC];
 		
-		// FCAL channel number:
-		
-		int m_fcalChannelNumber[59][59];
-		int m_fcalRow[3481];
-		int m_fcalColumn[3481];
-		
-		TVector2 m_fcalPositionOnFace[59][59];
-		
+		//-------------------------------------------------------------------//
 		// Histograms:
+		
+		/////////////////////////////////////////
+		// Defulat Analysis:
 		
 		TH1F *h_mcVertex, *h_mcVertexAccepted;
 		TH1F *h_mcReactionWeight;
@@ -175,17 +192,41 @@ class EtaAna {
 		TH3F *h_invmassMatrix, *h_invmassMatrix_acc;
 		vector<TH3F*> h_AngularMatrix;
 		
+		TH2F *h_pT_vs_elas, *h_pT_vs_elas_cut;
+		
+		/////////////////////////////////////////
+		// Varying FCAL Cuts:
+		
+		TH2F *h_FCAL_mgg;
+		TH2F *h_FCAL_mggECut;
+		TH2F *h_FCAL_mggFidCut;
+		TH2F *h_FCAL_mggCuts;
+		TH2F *h_FCAL_mggGoodMult;
+		TH2F *h_FCAL_mggMult;
+		
+		vector<double> m_fcalEnergyCuts;
+		vector<TH2F*> h_FCAL_mggECutVec;
+		vector<TH2F*> h_FCAL_mggExtraECutVec;
+		
+		vector<double> m_fcalFiducialCuts;
+		vector<TH2F*> h_FCAL_mggFidCutVec;
+		
+		vector<TH3F*> h_AngularMatrix_FCALECut, h_AngularMatrix_FCALExtraECut, h_AngularMatrix_FCALFidCut;
+		
+		/////////////////////////////////////////
+		// Varying Beam Cuts:
+		
 		//----------------------------------------------------------------------------------------------//
 		
 	public:
-		
+		//-------------------------------------------------------------------//
 		// Cuts:
 		
 		double m_FCALRFCut;
 		double m_BCALRFCut;
 		double m_BeamRFCut;
 		double m_TOFRFCut;
-		double m_FCALEnergyCut;
+		double m_FCALEnergyCut, m_FCALExtraEnergyCut;
 		double m_BCALEnergyCut;
 		double m_minBeamEnergyCut, m_maxBeamEnergyCut;
 		double m_FCALTOFCut;
@@ -199,24 +240,30 @@ class EtaAna {
 		double beamBunchesMain = 1.0;
 		double beamBunchesAcc  = 5.0; // how many bunches to use on each side for accidental subtraction
 		
+		//-------------------------------------------------------------------//
+		// Constructor/Destructor:
+		
 		EtaAna();
 		~EtaAna(){};
 		
-		int GetPrimexPhase(int runNumber);
+		//-------------------------------------------------------------------//
+		// Function Declarations:
 		
-		int SetCuts(TString configFileName);
+		int  GetPrimexPhase(int runNumber);
 		
-		// default analysis:
-		void InitHistograms();
-		void RunAnalysis(TString inputFileName);
-		void ResetHistograms();
-		void WriteHistograms();
+		int  SetRunNumber(int runNumber);
+		void SetOutputFileName(string fileName) { m_outputFileName = fileName; return; };
+		
+		int  SetCuts(TString configFileName);
+		void DumpCuts();
+		
+		void RunAnalysis(TString inputFileName, int analysisOption=0);
+		void  InitHistograms(int analysisOptions=0);
+		void ResetHistograms(int analysisOptions=0);
+		void WriteHistograms(int analysisOptions=0);
 		
 		void SetFillAngularMatrix(bool doFill) { m_FillAngularMatrix = doFill; return; };
 		void SetFillInvmassMatrix(bool doFill) { m_FillInvmassMatrix = doFill; return; };
-		
-		int SetRunNumber(int runNumber);
-		void SetOutputFileName(string fileName);
 };
 
 #endif
