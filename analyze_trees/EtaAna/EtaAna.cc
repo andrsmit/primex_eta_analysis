@@ -553,7 +553,7 @@ bool EtaAna::IsElasticCut(double Egg, double Eeta, double theta) {
 }
 
 bool EtaAna::IsEtaCut(double invmass) {
-	if((invmass<=0.5) && (invmass<0.6)) return true;
+	if((0.5<=invmass) && (invmass<0.6)) return true;
 	else return false;
 }
 
