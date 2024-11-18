@@ -1,6 +1,6 @@
 #include "EtaAna.h"
 
-void EtaAna::EtaggAnalysis_FCAL() {
+void EtaAna::EtaggAnalysis_TOF() {
 	
 	double locThrownBeamEnergy, locThrownAngle;
 	if(m_nmc>0) {
@@ -8,8 +8,8 @@ void EtaAna::EtaggAnalysis_FCAL() {
 		GetThrownEnergyAndAngle(locThrownBeamEnergy, locThrownAngle);
 		if((locThrownBeamEnergy < m_minBeamEnergyCut) || (locThrownBeamEnergy >= m_maxBeamEnergyCut)) return;
 		PlotThrown(locThrownBeamEnergy, locThrownAngle);
-		if(h_AngularMatrix_FCALECutVec.size()==0) {
-			InitializeAngularMatrices_FCAL();
+		if(h_AngularMatrix_TOFTimingCutVec.size()==0) {
+			InitializeAngularMatrices_TOF();
 		}
 	}
 	if(CheckEventMultiplicities()) {
@@ -22,7 +22,7 @@ void EtaAna::EtaggAnalysis_FCAL() {
 	
 	vector<int> locGoodFCALShowers; locGoodFCALShowers.clear();
 	int locNFCALShowers_EnergyCut;
-	int locNFCALShowers = GetFCALShowerList(locGoodFCALShowers, locNFCALShowers_EnergyCut, 0.0, m_FCALExtraEnergyCut, 0.0, m_FCALRFCut);
+	int locNFCALShowers = GetFCALShowerList(locGoodFCALShowers, locNFCALShowers_EnergyCut, m_FCALEnergyCut, m_FCALExtraEnergyCut, 2.0, m_FCALRFCut);
 	
 	vector<int> locGoodBCALShowers; locGoodBCALShowers.clear();
 	int locNBCALShowers = GetBCALShowerList(locGoodBCALShowers, 0.0, m_BCALRFCut);
@@ -42,35 +42,18 @@ void EtaAna::EtaggAnalysis_FCAL() {
 		}
 	}
 	
-	/*
-	The vector 'locGoodFCALShowers' stores all FCAL showers within +/-2ns of the RF time.
-	In the following code, we loop over different values of minimum energy cuts and determine whether or not 
-	there are exactly 2 showers (no more) with that cut value:
-	*/
-	vector<int> locEnergyCuts; locEnergyCuts.clear();
-	for(int icut=0; icut<m_fcalEnergyCuts.size(); icut++) {
-		
-		int locGoodFCALShowers_cut = 0;
-		for(int ishow=0; ishow<locGoodFCALShowers.size(); ishow++) {
-			if((m_fcalE[locGoodFCALShowers[ishow]] > m_fcalEnergyCuts[icut]))
-				locGoodFCALShowers_cut++;
-		}
-		if(locGoodFCALShowers_cut==2) locEnergyCuts.push_back(1);
-		else locEnergyCuts.push_back(0);
-	}
-	
 	//=====================================================================================//
 	
+	// Apply multiplicity cut on the number of FCAL showers: 
 	int locNGoodFCALShowers = (int)locGoodFCALShowers.size();
-	if(locNGoodFCALShowers<2) return;
+	if((locNFCALShowers_EnergyCut!=2) || (locNGoodFCALShowers!=2)) return;
 	
 	for(int ishow=0; ishow<(locNGoodFCALShowers-1); ishow++) {
 		
 		int show1 = locGoodFCALShowers[ishow];
 		TVector3 pos1 = GetFCALPosition(show1);
 		
-		double t1 = m_fcalT[show1] - (pos1.Mag()/m_c) - m_rfTime;
-		double e1 = m_fcalE[show1];
+		double  e1 = m_fcalE[show1];
 		
 		double px1 = e1*pos1.X() / pos1.Mag();
 		double py1 = e1*pos1.Y() / pos1.Mag();
@@ -86,7 +69,6 @@ void EtaAna::EtaggAnalysis_FCAL() {
 			int show2 = locGoodFCALShowers[jshow];
 			TVector3 pos2 = GetFCALPosition(show2);
 			
-			double t2 = m_fcalT[show2] - (pos2.Mag()/m_c) - m_rfTime;
 			double e2 = m_fcalE[show2];
 			
 			double px2 = e2*pos2.X() / pos2.Mag();
@@ -101,11 +83,45 @@ void EtaAna::EtaggAnalysis_FCAL() {
 			//-----------------------------------------------------//
 			// TOF Veto
 			
-			// reject combinations of FCAL showers where both showers are near a TOF hit:
-			bool isTOFVeto = false;
-			if((tof_dr1 < m_FCALTOFCut) && (tof_dr2 < m_FCALTOFCut)) isTOFVeto = true;
+			// standard TOF veto:
 			
-			if(isTOFVeto) continue;
+			bool locTOFVeto = false;
+			if((tof_dr1 < m_FCALTOFCut) && (tof_dr2 < m_FCALTOFCut)) locTOFVeto = true;
+			
+			// only require one hit to be matched with TOF to veto:
+			
+			bool locTOFVeto_single = false;
+			if((tof_dr1 < m_FCALTOFCut) || (tof_dr2 < m_FCALTOFCut)) locTOFVeto_single = true;
+			
+			// vary the timing cut used for TOF veto:
+			
+			vector<bool> locTOFVeto_dT;
+			for(int icut=0; icut<m_TOFTimingCuts.size(); icut++) {
+				locTOFVeto_dT.push_back(false);
+			}
+			double locTOFdx1, locTOFdy1, locTOFdt1;
+			double locTOFdx2, locTOFdy2, locTOFdt2;
+			for(int icut=0; icut<m_TOFTimingCuts.size(); icut++) {
+				CheckTOFMatch(pos1, locTOFdx1, locTOFdy1, locTOFdt1, m_TOFTimingCuts[icut]);
+				double locTOFdr1 = sqrt(pow(locTOFdx1,2.0)+pow(locTOFdy1,2.0));
+				CheckTOFMatch(pos2, locTOFdx2, locTOFdy2, locTOFdt2, m_TOFTimingCuts[icut]);
+				double locTOFdr2 = sqrt(pow(locTOFdx2,2.0)+pow(locTOFdy2,2.0));
+				if((locTOFdr1 < m_FCALTOFCut) && (locTOFdr2 < m_FCALTOFCut)) {
+					locTOFVeto_dT[icut] = true;
+				}
+			}
+			
+			// vary the distance cut used for TOF veto:
+			
+			vector<bool> locTOFVeto_dR;
+			for(int icut=0; icut<m_TOFDistanceCuts.size(); icut++) {
+				locTOFVeto_dR.push_back(false);
+			}
+			for(int icut=0; icut<m_TOFDistanceCuts.size(); icut++) {
+				if((tof_dr1 < m_TOFDistanceCuts[icut]) && (tof_dr1 < m_TOFDistanceCuts[icut])) {
+					locTOFVeto_dR[icut] = true;
+				}
+			}
 			
 			//-----------------------------------------------------//
 			// Two-Photon kinematics:
@@ -198,57 +214,28 @@ void EtaAna::EtaggAnalysis_FCAL() {
 				
 				//-----------------------------------------------------//
 				
-				h_mgg_FCAL->Fill(prodTheta, invmassConstr, fillWeight);
-				if((e1 > m_FCALEnergyCut) && (e2 > m_FCALEnergyCut)) {
-					h_mgg_FCALECut->Fill(prodTheta, invmassConstr, fillWeight);
-				}
-				if(!FCALFiducialCut(pos1, 2.0) && !FCALFiducialCut(pos2, 2.0)) {
-					h_mgg_FCALFidCut->Fill(prodTheta, invmassConstr, fillWeight);
-					if((e1 > m_FCALEnergyCut) && (e2 > m_FCALEnergyCut)) {
-						h_mgg_FCALCuts->Fill(prodTheta, invmassConstr, fillWeight);
-						if(locNFCALShowers_EnergyCut==2) {
-							h_mgg_FCALGoodMult->Fill(prodTheta, invmassConstr, fillWeight);
-							if(locNFCALShowers==2) {
-								h_mgg_FCALMult->Fill(prodTheta, invmassConstr, fillWeight);
-							}
-						}
-					}
+				h_mgg_noTOF->Fill(prodTheta, invmassConstr, fillWeight);
+				if(!locTOFVeto) h_mgg_TOF->Fill(prodTheta, invmassConstr, fillWeight);
+				if(!locTOFVeto_single) h_mgg_singleTOF->Fill(prodTheta, invmassConstr, fillWeight);
+				if(isEta && (m_nmc>0)) {
+					h_AngularMatrix_noTOF->Fill(locThrownAngle, prodTheta, locThrownBeamEnergy, fillWeight);
+					if(!locTOFVeto) h_AngularMatrix_TOF->Fill(locThrownAngle, prodTheta, locThrownBeamEnergy, fillWeight);
+					if(!locTOFVeto_single) h_AngularMatrix_singleTOF->Fill(locThrownAngle, prodTheta, locThrownBeamEnergy, fillWeight);
 				}
 				
-				if(locNFCALShowers_EnergyCut==2) {
-					// Vary the size of the fiducial cut used:
-					if((e1 > m_FCALEnergyCut) && (e2 > m_FCALEnergyCut)) {
-						for(int icut=0; icut<m_fcalFiducialCuts.size(); icut++) {
-							if(!FCALFiducialCut(pos1, m_fcalFiducialCuts[icut]) && !FCALFiducialCut(pos2, m_fcalFiducialCuts[icut])) {
-								h_mgg_FCALFidCutVec[icut]->Fill(prodTheta, invmassConstr, fillWeight);
-								if(isEta && (m_nmc>0)) {
-									h_AngularMatrix_FCALFidCutVec[icut]->Fill(locThrownAngle, prodTheta, locThrownBeamEnergy, fillWeight);
-								}
-							}
-						}
-					}
-					
-					// Vary the minimum energy cut used:
-					if(!FCALFiducialCut(pos1, 2.0) && !FCALFiducialCut(pos2, 2.0)) {
-						for(int icut=0; icut<m_fcalEnergyCuts.size(); icut++) {
-							if(e1>m_fcalEnergyCuts[icut] && e2>m_fcalEnergyCuts[icut]) {
-								h_mgg_FCALECutVec[icut]->Fill(prodTheta, invmassConstr, fillWeight);
-								if(isEta && (m_nmc>0)) {
-									h_AngularMatrix_FCALECutVec[icut]->Fill(locThrownAngle, prodTheta, locThrownBeamEnergy, fillWeight);
-								}
-							}
+				for(int icut=0; icut<m_TOFTimingCuts.size(); icut++) {
+					if(!locTOFVeto_dT[icut]) {
+						h_mgg_TOFTimingCutVec[icut]->Fill(prodTheta, invmassConstr, fillWeight);
+						if(isEta) {
+							h_AngularMatrix_TOFTimingCutVec[icut]->Fill(locThrownAngle, prodTheta, locThrownBeamEnergy, fillWeight);
 						}
 					}
 				}
-				
-				// Vary the minimum energy cut used for looking for extra showers:
-				if(!FCALFiducialCut(pos1,2.0) && !FCALFiducialCut(pos2,2.0) && (e1>m_FCALEnergyCut) && (e2>m_FCALEnergyCut)) {
-					for(int icut=0; icut<locEnergyCuts.size(); icut++) {
-						if(locEnergyCuts[icut]==1) {
-							h_mgg_FCALExtraECutVec[icut]->Fill(prodTheta, invmassConstr, fillWeight);
-							if(isEta && (m_nmc>0)) {
-								h_AngularMatrix_FCALExtraECutVec[icut]->Fill(locThrownAngle, prodTheta, locThrownBeamEnergy, fillWeight);
-							}
+				for(int icut=0; icut<m_TOFDistanceCuts.size(); icut++) {
+					if(!locTOFVeto_dR[icut]) {
+						h_mgg_TOFDistanceCutVec[icut]->Fill(prodTheta, invmassConstr, fillWeight);
+						if(isEta) {
+							h_AngularMatrix_TOFDistanceCutVec[icut]->Fill(locThrownAngle, prodTheta, locThrownBeamEnergy, fillWeight);
 						}
 					}
 				}
@@ -260,7 +247,7 @@ void EtaAna::EtaggAnalysis_FCAL() {
 	return;
 }
 
-void EtaAna::InitializeAngularMatrices_FCAL() {
+void EtaAna::InitializeAngularMatrices_TOF() {
 	
 	double minBeamEnergy      =  7.0;
 	double maxBeamEnergy      = 12.0;
@@ -278,34 +265,30 @@ void EtaAna::InitializeAngularMatrices_FCAL() {
 	int nRecAngleBins    = (int)((maxRecAngle-minRecAngle)/recAngleBinSize);
 	int nThrownAngleBins = (int)((maxThrownAngle-minThrownAngle)/thrownAngleBinSize);
 	
-	for(int icut=0; icut<m_fcalFiducialCuts.size(); icut++) {
-		TH3F *hMatrix = new TH3F(Form("AngularMatrix_FCALFidCut_%02d",icut), 
-			Form("Inner layers removed by fiducial cut: %.1f; #theta(thrown) [#circ]; #theta(rec) [#circ]", m_fcalFiducialCuts[icut]),
+	for(int icut=0; icut<m_TOFTimingCuts.size(); icut++) {
+		TH3F *hMatrix = new TH3F(Form("AngularMatrix_TOFTimingCut_%02d",icut), 
+			Form("Timing Cut for TOF Veto: #left|t_{TOF} - t_{RF}#right| < %.2f ns", m_TOFTimingCuts[icut]),
 			nThrownAngleBins, minThrownAngle, maxThrownAngle, 
 			nRecAngleBins,    minRecAngle,    maxRecAngle,
 			nBeamEnergyBins,  minBeamEnergy,  maxBeamEnergy);
 		hMatrix->SetDirectory(0);
-		h_AngularMatrix_FCALFidCutVec.push_back(hMatrix);
+		hMatrix->GetXaxis()->SetTitle("#theta(thrown) [#circ]");
+		hMatrix->GetYaxis()->SetTitle("#theta(rec) [#circ]");
+		hMatrix->GetZaxis()->SetTitle("E_{#gamma}(thrown) [#circ]");
+		h_AngularMatrix_TOFTimingCutVec.push_back(hMatrix);
 	}
 	
-	for(int icut=0; icut<m_fcalEnergyCuts.size(); icut++) {
-		TH3F *hMatrix = new TH3F(Form("AngularMatrix_FCALECut_%02d",icut), 
-			Form("Minimum Energy Cut: %.2f GeV; #theta(thrown) [#circ]; #theta(rec) [#circ]", m_fcalEnergyCuts[icut]),
+	for(int icut=0; icut<m_TOFDistanceCuts.size(); icut++) {
+		TH3F *hMatrix = new TH3F(Form("AngularMatrix_TOFDistanceCut_%02d",icut), 
+			Form("Distance Cut for TOF Veto: #DeltaR_{FCAL-TOF} < %.1f cm", m_TOFDistanceCuts[icut]),
 			nThrownAngleBins, minThrownAngle, maxThrownAngle, 
 			nRecAngleBins,    minRecAngle,    maxRecAngle,
 			nBeamEnergyBins,  minBeamEnergy,  maxBeamEnergy);
 		hMatrix->SetDirectory(0);
-		h_AngularMatrix_FCALECutVec.push_back(hMatrix);
-	}
-	
-	for(int icut=0; icut<m_fcalEnergyCuts.size(); icut++) {
-		TH3F *hMatrix = new TH3F(Form("AngularMatrix_FCALExtraECut_%02d",icut), 
-			Form("Extra Energy Cut: %.2f GeV; #theta(thrown) [#circ]; #theta(rec) [#circ]", m_fcalEnergyCuts[icut]),
-			nThrownAngleBins, minThrownAngle, maxThrownAngle, 
-			nRecAngleBins,    minRecAngle,    maxRecAngle,
-			nBeamEnergyBins,  minBeamEnergy,  maxBeamEnergy);
-		hMatrix->SetDirectory(0);
-		h_AngularMatrix_FCALExtraECutVec.push_back(hMatrix);
+		hMatrix->GetXaxis()->SetTitle("#theta(thrown) [#circ]");
+		hMatrix->GetYaxis()->SetTitle("#theta(rec) [#circ]");
+		hMatrix->GetZaxis()->SetTitle("E_{#gamma}(thrown) [#circ]");
+		h_AngularMatrix_TOFDistanceCutVec.push_back(hMatrix);
 	}
 	
 	return;

@@ -429,7 +429,9 @@ int EtaAna::GetBeamPhotonList(vector<pair<int,double>> &goodPhotons, double minE
 		) locWeight = -1.0/(2.0*beamBunchesAcc);
 		else continue;
 		
-		if(locWeight < 0.0) locWeight *= m_accScaleFactor[igam];
+		if((locWeight < 0.0) && (m_nmc>0)) {
+			locWeight *= m_accScaleFactor[igam];
+		}
 		if((m_beamE[igam] > minEnergyCut) && (m_beamE[igam] < maxEnergyCut)) {
 			nBeamPhotons++;
 			goodPhotons.push_back({igam,locWeight});
@@ -698,6 +700,9 @@ void EtaAna::RunAnalysis(TString inputFileName, int analysisOption) {
 			case 1:
 				EtaggAnalysis_FCAL();
 				break;
+			case 4:
+				EtaggAnalysis_TOF();
+				break;
 			default:
 				EtaggAnalysis();
 				break;
@@ -808,45 +813,45 @@ void EtaAna::InitHistograms(int analysisOption) {
 		{
 			// VARY FCAL CUTS:
 			
-			h_FCAL_mgg = new TH2F("FCAL_mgg", "No Multiplicity Cut", 550, 0., 5.5, 400, 0.3, 1.1);
-			h_FCAL_mgg->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
-			h_FCAL_mgg->GetYaxis()->SetTitle("m_{#gamma#gamma}^{Constr} [GeV/c^{2}]");
-			h_FCAL_mgg->Sumw2();
+			h_mgg_FCAL = new TH2F("mgg_FCAL", "No Multiplicity Cut", 550, 0., 5.5, 400, 0.3, 1.1);
+			h_mgg_FCAL->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
+			h_mgg_FCAL->GetYaxis()->SetTitle("m_{#gamma#gamma}^{Constr} [GeV/c^{2}]");
+			h_mgg_FCAL->Sumw2();
 			
 			// with minimum energy cuts:
 			
-			h_FCAL_mggECut = new TH2F("FCAL_mgg_ecut", Form("E_{1,2} > %.2f GeV", m_FCALEnergyCut), 550, 0., 5.5, 400, 0.3, 1.1);
-			h_FCAL_mggECut->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
-			h_FCAL_mggECut->GetYaxis()->SetTitle("m_{#gamma#gamma}^{Constr} [GeV/c^{2}]");
-			h_FCAL_mggECut->Sumw2();
+			h_mgg_FCALECut = new TH2F("mgg_FCAL_ecut", Form("E_{1,2} > %.2f GeV", m_FCALEnergyCut), 550, 0., 5.5, 400, 0.3, 1.1);
+			h_mgg_FCALECut->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
+			h_mgg_FCALECut->GetYaxis()->SetTitle("m_{#gamma#gamma}^{Constr} [GeV/c^{2}]");
+			h_mgg_FCALECut->Sumw2();
 			
 			// with fiducial cuts:
 			
-			h_FCAL_mggFidCut = new TH2F("FCAL_mgg_fidcut", "Fiducial Cut Applied", 550, 0., 5.5, 400, 0.3, 1.1);
-			h_FCAL_mggFidCut->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
-			h_FCAL_mggFidCut->GetYaxis()->SetTitle("m_{#gamma#gamma}^{Constr} [GeV/c^{2}]");
-			h_FCAL_mggFidCut->Sumw2();
+			h_mgg_FCALFidCut = new TH2F("mgg_FCAL_fidcut", "Fiducial Cut Applied", 550, 0., 5.5, 400, 0.3, 1.1);
+			h_mgg_FCALFidCut->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
+			h_mgg_FCALFidCut->GetYaxis()->SetTitle("m_{#gamma#gamma}^{Constr} [GeV/c^{2}]");
+			h_mgg_FCALFidCut->Sumw2();
 			
 			// with both energy and fiducial cuts:
 			
-			h_FCAL_mggCuts = new TH2F("FCAL_mgg_cuts", "Fiducial+Energy Cuts Applied", 550, 0., 5.5, 400, 0.3, 1.1);
-			h_FCAL_mggCuts->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
-			h_FCAL_mggCuts->GetYaxis()->SetTitle("m_{#gamma#gamma}^{Constr} [GeV/c^{2}]");
-			h_FCAL_mggCuts->Sumw2();
+			h_mgg_FCALCuts = new TH2F("mgg_FCAL_cuts", "Fiducial+Energy Cuts Applied", 550, 0., 5.5, 400, 0.3, 1.1);
+			h_mgg_FCALCuts->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
+			h_mgg_FCALCuts->GetYaxis()->SetTitle("m_{#gamma#gamma}^{Constr} [GeV/c^{2}]");
+			h_mgg_FCALCuts->Sumw2();
 			
 			// with 'good' multiplicity = 2:
 			
-			h_FCAL_mggGoodMult = new TH2F("FCAL_mgg_good_mult", "2 Good FCAL Showers", 550, 0., 5.5, 400, 0.3, 1.1);
-			h_FCAL_mggGoodMult->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
-			h_FCAL_mggGoodMult->GetYaxis()->SetTitle("m_{#gamma#gamma}^{Constr} [GeV/c^{2}]");
-			h_FCAL_mggGoodMult->Sumw2();
+			h_mgg_FCALGoodMult = new TH2F("mgg_FCAL_good_mult", "2 Good FCAL Showers", 550, 0., 5.5, 400, 0.3, 1.1);
+			h_mgg_FCALGoodMult->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
+			h_mgg_FCALGoodMult->GetYaxis()->SetTitle("m_{#gamma#gamma}^{Constr} [GeV/c^{2}]");
+			h_mgg_FCALGoodMult->Sumw2();
 			
 			// with total multiplicity = 2:
 			
-			h_FCAL_mggMult = new TH2F("FCAL_mgg_mult", "2 FCAL Showers", 550, 0., 5.5, 400, 0.3, 1.1);
-			h_FCAL_mggMult->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
-			h_FCAL_mggMult->GetYaxis()->SetTitle("m_{#gamma#gamma}^{Constr} [GeV/c^{2}]");
-			h_FCAL_mggMult->Sumw2();
+			h_mgg_FCALMult = new TH2F("mgg_FCAL_mult", "2 FCAL Showers", 550, 0., 5.5, 400, 0.3, 1.1);
+			h_mgg_FCALMult->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
+			h_mgg_FCALMult->GetYaxis()->SetTitle("m_{#gamma#gamma}^{Constr} [GeV/c^{2}]");
+			h_mgg_FCALMult->Sumw2();
 			
 			// vary the size of the fiducial cut:
 			
@@ -857,13 +862,13 @@ void EtaAna::InitHistograms(int analysisOption) {
 			}
 			
 			for(int icut=0; icut<m_fcalFiducialCuts.size(); icut++) {
-				TH2F *loc_h_mgg = new TH2F(Form("FCAL_mgg_fid_%02d", icut),
+				TH2F *loc_h_mgg = new TH2F(Form("mgg_FCAL_fid_%02d", icut),
 					Form("Inner layers removed by fiducial cut: %.1f", m_fcalFiducialCuts[icut]), 
 					550, 0.0, 5.5, 400, 0.3, 1.1);
 				loc_h_mgg->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
 				loc_h_mgg->GetYaxis()->SetTitle("m_{#gamma#gamma}^{Constr} [GeV/c^{2}]");
 				loc_h_mgg->Sumw2();
-				h_FCAL_mggFidCutVec.push_back(loc_h_mgg);
+				h_mgg_FCALFidCutVec.push_back(loc_h_mgg);
 			}
 			
 			// vary the minimum energy cut:
@@ -875,23 +880,86 @@ void EtaAna::InitHistograms(int analysisOption) {
 			}
 			
 			for(int icut=0; icut<m_fcalEnergyCuts.size(); icut++) {
-				TH2F *loc_h_mgg = new TH2F(Form("FCAL_mgg_ecut_%02d", icut),
+				TH2F *loc_h_mgg = new TH2F(Form("mgg_FCAL_ecut_%02d", icut),
 					Form("Minimum Energy Cut: %.2f GeV", m_fcalEnergyCuts[icut]), 
 					550, 0.0, 5.5, 400, 0.3, 1.1);
 				loc_h_mgg->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
 				loc_h_mgg->GetYaxis()->SetTitle("m_{#gamma#gamma}^{Constr} [GeV/c^{2}]");
 				loc_h_mgg->Sumw2();
-				h_FCAL_mggECutVec.push_back(loc_h_mgg);
+				h_mgg_FCALECutVec.push_back(loc_h_mgg);
 			}
 			
 			for(int icut=0; icut<m_fcalEnergyCuts.size(); icut++) {
-				TH2F *loc_h_mgg = new TH2F(Form("FCAL_mgg_extra_ecut_%02d", icut),
+				TH2F *loc_h_mgg = new TH2F(Form("mgg_FCAL_extra_ecut_%02d", icut),
 					Form("Minimum Energy Cut: %.2f GeV", m_fcalEnergyCuts[icut]), 
 					550, 0.0, 5.5, 400, 0.3, 1.1);
 				loc_h_mgg->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
 				loc_h_mgg->GetYaxis()->SetTitle("m_{#gamma#gamma}^{Constr} [GeV/c^{2}]");
 				loc_h_mgg->Sumw2();
-				h_FCAL_mggExtraECutVec.push_back(loc_h_mgg);
+				h_mgg_FCALExtraECutVec.push_back(loc_h_mgg);
+			}
+			
+			break;
+		}
+		case 4:
+		{
+			// VARY TOF CUTS:
+			
+			h_mgg_noTOF = new TH2F("mgg_noTOF", "No TOF Veto", 550, 0., 5.5, 400, 0.3, 1.1);
+			h_mgg_noTOF->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
+			h_mgg_noTOF->GetYaxis()->SetTitle("m_{#gamma#gamma}^{Constr} [GeV/c^{2}]");
+			h_mgg_noTOF->Sumw2();
+			
+			// with standard veto:
+			
+			h_mgg_TOF = new TH2F("mgg_TOF", "Standard TOF Veto", 550, 0., 5.5, 400, 0.3, 1.1);
+			h_mgg_TOF->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
+			h_mgg_TOF->GetYaxis()->SetTitle("m_{#gamma#gamma}^{Constr} [GeV/c^{2}]");
+			h_mgg_TOF->Sumw2();
+			
+			// with single-shower TOF veto:
+			
+			h_mgg_singleTOF = new TH2F("mgg_singleTOF", "Veto on single-shower TOF match", 550, 0., 5.5, 400, 0.3, 1.1);
+			h_mgg_singleTOF->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
+			h_mgg_singleTOF->GetYaxis()->SetTitle("m_{#gamma#gamma}^{Constr} [GeV/c^{2}]");
+			h_mgg_singleTOF->Sumw2();
+			
+			// vary the timing cut used for TOF veto:
+			
+			m_TOFTimingCuts.clear();
+			for(int icut=0; icut<7; icut++) {
+				double locCut = 0.5 + 0.25*(double)(icut);
+				m_TOFTimingCuts.push_back(locCut);
+			}
+			m_TOFTimingCuts.push_back(6.0);
+			
+			for(int icut=0; icut<m_TOFTimingCuts.size(); icut++) {
+				TH2F *loc_h_mgg = new TH2F(Form("mgg_TOFTiming_%02d", icut),
+					Form("TOF Timing Cut: #left|t_{TOF} - t_{RF}#right| < %.2f", m_TOFTimingCuts[icut]), 
+					550, 0.0, 5.5, 400, 0.3, 1.1);
+				loc_h_mgg->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
+				loc_h_mgg->GetYaxis()->SetTitle("m_{#gamma#gamma}^{Constr} [GeV/c^{2}]");
+				loc_h_mgg->Sumw2();
+				h_mgg_TOFTimingCutVec.push_back(loc_h_mgg);
+			}
+			
+			// vary the distance cut used for TOF veto:
+			
+			m_TOFDistanceCuts.clear();
+			for(int icut=0; icut<15; icut++) {
+				double locCut = 5.0 + 0.5*(double)(icut);
+				m_TOFDistanceCuts.push_back(locCut);
+			}
+			m_TOFDistanceCuts.push_back(500.0);
+			
+			for(int icut=0; icut<m_TOFDistanceCuts.size(); icut++) {
+				TH2F *loc_h_mgg = new TH2F(Form("mgg_TOFDistance_%02d", icut),
+					Form("TOF Distance Cut: #DeltaR_{FCAL-TOF} < %.1f cm", m_TOFDistanceCuts[icut]), 
+					550, 0.0, 5.5, 400, 0.3, 1.1);
+				loc_h_mgg->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
+				loc_h_mgg->GetYaxis()->SetTitle("m_{#gamma#gamma}^{Constr} [GeV/c^{2}]");
+				loc_h_mgg->Sumw2();
+				h_mgg_TOFDistanceCutVec.push_back(loc_h_mgg);
 			}
 			
 			break;
@@ -941,31 +1009,55 @@ void EtaAna::ResetHistograms(int analysisOption) {
 		}
 		case 1:
 		{
-			h_FCAL_mgg->Reset();
-			h_FCAL_mggECut->Reset();
-			h_FCAL_mggFidCut->Reset();
-			h_FCAL_mggCuts->Reset();
-			h_FCAL_mggGoodMult->Reset();
-			h_FCAL_mggMult->Reset();
-			for(int icut=0; icut<m_fcalFiducialCuts.size(); icut++) h_FCAL_mggFidCutVec[icut]->Reset();
+			h_mgg_FCAL->Reset();
+			h_mgg_FCALECut->Reset();
+			h_mgg_FCALFidCut->Reset();
+			h_mgg_FCALCuts->Reset();
+			h_mgg_FCALGoodMult->Reset();
+			h_mgg_FCALMult->Reset();
+			for(int icut=0; icut<m_fcalFiducialCuts.size(); icut++) h_mgg_FCALFidCutVec[icut]->Reset();
 			for(int icut=0; icut<m_fcalEnergyCuts.size(); icut++) {
-				h_FCAL_mggECutVec[icut]->Reset();
-				h_FCAL_mggExtraECutVec[icut]->Reset();
+				h_mgg_FCALECutVec[icut]->Reset();
+				h_mgg_FCALExtraECutVec[icut]->Reset();
 			}
 			
-			if(h_AngularMatrix_FCALECut.size()) {
-				for(int i=0; i<h_AngularMatrix_FCALECut.size(); i++) {
-					h_AngularMatrix_FCALECut[i]->Reset();
+			if(h_AngularMatrix_FCALECutVec.size()) {
+				for(int i=0; i<h_AngularMatrix_FCALECutVec.size(); i++) {
+					h_AngularMatrix_FCALECutVec[i]->Reset();
 				}
 			}
-			if(h_AngularMatrix_FCALExtraECut.size()) {
-				for(int i=0; i<h_AngularMatrix_FCALExtraECut.size(); i++) {
-					h_AngularMatrix_FCALExtraECut[i]->Reset();
+			if(h_AngularMatrix_FCALExtraECutVec.size()) {
+				for(int i=0; i<h_AngularMatrix_FCALExtraECutVec.size(); i++) {
+					h_AngularMatrix_FCALExtraECutVec[i]->Reset();
 				}
 			}
-			if(h_AngularMatrix_FCALFidCut.size()) {
-				for(int i=0; i<h_AngularMatrix_FCALFidCut.size(); i++) {
-					h_AngularMatrix_FCALFidCut[i]->Reset();
+			if(h_AngularMatrix_FCALFidCutVec.size()) {
+				for(int i=0; i<h_AngularMatrix_FCALFidCutVec.size(); i++) {
+					h_AngularMatrix_FCALFidCutVec[i]->Reset();
+				}
+			}
+			
+			break;
+		}
+		case 4:
+		{
+			h_mgg_noTOF->Reset();
+			h_mgg_TOF->Reset();
+			h_mgg_singleTOF->Reset();
+			for(int icut=0; icut<m_TOFTimingCuts.size(); icut++) {
+				h_mgg_TOFTimingCutVec[icut]->Reset();
+			}
+			for(int icut=0; icut<m_TOFDistanceCuts.size(); icut++) {
+				h_mgg_TOFDistanceCutVec[icut]->Reset();
+			}
+			if(h_AngularMatrix_TOFTimingCutVec.size()) {
+				for(int i=0; i<h_AngularMatrix_TOFTimingCutVec.size(); i++) {
+					h_AngularMatrix_TOFTimingCutVec[i]->Reset();
+				}
+			}
+			if(h_AngularMatrix_TOFDistanceCutVec.size()) {
+				for(int i=0; i<h_AngularMatrix_TOFDistanceCutVec.size(); i++) {
+					h_AngularMatrix_TOFDistanceCutVec[i]->Reset();
 				}
 			}
 			
@@ -1032,33 +1124,33 @@ void EtaAna::WriteHistograms(int analysisOption) {
 		}
 		case 1:
 		{
-			h_FCAL_mgg->Write();
-			h_FCAL_mggECut->Write();
-			h_FCAL_mggFidCut->Write();
-			h_FCAL_mggCuts->Write();
-			h_FCAL_mggGoodMult->Write();
-			h_FCAL_mggMult->Write();
+			h_mgg_FCAL->Write();
+			h_mgg_FCALECut->Write();
+			h_mgg_FCALFidCut->Write();
+			h_mgg_FCALCuts->Write();
+			h_mgg_FCALGoodMult->Write();
+			h_mgg_FCALMult->Write();
 			
 			TDirectory *dirECut = new TDirectoryFile("ECut", "ECut");
 			dirECut->cd();
 			for(int icut=0; icut<m_fcalEnergyCuts.size(); icut++) {
-				h_FCAL_mggECutVec[icut]->Write();
+				h_mgg_FCALECutVec[icut]->Write();
 			}
-			if(h_AngularMatrix_FCALECut.size()) {
-				for(int i=0; i<h_AngularMatrix_FCALECut.size(); i++) {
-					h_AngularMatrix_FCALECut[i]->Write();
+			if(h_AngularMatrix_FCALECutVec.size()) {
+				for(int i=0; i<h_AngularMatrix_FCALECutVec.size(); i++) {
+					h_AngularMatrix_FCALECutVec[i]->Write();
 				}
 			}
 			dirECut->cd("../");
 			
 			TDirectory *dirExtraECut = new TDirectoryFile("ExtraECut", "ExtraECut");
 			dirExtraECut->cd();
-			for(int icut=0; icut<h_FCAL_mggExtraECutVec.size(); icut++) {
-				h_FCAL_mggExtraECutVec[icut]->Write();
+			for(int icut=0; icut<h_mgg_FCALExtraECutVec.size(); icut++) {
+				h_mgg_FCALExtraECutVec[icut]->Write();
 			}
-			if(h_AngularMatrix_FCALExtraECut.size()) {
-				for(int i=0; i<h_AngularMatrix_FCALExtraECut.size(); i++) {
-					h_AngularMatrix_FCALExtraECut[i]->Write();
+			if(h_AngularMatrix_FCALExtraECutVec.size()) {
+				for(int i=0; i<h_AngularMatrix_FCALExtraECutVec.size(); i++) {
+					h_AngularMatrix_FCALExtraECutVec[i]->Write();
 				}
 			}
 			dirExtraECut->cd("../");
@@ -1066,16 +1158,46 @@ void EtaAna::WriteHistograms(int analysisOption) {
 			TDirectory *dirFidCut = new TDirectoryFile("FidCut", "FidCut");
 			dirFidCut->cd();
 			for(int icut=0; icut<m_fcalFiducialCuts.size(); icut++) {
-				h_FCAL_mggFidCutVec[icut]->Write();
+				h_mgg_FCALFidCutVec[icut]->Write();
 			}
-			if(h_AngularMatrix_FCALFidCut.size()) {
-				for(int i=0; i<h_AngularMatrix_FCALFidCut.size(); i++) {
-					h_AngularMatrix_FCALFidCut[i]->Write();
+			if(h_AngularMatrix_FCALFidCutVec.size()) {
+				for(int i=0; i<h_AngularMatrix_FCALFidCutVec.size(); i++) {
+					h_AngularMatrix_FCALFidCutVec[i]->Write();
 				}
 			}
 			dirFidCut->cd("../");
 			
 			break;
+		}
+		case 4:
+		{
+			h_mgg_noTOF->Write();
+			h_mgg_TOF->Write();
+			h_mgg_singleTOF->Write();
+			
+			TDirectory *dirTOFTimingCut = new TDirectoryFile("TOFTimingCut", "TOFTimingCut");
+			dirTOFTimingCut->cd();
+			for(int icut=0; icut<m_TOFTimingCuts.size(); icut++) {
+				h_mgg_TOFTimingCutVec[icut]->Write();
+			}
+			if(h_AngularMatrix_TOFTimingCutVec.size()) {
+				for(int i=0; i<h_AngularMatrix_TOFTimingCutVec.size(); i++) {
+					h_AngularMatrix_TOFTimingCutVec[i]->Write();
+				}
+			}
+			dirTOFTimingCut->cd("../");
+			
+			TDirectory *dirTOFDistanceCut = new TDirectoryFile("TOFDistanceCut", "TOFDistanceCut");
+			dirTOFDistanceCut->cd();
+			for(int icut=0; icut<m_TOFDistanceCuts.size(); icut++) {
+				h_mgg_TOFDistanceCutVec[icut]->Write();
+			}
+			if(h_AngularMatrix_TOFDistanceCutVec.size()) {
+				for(int i=0; i<h_AngularMatrix_TOFDistanceCutVec.size(); i++) {
+					h_AngularMatrix_TOFDistanceCutVec[i]->Write();
+				}
+			}
+			dirTOFDistanceCut->cd("../");
 		}
 	}
 	

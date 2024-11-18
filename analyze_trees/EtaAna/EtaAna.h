@@ -101,8 +101,6 @@ class EtaAna {
 		bool IsElasticCut(double Egg, double Eeta, double theta);
 		bool IsEtaCut(double invmass);
 		
-		void InitializeAngularMatrices_FCAL();
-		
 		// Different ways to do analysis (each function is defined in it's own .cc file):
 		void EtaggAnalysis();
 		void EtaggAnalysis_FCAL();
@@ -197,21 +195,38 @@ class EtaAna {
 		/////////////////////////////////////////
 		// Varying FCAL Cuts:
 		
-		TH2F *h_FCAL_mgg;
-		TH2F *h_FCAL_mggECut;
-		TH2F *h_FCAL_mggFidCut;
-		TH2F *h_FCAL_mggCuts;
-		TH2F *h_FCAL_mggGoodMult;
-		TH2F *h_FCAL_mggMult;
+		TH2F *h_mgg_FCAL;
+		TH2F *h_mgg_FCALECut;
+		TH2F *h_mgg_FCALFidCut;
+		TH2F *h_mgg_FCALCuts;
+		TH2F *h_mgg_FCALGoodMult;
+		TH2F *h_mgg_FCALMult;
 		
 		vector<double> m_fcalEnergyCuts;
-		vector<TH2F*> h_FCAL_mggECutVec;
-		vector<TH2F*> h_FCAL_mggExtraECutVec;
+		vector<TH2F*> h_mgg_FCALECutVec,           h_mgg_FCALExtraECutVec;
+		vector<TH3F*> h_AngularMatrix_FCALECutVec, h_AngularMatrix_FCALExtraECutVec;
 		
 		vector<double> m_fcalFiducialCuts;
-		vector<TH2F*> h_FCAL_mggFidCutVec;
+		vector<TH2F*> h_mgg_FCALFidCutVec;
+		vector<TH3F*> h_AngularMatrix_FCALFidCutVec;
 		
-		vector<TH3F*> h_AngularMatrix_FCALECut, h_AngularMatrix_FCALExtraECut, h_AngularMatrix_FCALFidCut;
+		void InitializeAngularMatrices_FCAL();
+		
+		/////////////////////////////////////////
+		// Varying TOF Cuts:
+		
+		vector<double> m_TOFTimingCuts;
+		vector<TH2F*> h_mgg_TOFTimingCutVec;
+		vector<TH3F*> h_AngularMatrix_TOFTimingCutVec;
+		
+		vector<double> m_TOFDistanceCuts;
+		vector<TH2F*> h_mgg_TOFDistanceCutVec;
+		vector<TH3F*> h_AngularMatrix_TOFDistanceCutVec;
+		
+		TH2F *h_mgg_noTOF, *h_mgg_TOF, *h_mgg_singleTOF;
+		TH3F *h_AngularMatrix_noTOF, *h_AngularMatrix_TOF, *h_AngularMatrix_singleTOF;
+		
+		void InitializeAngularMatrices_TOF();
 		
 		/////////////////////////////////////////
 		// Varying Beam Cuts:

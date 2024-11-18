@@ -7,8 +7,8 @@ MyReadConfig.o: MyReadConfig.cc Makefile $(wildcard ./*.h)
 	@echo Compiling MyReadConfig.cc; g++ -c MyReadConfig.cc \
 	`root-config --cflags --glibs` -I${HALLD_RECON_HOME}/src/libraries/include
 #
-EtaAna.o: EtaAna.cc EtaggAnalysis.cc EtaggAnalysis_FCAL.cc MyReadConfig.o Makefile $(wildcard ./*.h)
-	@echo Compiling EtaAna.cc; g++ -c EtaAna.cc EtaggAnalysis.cc EtaggAnalysis_FCAL.cc \
+EtaAna.o: EtaAna.cc EtaggAnalysis.cc EtaggAnalysis_FCAL.cc EtaggAnalysis_TOF.cc MyReadConfig.o Makefile $(wildcard ./*.h)
+	@echo Compiling EtaAna.cc; g++ -c EtaAna.cc EtaggAnalysis.cc EtaggAnalysis_FCAL.cc EtaggAnalysis_TOF.cc \
 	`root-config --cflags --glibs` -I${HALLD_RECON_HOME}/src/libraries/include
 #
 clean:
