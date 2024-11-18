@@ -1,9 +1,9 @@
 #
 CERN_ROOT = /apps/cernlib/x86_64_rhel6/2005
 CLASSDIR = ${PRIMEXDIR}/analyze_trees/EtaAna
-OBJS = ${CLASSDIR}/EtaAna.o ${CLASSDIR}/MyReadConfig.o
+OBJS = $(wildcard ${CLASSDIR}/*.o)
 
-all: clean ana_trees
+all: ana_trees
 
 ana_trees: analyze_trees.o Makefile $(OBJS)
 	g++ analyze_trees.o $(OBJS) -o ana_trees -L/usr/lib64/root \
