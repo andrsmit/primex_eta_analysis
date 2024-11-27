@@ -57,6 +57,7 @@ class JEventProcessor_eta_gg_tree:public jana::JEventProcessor{
 		// Functions
 		
 		double energy_after_recoil(double eb, double theta, double m0, double mp);
+		double fcal_energy_res(double e);
 		double get_acc_scaling_factor(double eb);
 		
 		void write_events(uint64_t eventnumber, double rfTime, vector<const DMCThrown*> mc_thrown);

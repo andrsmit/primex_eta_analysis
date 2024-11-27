@@ -506,9 +506,13 @@ jerror_t JEventProcessor_eta_gg_tree::evnt(JEventLoop *eventLoop, uint64_t event
 			double cos12   = (pos1.X()*pos2.X() + pos1.Y()*pos2.Y() + pos1.Z()*pos2.Z()) / (pos1.Mag()*pos2.Mag());
 			
 			// invariant mass:
-			double invmass = sqrt(2.0*e1*e2*(1.-cos12));
-			
-			if(invmass < 0.3) continue;
+			//double invmass = sqrt(2.0*e1*e2*(1.-cos12));
+			//if(invmass < 0.3) continue;
+			//
+			// 11.27.2024: 
+			// I commented out the above two lines because cutting on the invariant mass 
+			// and then plotting the energy-constrained invariant mass could lead to 
+			// artificial structures to the left of the eta peak that would affect the background fit.
 			
 			for(vector<const DBeamPhoton*>::const_iterator gam = locBeamPhotons.begin(); gam != locBeamPhotons.end(); gam++) {
 				
@@ -517,6 +521,26 @@ jerror_t JEventProcessor_eta_gg_tree::evnt(JEventLoop *eventLoop, uint64_t event
 				
 				// remove beam photons below the minimum energy cut:
 				if(eb < m_MIN_BEAM_ENERGY) continue;
+				
+				//-----------------------------------------------------//
+				// Energy constraint
+				
+				// Calculate the energy of the eta meson, assuming production on a free nucleon:
+				double eeta = energy_after_recoil(eb, prod_th, m_eta, m_Proton);
+				
+				// adjust the measured energies of the two-photons to exactly equal the energy of 
+				// a photo-produced eta meson:
+				
+				double sig1 = fcal_energy_res(e1);
+				double sig2 = fcal_energy_res(e2);
+				double sigr = pow(sig1/sig2,2.0);
+				
+				// Energy-constrained invariant mass assuming production on free nucleon:
+				double e1c = e1/(1.+sigr) + (eeta-e2)/(1.+(1./sigr));
+				double e2c = eeta - e1c;
+				double invmass_const = sqrt(2.*e1c*e2c*(1.-cos12));
+				
+				//-----------------------------------------------------//
 				
 				// only save events where there is a beam photon passing the cuts in the main RF bunch 
 				// OR in one of the accidental sidebands that will be used for subtraction. 
@@ -532,10 +556,8 @@ jerror_t JEventProcessor_eta_gg_tree::evnt(JEventLoop *eventLoop, uint64_t event
 				
 				if(bunch_val==0) continue;
 				
-				double eeta = energy_after_recoil(eb, prod_th, m_eta, m_Target);
-				
 				double locDeltaE = Egg - eeta;
-				if(fabs(locDeltaE) < 3.0) {
+				if(fabs(locDeltaE) < 3.0 && invmass_const > 0.30) {
 					locEventSelector = true;
 				}
 			}
@@ -585,6 +607,16 @@ double JEventProcessor_eta_gg_tree::energy_after_recoil(double eb, double theta,
 	
 	double energy = (-b-sqrt(d))/2./a;
 	return energy;
+}
+
+double JEventProcessor_eta_gg_tree::fcal_energy_res(double e)
+{
+	// hard-coded values for the FCAL energy resolution (taken from GlueX NIM paper)
+	
+	double a = 0.062, b = 0.047;
+	double sig = (a*a)/e + (b*b);
+	sig = sqrt(sig) * e;
+	return sig;
 }
 
 double JEventProcessor_eta_gg_tree::get_acc_scaling_factor(double eb)
