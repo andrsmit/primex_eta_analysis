@@ -3,7 +3,7 @@
 import rcdb
 
 minRun = 110657
-maxRun = 119999
+maxRun = 111957
 
 db = rcdb.RCDBProvider('mysql://rcdb@hallddb.jlab.org/rcdb2')
 
