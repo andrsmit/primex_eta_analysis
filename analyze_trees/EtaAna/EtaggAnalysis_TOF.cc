@@ -2,19 +2,15 @@
 
 void EtaAna::EtaggAnalysis_TOF() {
 	
-	double locThrownBeamEnergy, locThrownAngle;
 	if(m_nmc>0) {
 		if(AcceptRejectEvent()) return;
-		GetThrownEnergyAndAngle(locThrownBeamEnergy, locThrownAngle);
-		if((locThrownBeamEnergy < m_minBeamEnergyCut) || (locThrownBeamEnergy >= m_maxBeamEnergyCut)) return;
-		PlotThrown(locThrownBeamEnergy, locThrownAngle);
-		if(h_AngularMatrix_TOFTimingCutVec.size()==0) {
-			InitializeAngularMatrices_TOF();
-		}
 	}
-	if(CheckEventMultiplicities()) {
-		printf("    Skipping event %d\n", m_event);
-		return;
+	
+	double locThrownBeamEnergy = 0.0, locThrownAngle = 0.0;
+	if(m_FillThrown) {
+		GetThrownEnergyAndAngle(locThrownBeamEnergy, locThrownAngle);
+		//if((locThrownBeamEnergy < m_minBeamEnergyCut) || (locThrownBeamEnergy >= m_maxBeamEnergyCut)) return;
+		PlotThrown(locThrownBeamEnergy, locThrownAngle);
 	}
 	
 	vector<pair<int,double>> locGoodBeamPhotons; locGoodBeamPhotons.clear();
@@ -118,7 +114,7 @@ void EtaAna::EtaggAnalysis_TOF() {
 				locTOFVeto_dR.push_back(false);
 			}
 			for(int icut=0; icut<m_TOFDistanceCuts.size(); icut++) {
-				if((tof_dr1 < m_TOFDistanceCuts[icut]) && (tof_dr1 < m_TOFDistanceCuts[icut])) {
+				if((tof_dr1 < m_TOFDistanceCuts[icut]) && (tof_dr2 < m_TOFDistanceCuts[icut])) {
 					locTOFVeto_dR[icut] = true;
 				}
 			}
@@ -217,16 +213,15 @@ void EtaAna::EtaggAnalysis_TOF() {
 				h_mgg_noTOF->Fill(prodTheta, invmassConstr, fillWeight);
 				if(!locTOFVeto) h_mgg_TOF->Fill(prodTheta, invmassConstr, fillWeight);
 				if(!locTOFVeto_single) h_mgg_singleTOF->Fill(prodTheta, invmassConstr, fillWeight);
-				if(isEta && (m_nmc>0)) {
+				if(m_FillThrown && isEta) {
 					h_AngularMatrix_noTOF->Fill(locThrownAngle, prodTheta, locThrownBeamEnergy, fillWeight);
 					if(!locTOFVeto) h_AngularMatrix_TOF->Fill(locThrownAngle, prodTheta, locThrownBeamEnergy, fillWeight);
 					if(!locTOFVeto_single) h_AngularMatrix_singleTOF->Fill(locThrownAngle, prodTheta, locThrownBeamEnergy, fillWeight);
 				}
-				
 				for(int icut=0; icut<m_TOFTimingCuts.size(); icut++) {
 					if(!locTOFVeto_dT[icut]) {
 						h_mgg_TOFTimingCutVec[icut]->Fill(prodTheta, invmassConstr, fillWeight);
-						if(isEta) {
+						if(m_FillThrown && isEta) {
 							h_AngularMatrix_TOFTimingCutVec[icut]->Fill(locThrownAngle, prodTheta, locThrownBeamEnergy, fillWeight);
 						}
 					}
@@ -234,7 +229,7 @@ void EtaAna::EtaggAnalysis_TOF() {
 				for(int icut=0; icut<m_TOFDistanceCuts.size(); icut++) {
 					if(!locTOFVeto_dR[icut]) {
 						h_mgg_TOFDistanceCutVec[icut]->Fill(prodTheta, invmassConstr, fillWeight);
-						if(isEta) {
+						if(m_FillThrown && isEta) {
 							h_AngularMatrix_TOFDistanceCutVec[icut]->Fill(locThrownAngle, prodTheta, locThrownBeamEnergy, fillWeight);
 						}
 					}
@@ -249,28 +244,37 @@ void EtaAna::EtaggAnalysis_TOF() {
 
 void EtaAna::InitializeAngularMatrices_TOF() {
 	
-	double minBeamEnergy      =  7.0;
-	double maxBeamEnergy      = 12.0;
-	double beamEnergyBinSize  =  0.1;
+	int nBeamEnergyBins  = (int)((m_maxBeamEnergyBin-m_minBeamEnergyBin)/m_beamEnergyBinSize);
+	int nRecAngleBins    = (int)((m_maxRecAngleBin-m_minRecAngleBin)/m_recAngleBinSize);
+	int nThrownAngleBins = (int)((m_maxThrownAngleBin-m_minThrownAngleBin)/m_thrownAngleBinSize);
 	
-	double minRecAngle        = 0.0;
-	double maxRecAngle        = 5.5;
-	double recAngleBinSize    = 0.01;
+	h_AngularMatrix_noTOF = new TH3F("AngularMatrix_noTOF", 
+		"No TOF Veto; #theta(thrown) [#circ]; #theta(rec) [#circ]; E_{#gamma}(thrown) [GeV]",
+		nThrownAngleBins, m_minThrownAngleBin, m_maxThrownAngleBin, 
+		nRecAngleBins,    m_minRecAngleBin,    m_maxRecAngleBin,
+		nBeamEnergyBins,  m_minBeamEnergyBin,  m_maxBeamEnergyBin);
+	h_AngularMatrix_noTOF->SetDirectory(0);
 	
-	double minThrownAngle     = 0.0;
-	double maxThrownAngle     = 5.0;
-	double thrownAngleBinSize = 0.01;
+	h_AngularMatrix_TOF = new TH3F("AngularMatrix_TOF", 
+		"Standard TOF Veto; #theta(thrown) [#circ]; #theta(rec) [#circ]; E_{#gamma}(thrown) [GeV]",
+		nThrownAngleBins, m_minThrownAngleBin, m_maxThrownAngleBin, 
+		nRecAngleBins,    m_minRecAngleBin,    m_maxRecAngleBin,
+		nBeamEnergyBins,  m_minBeamEnergyBin,  m_maxBeamEnergyBin);
+	h_AngularMatrix_TOF->SetDirectory(0);
 	
-	int nBeamEnergyBins  = (int)((maxBeamEnergy-minBeamEnergy)/beamEnergyBinSize);
-	int nRecAngleBins    = (int)((maxRecAngle-minRecAngle)/recAngleBinSize);
-	int nThrownAngleBins = (int)((maxThrownAngle-minThrownAngle)/thrownAngleBinSize);
+	h_AngularMatrix_singleTOF = new TH3F("AngularMatrix_singleTOF", 
+		"Veto on single FCAL-TOF Match; #theta(thrown) [#circ]; #theta(rec) [#circ]; E_{#gamma}(thrown) [GeV]",
+		nThrownAngleBins, m_minThrownAngleBin, m_maxThrownAngleBin, 
+		nRecAngleBins,    m_minRecAngleBin,    m_maxRecAngleBin,
+		nBeamEnergyBins,  m_minBeamEnergyBin,  m_maxBeamEnergyBin);
+	h_AngularMatrix_singleTOF->SetDirectory(0);
 	
 	for(int icut=0; icut<m_TOFTimingCuts.size(); icut++) {
 		TH3F *hMatrix = new TH3F(Form("AngularMatrix_TOFTimingCut_%02d",icut), 
 			Form("Timing Cut for TOF Veto: #left|t_{TOF} - t_{RF}#right| < %.2f ns", m_TOFTimingCuts[icut]),
-			nThrownAngleBins, minThrownAngle, maxThrownAngle, 
-			nRecAngleBins,    minRecAngle,    maxRecAngle,
-			nBeamEnergyBins,  minBeamEnergy,  maxBeamEnergy);
+			nThrownAngleBins, m_minThrownAngleBin, m_maxThrownAngleBin, 
+			nRecAngleBins,    m_minRecAngleBin,    m_maxRecAngleBin,
+			nBeamEnergyBins,  m_minBeamEnergyBin,  m_maxBeamEnergyBin);
 		hMatrix->SetDirectory(0);
 		hMatrix->GetXaxis()->SetTitle("#theta(thrown) [#circ]");
 		hMatrix->GetYaxis()->SetTitle("#theta(rec) [#circ]");
@@ -281,15 +285,14 @@ void EtaAna::InitializeAngularMatrices_TOF() {
 	for(int icut=0; icut<m_TOFDistanceCuts.size(); icut++) {
 		TH3F *hMatrix = new TH3F(Form("AngularMatrix_TOFDistanceCut_%02d",icut), 
 			Form("Distance Cut for TOF Veto: #DeltaR_{FCAL-TOF} < %.1f cm", m_TOFDistanceCuts[icut]),
-			nThrownAngleBins, minThrownAngle, maxThrownAngle, 
-			nRecAngleBins,    minRecAngle,    maxRecAngle,
-			nBeamEnergyBins,  minBeamEnergy,  maxBeamEnergy);
+			nThrownAngleBins, m_minThrownAngleBin, m_maxThrownAngleBin, 
+			nRecAngleBins,    m_minRecAngleBin,    m_maxRecAngleBin,
+			nBeamEnergyBins,  m_minBeamEnergyBin,  m_maxBeamEnergyBin);
 		hMatrix->SetDirectory(0);
 		hMatrix->GetXaxis()->SetTitle("#theta(thrown) [#circ]");
 		hMatrix->GetYaxis()->SetTitle("#theta(rec) [#circ]");
 		hMatrix->GetZaxis()->SetTitle("E_{#gamma}(thrown) [#circ]");
 		h_AngularMatrix_TOFDistanceCutVec.push_back(hMatrix);
 	}
-	
 	return;
 }

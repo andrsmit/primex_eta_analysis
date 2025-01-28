@@ -19,6 +19,7 @@ using namespace std;
 #include <iomanip>
 
 #include "TVector3.h"
+#include "TLorentzVector.h"
 #include "TMath.h"
 #include "TFile.h"
 #include "TTree.h"
@@ -62,8 +63,8 @@ class EtaAna {
 		TFile *m_inputFile;
 		TTree *m_tree;
 		
-		bool m_FillAngularMatrix = false;
-		bool m_FillInvmassMatrix = false;
+		// decides whether to create and fill thrown histograms:
+		bool m_FillThrown = false;
 		
 		int m_event;
 		
@@ -78,7 +79,9 @@ class EtaAna {
 		void ReadEvent();
 		
 		void PlotThrown(double, double);
-		void FillAngularMatrix(int vetoOption, double thrownEnergy, double thrownAngle, 
+		void FillAngularMatrix(double thrownEnergy, double thrownAngle, 
+			double recAngle, double weight);
+		void FillAngularMatrix_vetos(int vetoOption, double thrownEnergy, double thrownAngle, 
 			double recAngle, double weight);
 		void FillInvmassMatrix(double theta, double mgg, double beamEnergy, double weight);
 		
@@ -90,6 +93,14 @@ class EtaAna {
 		TVector3 GetFCALPosition(int index);
 		TVector3 GetBCALPosition(int index);
 		
+		double CalcInvmass(double e1, double e2, TVector3 pos1, TVector3 pos2);
+		double CalcInvmass(double e1, double e2, double e3, TVector3 pos1, TVector3 pos2, TVector3 pos3);
+		double CalcInvmassShifted(double deltaZ, double e1, double e2, TVector3 pos1, TVector3 pos2);
+		double CalcInvmassShifted(double deltaZ, double e1, double e2, double e3, TVector3 pos1, TVector3 pos2, TVector3 pos3);
+		double CalcProdTheta(double e1, double e2, double e3, TVector3 pos1, TVector3 pos2, TVector3 pos3);
+		double CalcProdThetaShifted(double deltaZ, double e1, double e2, double e3, TVector3 pos1, TVector3 pos2, TVector3 pos3);
+		double CalculateCost(double deltaZ, double e1, double e2, double e3, TVector3 pos1, TVector3 pos2, TVector3 pos3);
+		
 		int FCALFiducialCut(TVector3 pos, double cutLayer);
 		
 		void CheckTOFMatch(TVector3 pos, double &dxMin, double &dyMin, double &dtMin, double rfTimingCut);
@@ -98,16 +109,19 @@ class EtaAna {
 		double GetFCALEnergyResolution(double e);
 		void GetThrownEnergyAndAngle(double &thrownEnergy, double &thrownAngle);
 		
+		int GetAcceptanceHistogram();
+		
 		bool IsElasticCut(double Egg, double Eeta, double theta);
 		bool IsEtaCut(double invmass);
 		
 		// Different ways to do analysis (each function is defined in it's own .cc file):
 		void EtaggAnalysis();
+		void EtaggAnalysis_matrix();
 		void EtaggAnalysis_FCAL();
 		void EtaggAnalysis_BCAL();
 		void EtaggAnalysis_BEAM();
 		void EtaggAnalysis_TOF();
-		
+		void Omega3gAnalysis();
 		//-------------------------------------------------------------------//
 		// TTree Variables:
 		
@@ -164,6 +178,26 @@ class EtaAna {
 		//-------------------------------------------------------------------//
 		// Histograms:
 		
+		// Defaults for histogram bin sizes:
+		
+		double m_minInvmassBin      =  0.300;
+		double m_maxInvmassBin      =  1.100;
+		double m_invmassBinSize     =  0.001;
+		
+		double m_minRecAngleBin     =  0.000;
+		double m_maxRecAngleBin     =  5.500;
+		double m_recAngleBinSize    =  0.010;
+		
+		double m_minThrownAngleBin  =  0.000;
+		double m_maxThrownAngleBin  =  5.000;
+		double m_thrownAngleBinSize =  0.010;
+		
+		double m_minBeamEnergyBin   =  7.000;
+		double m_maxBeamEnergyBin   = 12.000;
+		double m_beamEnergyBinSize  =  0.050;
+		
+		TH2F *h_acceptance; // acceptance as 2-d grid of theta vs. beam energy
+		
 		/////////////////////////////////////////
 		// Defulat Analysis:
 		
@@ -180,17 +214,33 @@ class EtaAna {
 		TH2F *h_mgg[m_nVetos];
 		TH2F *h_mggConstr[m_nVetos];
 		TH2F *h_mggConstr_coh[m_nVetos];
+		TH2F *h_mgg_vs_t[m_nVetos];
+		TH2F *h_mgg_vs_t_cor[m_nVetos];
 		
-		TH2F *h_pt[m_nVetos], *h_ptCoh[m_nVetos];
-		TH2F *h_mm[m_nVetos], *h_mm_coh[m_nVetos];
+		TH2F *h_t_vs_theta;
+		
+		TH1F *h_deltaPhi_CM;
+		TH2F *h_e_vs_theta;
+		
+		TH2F *h_mgg_vs_vertex;
+		
+		TH2F *h_pt[m_nVetos],      *h_ptCoh[m_nVetos];
+		TH2F *h_mm[m_nVetos],      *h_mm_coh[m_nVetos];
+		TH2F *h_mm_elas[m_nVetos], *h_mm_elas_coh[m_nVetos];
 		
 		TH2F *h_scDeltaPhi, *h_bcalDeltaPhi;
 		TH2F *h_xy1, *h_xy2;
 		
-		TH3F *h_invmassMatrix, *h_invmassMatrix_acc;
-		vector<TH3F*> h_AngularMatrix;
-		
 		TH2F *h_pT_vs_elas, *h_pT_vs_elas_cut;
+		
+		vector<TH3F*> h_AngularMatrix_vetos;
+		
+		/////////////////////////////////////////
+		// Default Analysis with no cut on beam energy:
+		
+		TH3F *h_invmassMatrix;
+		TH3F *h_invmassMatrix_prompt, *h_invmassMatrix_acc;
+		TH3F *h_AngularMatrix;
 		
 		/////////////////////////////////////////
 		// Varying FCAL Cuts:
@@ -231,6 +281,14 @@ class EtaAna {
 		/////////////////////////////////////////
 		// Varying Beam Cuts:
 		
+		/////////////////////////////////////////
+		// Omega->pi0+gamma:
+		
+		TH1F *h_3gamma_m12,      *h_3gamma_m13,      *h_3gamma_m23,      *h_3gamma_m3g;
+		TH1F *h_3gamma_m12_elas, *h_3gamma_m13_elas, *h_3gamma_m23_elas, *h_3gamma_m3g_elas;
+		TH1F *h_3gamma_vz,       *h_3gamma_vz_elas;
+		TH1F *h_3gamma_theta_targ, *h_3gamma_theta_fdc1, *h_3gamma_theta_fdc2, *h_3gamma_theta_fdc3;
+		TH2F *h_xy_targ, *h_xy_fdc1, *h_xy_fdc2, *h_xy_fdc3;
 		//----------------------------------------------------------------------------------------------//
 		
 	public:
@@ -277,8 +335,7 @@ class EtaAna {
 		void ResetHistograms(int analysisOptions=0);
 		void WriteHistograms(int analysisOptions=0);
 		
-		void SetFillAngularMatrix(bool doFill) { m_FillAngularMatrix = doFill; return; };
-		void SetFillInvmassMatrix(bool doFill) { m_FillInvmassMatrix = doFill; return; };
+		void SetFillThrown(bool doFill) { m_FillThrown = doFill; return; };
 };
 
 #endif

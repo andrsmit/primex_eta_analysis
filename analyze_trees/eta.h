@@ -38,15 +38,15 @@ struct anaSettings_t {
 };
 
 int GetMinRunNumber(int phase) {
-	if(phase==1)      return  61462;
+	if(phase==1)      return  61355;
 	else if(phase==2) return  81396;
-	else if(phase==3) return 110641;
+	else if(phase==3) return 110657;
 	else return -1;
 };
 int GetMaxRunNumber(int phase) {
 	if(phase==1)      return  61956;
 	else if(phase==2) return  81716;
-	else if(phase==3) return 112001;
+	else if(phase==3) return 111957;
 	else return -1;
 };
 
@@ -58,5 +58,6 @@ int main(int argc, char **argv);
 
 char rootTreePathName[256];
 char rootFilePathName[256];
+char  runListPathName[256];
 
 #endif

@@ -8,15 +8,10 @@ void EtaAna::EtaggAnalysis() {
 		h_mcVertexAccepted->Fill(m_mcZ[0]);
 	}
 	
-	double locThrownBeamEnergy, locThrownAngle;
-	if(m_FillAngularMatrix) {
+	double locThrownBeamEnergy = 0.0, locThrownAngle = 0.0;
+	if(m_FillThrown) {
 		GetThrownEnergyAndAngle(locThrownBeamEnergy, locThrownAngle);
 		PlotThrown(locThrownBeamEnergy, locThrownAngle);
-	}
-	
-	if(CheckEventMultiplicities()) {
-		printf("    Skipping event %d\n", m_event);
-		return;
 	}
 	
 	vector<pair<int,double>> locGoodBeamPhotons; locGoodBeamPhotons.clear();
@@ -42,6 +37,23 @@ void EtaAna::EtaggAnalysis() {
 		if(fabs(locT) < 1.0) {
 			locNBCALShowers_1ns++;
 		}
+	}
+	
+	// Plot SC Timing Distribution for monitoring:
+	for(int isc = 0; isc < m_nsc; isc++) {
+		double locT  = m_scT[isc] - m_rfTime;
+		double locdE = m_scdE[isc];
+		if(locdE > 0.0002) {
+			h_scRFdt->Fill(locT);
+		}
+	}
+	
+	// Plot TOF Timing Distribution for monitoring:
+	for(int itof = 0; itof < m_ntof; itof++) {
+		TVector3 locPos(m_tofX[itof], m_tofY[itof], m_tofZ[itof]);
+		locPos -= m_vertex;
+		double locT = m_tofT[itof] - (locPos.Mag()/m_c) - m_rfTime;
+		h_tofRFdt->Fill(locT);
 	}
 	
 	//=====================================================================================//
@@ -129,7 +141,7 @@ void EtaAna::EtaggAnalysis() {
 				double locT  = m_scT[isc] - m_rfTime;
 				double locdE = m_scdE[isc];
 				
-				if((1.0 < locT) && (locT < 7.0) && (locdE > 0.0002)) {
+				if((1.0 < locT) && (locT < 9.0) && (locdE > 0.0002)) {
 					locNSCHits++;
 					if(fabs(fabs(m_scPhi[isc]-prodPhi)-180.0) < m_SCDeltaPhiCut) locNSCHits_coplanar++;
 				}
@@ -197,6 +209,18 @@ void EtaAna::EtaggAnalysis() {
 				// Plot timing distribution of beam photons after elasticity cut to see the level of accidentals:
 				if(isElastic && locVetoOptions[5]) {
 					h_beamRFdt_cut->Fill(brfdt);
+				}
+				
+				TLorentzVector k_beam(0.0, 0.0, eb, eb);
+				TLorentzVector p_eta(pggx, pggy, pggz, Egg);
+				double t    = (k_beam-p_eta)*(k_beam-p_eta);
+				double logt = log10(-t);
+				
+				// acceptance correction:
+				double locAcc = 1.0;
+				if(h_acceptance != NULL) {
+					locAcc = h_acceptance->GetBinContent(h_acceptance->GetXaxis()->FindBin(eb), 
+						h_acceptance->GetYaxis()->FindBin(prodTheta));
 				}
 				
 				//-----------------------------------------------------//
@@ -272,18 +296,38 @@ void EtaAna::EtaggAnalysis() {
 					if(locVetoOptions[5]) h_pT_vs_elas_cut->Fill(Egg/etaEnergy, pggt/pTCalc, fillWeight);
 				}
 				*/
+				/*
+				TLorentzVector locMesonP4(pggx, pggy, pggz, Egg);
 				
+				TVector3 locBoostVector_MesonCM = -1.0*(locMesonP4.BoostVector());
+				TLorentzVector locProduct1_MesonCM(px1, py1, pz1, e1);
+				TLorentzVector locProduct2_MesonCM(px2, py2, pz2, e2);
+				locProduct1_MesonCM.Boost(locBoostVector_MesonCM);
+				locProduct2_MesonCM.Boost(locBoostVector_MesonCM);
+				
+				h_deltaPhi_CM->Fill((locProduct1_MesonCM.Phi()-locProduct2_MesonCM.Phi())*TMath::RadToDeg());
+				
+				// plot energy vs angle in CM frame:
+				
+				if(((e1/Egg)<0.3) || ((e2/Egg)<0.3)) continue;
+				
+				if(isEta && isElastic && locVetoOptions[5]) {
+					h_e_vs_theta->Fill(acos((px1*pggx + py1*pggy + pz1*pggz)/(e1*sqrt(pow(pggt,2.0)+pow(pggz,2.0)))), e1/Egg);
+					h_e_vs_theta->Fill(acos((px2*pggx + py2*pggy + pz2*pggz)/(e2*sqrt(pow(pggt,2.0)+pow(pggz,2.0)))), e2/Egg);
+				}
+				*/
 				if(isEta && isElastic) {
-					if(locVetoOptions[1]) {
+					if(locVetoOptions[5]) {
 						h_xy1->Fill(pos1.X(),pos1.Y());
 						h_xy2->Fill(pos2.X(),pos2.Y());
+						h_t_vs_theta->Fill(prodTheta, logt, fillWeight);
 					}
 					
 					// plot SC-DeltaPhi:
 					for(int isc = 0; isc < m_nsc; isc++) {
 						double locT  = m_scT[isc] - m_rfTime;
 						double locdE = m_scdE[isc];
-						if((1.0 < locT) && (locT < 7.0) && (locdE > 0.0002)) {
+						if((1.0 < locT) && (locT < 9.0) && (locdE > 0.0002)) {
 							double deltaPhi = m_scPhi[isc]-prodPhi;
 							h_scDeltaPhi->Fill(prodTheta, deltaPhi);
 						}
@@ -308,6 +352,10 @@ void EtaAna::EtaggAnalysis() {
 						
 						h_mm[iveto]->Fill(prodTheta, mmSq, fillWeight);
 						h_mm_coh[iveto]->Fill(prodTheta, (mmSqCoh - pow(ParticleMass(Helium),2.0)), fillWeight);
+						if(isElastic) {
+							h_mm_elas[iveto]->Fill(prodTheta, mmSq, fillWeight);
+							h_mm_elas_coh[iveto]->Fill(prodTheta, (mmSqCoh - pow(ParticleMass(Helium),2.0)), fillWeight);
+						}
 					}
 					
 					if(isElastic) {
@@ -316,13 +364,13 @@ void EtaAna::EtaggAnalysis() {
 						h_mggConstr_coh[iveto]->Fill(prodTheta, invmassConstr_coh, fillWeight);
 					}
 					
-					if(m_FillAngularMatrix && isEta && isElastic) {
-						FillAngularMatrix(iveto, locThrownBeamEnergy, locThrownAngle, prodTheta, fillWeight);
+					if(m_FillThrown && isEta && isElastic) {
+						FillAngularMatrix_vetos(iveto, locThrownBeamEnergy, locThrownAngle, prodTheta, fillWeight);
 					}
 				}
 				
-				if(m_FillInvmassMatrix && locVetoOptions[5] && isElastic) {
-					FillInvmassMatrix(prodTheta, invmassConstr, eb, fillWeight);
+				if((m_nmc>0) && locVetoOptions[5] && isElastic) {
+					h_mgg_vs_vertex->Fill(m_mcZ[0], invmassConstr, fillWeight);
 				}
 				
 			} // end loop over beam photons

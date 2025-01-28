@@ -59,10 +59,15 @@ int main(int argc, char **argv) {
 	printUsage(locSettings, 1);
 	
 	// Directory where input ROOT trees will be read from:
-	sprintf(rootTreePathName, "/work/halld/home/andrsmit/primex_eta_analysis/data/pass1/rootTrees");
+	int locPass = 2;
+	if(locSettings.primexPhase==3) locPass = 1;
+	sprintf(rootTreePathName, "/work/halld/home/andrsmit/primex_eta_analysis/data/pass%d/rootTrees", locPass);
 	
 	// Directory where output ROOT files will be stored:
 	sprintf(rootFilePathName, "/work/halld/home/andrsmit/primex_eta_analysis/analyze_trees/rootFiles");
+	
+	// Directory where run lists are stored:
+	sprintf(runListPathName, "/work/halld/home/andrsmit/primex_eta_analysis/run_lists");
 	
 	// Initialize analysis object:
 	EtaAna locAna;
@@ -73,16 +78,22 @@ int main(int argc, char **argv) {
 			analysisStr = "";
 			break;
 		case 1:
-			analysisStr = "_FCAL";
+			analysisStr = "_matrix";
 			break;
 		case 2:
-			analysisStr = "_BCAL";
+			analysisStr = "_FCAL";
 			break;
 		case 3:
-			analysisStr = "_BEAM";
+			analysisStr = "_BCAL";
 			break;
 		case 4:
+			analysisStr = "_BEAM";
+			break;
+		case 5:
 			analysisStr = "_TOF";
+			break;
+		case 6:
+			analysisStr = "_omega";
 			break;
 		default:
 			std::cout << "Invalid analysis option provided." << std::endl;
@@ -96,9 +107,6 @@ int main(int argc, char **argv) {
 	
 	// Initialize histograms to be filled:
 	locAna.InitHistograms(locSettings.analysisOption);
-	
-	// Optionally fill 3-d matrix of Angle vs. Invariant Mass vs. BeamEnergy:
-	if(locSettings.analysisOption==0) locAna.SetFillInvmassMatrix(true);
 	
 	//
 	// Check if an input filename was specificed at runtime. 
@@ -124,7 +132,7 @@ int main(int argc, char **argv) {
 		
 		int locPhase = locSettings.primexPhase;
 		
-		vector<TString> targetStrings = {"full","empty"};
+		vector<TString> targetStrings = {"empty","full"};
 		
 		vector<TString>  fieldStrings; fieldStrings.clear();
 		if(locPhase==1) {
@@ -139,10 +147,40 @@ int main(int argc, char **argv) {
 		for(int itarget=0; itarget<targetStrings.size(); itarget++) {
 			for(int ifield=0; ifield<fieldStrings.size(); ifield++) {
 				
+				//----------------------------------------------------//
+				// Get list of runs to process:
+				
+				TString runListFileName = Form("%s/phase%d/he_%s_%s.txt", 
+					runListPathName, locPhase, targetStrings[itarget].Data(), fieldStrings[ifield].Data());
+				
+				// skip this target+field setting if no run list exists:
+				if(gSystem->AccessPathName(runListFileName.Data())) continue;
+				
+				// store runs in a vector of integers:
+				vector<int> runList; runList.clear();
+				
+				// objects used for reading txt file:
+				ifstream runListStream(runListFileName.Data());
+				string runNumberStr;
+				
+				// fill run list vector:
+				while(getline(runListStream, runNumberStr)) {
+					runList.push_back(stoi(runNumberStr));
+				}
+				runListStream.close();
+				
+				// skip this setting if run list is empty:
+				int locNRuns = (int)runList.size();
+				if(locNRuns<1) continue;
+				
+				//----------------------------------------------------//
+				
+				printf("Processing %s target %s runs:\n", targetStrings[itarget].Data(), fieldStrings[ifield].Data());
+				
 				TString outputFileName = Form("%s/phase%d/%s_target_%s%s.root", rootFilePathName, locPhase, 
 					targetStrings[itarget].Data(), fieldStrings[ifield].Data(), analysisStr.Data());
 				
-				if(!gSystem->AccessPathName(outputFileName.Data())) continue;
+				//if(!gSystem->AccessPathName(outputFileName.Data())) continue;
 				locAna.SetOutputFileName(outputFileName.Data());
 				
 				char locRootTreePathName[256];
@@ -150,11 +188,25 @@ int main(int argc, char **argv) {
 					targetStrings[itarget].Data(), fieldStrings[ifield].Data());
 				
 				int nRunsProcessed = 0;
-				for(int locRun = locSettings.minRunNumber; locRun <= locSettings.maxRunNumber; locRun++) {
+				for(int iRun=0; iRun<=locNRuns; iRun++) {
+					
+					int locRun = runList[iRun];
 					TString inputFileName = Form("%s/%06d.root", locRootTreePathName, locRun);
+					
+					// check if flux has been processed for this run. If not, skip it:
+					TString fluxFileName = Form(
+						"/work/halld/home/andrsmit/primex_eta_analysis/photon_flux/rootFiles/phase%d/%s/%d_flux.root",
+						locPhase, targetStrings[itarget].Data(), locRun);
+					
+					// check if flux file exists, but not rootTree:
+					if(!gSystem->AccessPathName(fluxFileName.Data()) && gSystem->AccessPathName(inputFileName.Data())) {
+						std:cout << "Flux file exists, but root tree does not for run " << locRun << std::endl;
+						continue;
+					}
 					
 					// check if file exists:
 					if(gSystem->AccessPathName(inputFileName.Data())) continue;
+					if(gSystem->AccessPathName(fluxFileName.Data())) continue;
 					
 					std::cout << "  processing run number " << locRun << std::endl;
 					if(locAna.SetRunNumber(locRun)) continue;
@@ -182,7 +234,7 @@ void printUsage(anaSettings_t anaSettings, int goYes) {
 		fprintf(stderr,"-b<arg>\tMinimum run number to process\n");
 		fprintf(stderr,"-e<arg>\tMaximum run number to process\n");
 		fprintf(stderr,"-c<arg>\tConfiguration file name\n");
-		fprintf(stderr,"-a<arg>\tAnalysis Option (0: default, 1: FCAL cuts, 2: BCAL cuts, 3: BEAM cuts, 4: TOF cuts)\n");
+		fprintf(stderr,"-a<arg>\tAnalysis Option (0: default, 1: invmass matrix, 2: FCAL cuts, 3: BCAL cuts, 4: BEAM cuts, 5: TOF cuts)\n");
 		fprintf(stderr,"-r<arg>\tRun number for specified input file\n");
 		fprintf(stderr,"-i<arg>\tInput file name (default is none)\n");
 		fprintf(stderr,"-o<arg>\tOutput file name (default is compton_ana.root)\n\n\n");
