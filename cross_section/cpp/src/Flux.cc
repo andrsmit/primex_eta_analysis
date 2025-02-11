@@ -2,21 +2,14 @@
 
 TString fluxDirectory = "/work/halld/home/andrsmit/primex_eta_analysis/photon_flux/rootFiles";
 
-void EtaAnalyzer::CalcLuminosity() {
+int EtaAnalyzer::LoadLuminosity() {
 	
-	m_fluxWeights.clear();
+	double targetThickness = m_targetDensity * m_targetLength * (1.0/m_targetMass) * m_avogdroNum * (1.e-30); // atoms/ub
 	
-	double targetDensity = 0.1217;    // g/cm3
-	double targetLength  = 29.535;    // cm
-	double targetMass    = 4.002602;  // g/mol
-	double avogdroNum    = 6.02214e23;
-	
-	double targetThickness = targetDensity * targetLength * (1.0/targetMass) * avogdroNum * (1.e-30); // atoms/ub
-		
 	TString fluxFileName = Form("%s/phase%d/full.root", fluxDirectory.Data(), m_phase);
 	if(gSystem->AccessPathName(fluxFileName.Data())) {
 		cout << "Flux filename doesn't exist." << endl;
-		return;
+		return 1;
 	}
 	
 	// read in flux histogram from file:
@@ -24,38 +17,39 @@ void EtaAnalyzer::CalcLuminosity() {
 	TFile *locFluxFile = new TFile(fluxFileName.Data(), "READ");
 	TH1F  *locFluxHist = (TH1F*)locFluxFile->Get("flux_vs_egamma");
 	
-	double integratedFlux = IntegrateFluxHist(locFluxHist);
+	double integratedFlux = IntegrateFluxHist(locFluxHist, m_minBeamEnergy, m_maxBeamEnergy);
 	m_luminosity = integratedFlux * targetThickness;
 	
+	// to account for the residual-gas contribution when subtracting empty background:
+	
+	if(m_subtractEmpty==1) m_luminosity *= 0.9817;
+	
 	//------------------------------------------------//
-	// Store fraction of flux in each energy bin in m_fluxWeights vector:
+	// Store fraction of flux in each energy bin in h_fluxWeights:
 	
-	double fluxBinSize = locFluxHist->GetXaxis()->GetBinWidth(1); // assumes fixed bin size
-	double locBeamE = minBeamEnergy + 0.5*beamEnergyBinSize;
+	InitializeFluxHist();
 	
-	while(locBeamE < maxBeamEnergy) {
+	for(int ibin=1; ibin<=h_fluxWeights->GetXaxis()->GetNbins(); ibin++) {
+		double locMinEnergy = h_fluxWeights->GetBinCenter(ibin) - 0.5*m_beamEnergyBinSize;
+		double locMaxEnergy = h_fluxWeights->GetBinCenter(ibin) + 0.5*m_beamEnergyBinSize;
 		
-		double locMinBeamE = locBeamE - 0.5*beamEnergyBinSize;
-		double locMaxBeamE = locBeamE + 0.5*beamEnergyBinSize;
-		double locFlux = locFluxHist->Integral(locFluxHist->GetXaxis()->FindBin(locMinBeamE+0.5*fluxBinSize),
-			locFluxHist->GetXaxis()->FindBin(locMaxBeamE-0.5*fluxBinSize));
-		m_fluxWeights.push_back(locFlux);
-		locBeamE += beamEnergyBinSize;
+		double locFlux = IntegrateFluxHist(locFluxHist, locMinEnergy, locMaxEnergy);
+		if(integratedFlux>0.0) {
+			h_fluxWeights->SetBinContent(ibin, locFlux/integratedFlux);
+			h_fluxWeights->SetBinError(ibin, sqrt(locFlux)/integratedFlux);
+		}
 	}
-	for(int ibin=0; ibin<m_fluxWeights.size(); ibin++) {
-		m_fluxWeights[ibin] = m_fluxWeights[ibin] / integratedFlux;
-		//cout << m_fluxWeights[ibin] << endl;
-	}
+	
 	//------------------------------------------------//
 	
 	locFluxFile->Close();
 	
-	printf("Integrated Luminosity [%.2f GeV - %.2f GeV]: %f pb-1\n", minBeamEnergy, maxBeamEnergy, (1.e-6)*m_luminosity);
+	printf("Integrated Luminosity [%.2f GeV - %.2f GeV]: %f pb-1\n", m_minBeamEnergy, m_maxBeamEnergy, (1.e-6)*m_luminosity);
 	
-	return;
+	return 0;
 }
 
-void EtaAnalyzer::CalcEmptyTargetFluxRatio() {
+int EtaAnalyzer::LoadEmptyTargetFluxRatio() {
 	
 	//
 	// If we assume the beamline background we want to subtract originates from downstream the target, then
@@ -70,7 +64,7 @@ void EtaAnalyzer::CalcEmptyTargetFluxRatio() {
 	
 	if(gSystem->AccessPathName(fluxFileNameFull.Data()) || gSystem->AccessPathName(fluxFileNameEmpty.Data())) {
 		cout << "Flux filenames don't exist." << endl;
-		return;
+		return 1;
 	}
 	
 	// read in flux histograms from files:
@@ -81,32 +75,32 @@ void EtaAnalyzer::CalcEmptyTargetFluxRatio() {
 	TH1F  *hFull  = (TH1F*)fFull->Get("flux_vs_egamma")->Clone("hFull");
 	TH1F  *hEmpty = (TH1F*)fEmpty->Get("flux_vs_egamma")->Clone("hEmpty");
 	
-	double integratedFluxFull  = IntegrateFluxHist(hFull);
-	double integratedFluxEmpty = IntegrateFluxHist(hEmpty);
+	double integratedFluxFull  = IntegrateFluxHist(hFull,  m_minBeamEnergy, m_maxBeamEnergy);
+	double integratedFluxEmpty = IntegrateFluxHist(hEmpty, m_minBeamEnergy, m_maxBeamEnergy);
 	
 	m_emptyTargetFluxRatio = scaleFactor * (integratedFluxFull / integratedFluxEmpty);
 	
 	printf("Photon Flux Ratio (Full/Empty): %f\n", m_emptyTargetFluxRatio);
 	
-	return;
+	return 0;
 }
 
-double EtaAnalyzer::IntegrateFluxHist(TH1F *hFlux) {
+double EtaAnalyzer::IntegrateFluxHist(TH1F *hFlux, double minEnergy, double maxEnergy) {
 	
 	// find the bin numbers to integrate flux over:
 	
 	double locBinSize = hFlux->GetXaxis()->GetBinWidth(1);
-	int locMinimumBin = hFlux->GetXaxis()->FindBin(minBeamEnergy + 0.5*locBinSize);
-	int locMaximumBin = hFlux->GetXaxis()->FindBin(maxBeamEnergy - 0.5*locBinSize);
+	int locMinimumBin = hFlux->GetXaxis()->FindBin(minEnergy + 0.5*locBinSize);
+	int locMaximumBin = hFlux->GetXaxis()->FindBin(maxEnergy - 0.5*locBinSize);
 	
 	// check that the bin edges exactly correspond to specified energy range:
 	
 	double locMinimumEnergy = hFlux->GetXaxis()->GetBinCenter(locMinimumBin) - 0.5*locBinSize;
 	double locMaximumEnergy = hFlux->GetXaxis()->GetBinCenter(locMaximumBin) + 0.5*locBinSize;
 	
-	if((fabs(locMinimumEnergy-minBeamEnergy)>1.e6) || (fabs(locMaximumEnergy-maxBeamEnergy)>1.e6)) {
+	if((fabs(locMinimumEnergy-m_minBeamEnergy)>1.e6) || (fabs(locMaximumEnergy-m_maxBeamEnergy)>1.e6)) {
 		printf("\n\nWarning! Bin edges of flux histogram are inconsistent with specified energy range:\n");
-		printf("   Specified energy range: %.5f GeV - %.5f GeV\n", minBeamEnergy-locMinimumEnergy, maxBeamEnergy-locMaximumEnergy);
+		printf("   Specified energy range: %.5f GeV - %.5f GeV\n", m_minBeamEnergy, m_maxBeamEnergy);
 		printf("   Flux Integration Range: %.5f GeV - %.5f GeV\n\n", locMinimumEnergy, locMaximumEnergy);
 	}
 	
@@ -114,4 +108,28 @@ double EtaAnalyzer::IntegrateFluxHist(TH1F *hFlux) {
 	
 	double integratedFlux = hFlux->Integral(locMinimumBin, locMaximumBin);
 	return integratedFlux;
+}
+
+void EtaAnalyzer::InitializeFluxHist() {
+	
+	double locNBins = (int)((m_maxBeamEnergy-m_minBeamEnergy)/m_beamEnergyBinSize);
+	
+	// consistency check:
+	double locMin = m_minBeamEnergy;
+	double locMax = m_minBeamEnergy + m_beamEnergyBinSize * (double)(locNBins);
+	
+	if(fabs(locMax-m_maxBeamEnergy) > 1.e-6) {
+		printf("\n\nWarning: Beam energy bin edges of flux histogram are inconsistent with specificied bin widths.\n");
+		printf("  Specificed energy range: %.3f-%.3f\n", m_minBeamEnergy, m_maxBeamEnergy);
+		printf("  Flux weights histogram min-max: %.3f-%.3f\n\n", locMin, locMax);
+	}
+	
+	h_fluxWeights = new TH1F("fluxWeights", "Fractional Photon Flux; E_{#gamma} [GeV]", locNBins, locMin, locMax);
+	h_fluxWeights->GetYaxis()->SetTitle(Form("w_{i} = #Gamma(i) / #int_{%.2f GeV}^{%.2f GeV}#Gamma(E)dE", 
+		m_minBeamEnergy, m_maxBeamEnergy));
+	h_fluxWeights->GetYaxis()->SetTitleOffset(1.5);
+	h_fluxWeights->GetYaxis()->CenterTitle(true);
+	h_fluxWeights->SetDirectory(0);
+	
+	return;
 }

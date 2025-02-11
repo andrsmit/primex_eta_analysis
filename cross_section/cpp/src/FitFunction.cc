@@ -1,7 +1,7 @@
 #include "MggFitter.h"
 #include "EtaAnalyzer.h"
 
-void MggFitter::InitializeFitFunction(TF1 **f1, TString funcName)
+int MggFitter::InitializeFitFunction(TF1 **f1, TString funcName)
 {
 	vector<TString> parNames; parNames.clear();
 	
@@ -54,6 +54,13 @@ void MggFitter::InitializeFitFunction(TF1 **f1, TString funcName)
 			parNames.push_back("#mu_{#eta,inc}");
 			parNames.push_back("#sigma_{#eta,inc}");
 			break;
+		case 7:
+			nEtaPars = 4;
+			parNames.push_back("N_{#eta}");
+			parNames.push_back("#Delta#mu_{#eta}");
+			parNames.push_back("N_{#eta#pi}");
+			parNames.push_back("#Delta#mu_{#eta#pi}");
+			break;
 	}
 	
 	int nOmegaPars = 0;
@@ -105,133 +112,23 @@ void MggFitter::InitializeFitFunction(TF1 **f1, TString funcName)
 	
 	int nParameters = nEtaPars + nOmegaPars + nBkgdPars + nEtaPrimePars;
 	
+	// Empty Target PDF:
+	if(fitOption_empty==1) {
+		parNames.push_back("N_{empty}");
+		nParameters++;
+	}
+	
 	// initialize fit function for each angular bin:
 	
-	*f1 = new TF1(funcName.Data(), this, &MggFitter::mggFitFunction, minFitRange, maxFitRange, nParameters);
+	*f1 = new TF1(funcName.Data(), this, &MggFitter::MggFitFunction, minFitRange, maxFitRange, nParameters);
 	
 	// set names for each parameter:
 	
 	for(int ipar = 0; ipar < parNames.size(); ipar++) (*f1)->SetParName(ipar, parNames[ipar]);
-	return;
-}
-
-int MggFitter::InitializeFitFunction(TString funcName)
-{
-	vector<TString> parNames; parNames.clear();
-	
-	int nEtaPars = 0;
-	switch(fitOption_signal) {
-		case 1:
-			nEtaPars = 3;
-			parNames.push_back("N_{#eta}");
-			parNames.push_back("#mu_{#eta}");
-			parNames.push_back("#sigma_{#eta}");
-			break;
-		case 2:
-			nEtaPars = 6;
-			parNames.push_back("N_{#eta,1}");
-			parNames.push_back("N_{#eta,2}");
-			parNames.push_back("#mu_{#eta,1}");
-			parNames.push_back("#mu_{#eta,2}-#mu_{#eta,1}");
-			parNames.push_back("#sigma_{#eta,1}");
-			parNames.push_back("#sigma_{#eta,2}");
-			break;
-		case 3:
-			nEtaPars = 5;
-			parNames.push_back("N_{#eta}");
-			parNames.push_back("#mu_{#eta}");
-			parNames.push_back("#sigma_{#eta}");
-			parNames.push_back("#alpha_{#eta}");
-			parNames.push_back("n_{#eta}");
-			break;
-		case 4:
-			nEtaPars = 8;
-			parNames.push_back("N_{#eta,1}");
-			parNames.push_back("#mu_{#eta,1}");
-			parNames.push_back("#sigma_{#eta,1}");
-			parNames.push_back("#alpha_{#eta,1}");
-			parNames.push_back("n_{#eta,1}");
-			parNames.push_back("N_{#eta,2}");
-			parNames.push_back("#mu_{#eta,2}");
-			parNames.push_back("#sigma_{#eta,2}");
-			break;
-		case 5:
-			nEtaPars = 2;
-			parNames.push_back("N_{#eta}");
-			parNames.push_back("#Delta#mu_{#eta}");
-			break;
-		case 6:
-			nEtaPars = 5;
-			parNames.push_back("N_{#eta}");
-			parNames.push_back("#Delta#mu_{#eta}");
-			parNames.push_back("N_{#eta,inc}");
-			parNames.push_back("#mu_{#eta,inc}");
-			parNames.push_back("#sigma_{#eta,inc}");
-			break;
-	}
-	
-	int nOmegaPars = 0;
-	switch(fitOption_omega) {
-		case 1:
-			nOmegaPars = 5;
-			parNames.push_back("N_{#omega}");
-			parNames.push_back("#mu_{#omega}");
-			parNames.push_back("#sigma_{#omega}");
-			parNames.push_back("#alpha_{#omega}");
-			parNames.push_back("n_{#omega}");
-			break;
-		case 2:
-			nOmegaPars = 2;
-			parNames.push_back("N_{#omega}");
-			parNames.push_back("#Delta#mu_{#omega}");
-			break;
-		case 3:
-			nOmegaPars = 2;
-			parNames.push_back("N_{#omega}");
-			parNames.push_back("#Delta#mu_{#omega}");
-			break;
-	}
-	
-	int nBkgdPars = 0;
-	switch(fitOption_bkgd) {
-		case 1:
-			nBkgdPars = fitOption_poly + 1;
-			break;
-		case 2:
-			nBkgdPars = 5;
-			break;
-		case 3:
-			nBkgdPars = fitOption_poly + 1;
-			break;
-		case 4:
-			nBkgdPars = 0;
-			break;
-	}
-	for(int ipar=0; ipar<nBkgdPars; ipar++) parNames.push_back(Form("p%d",ipar));
-	
-	int nEtaPrimePars = 0;
-	if(fitOption_etap==1) {
-		nEtaPrimePars = 3;
-		parNames.push_back("N_{#eta'}");
-		parNames.push_back("#mu_{#eta'}");
-		parNames.push_back("#sigma_{#eta'}");
-	}
-	
-	int nParameters = nEtaPars + nOmegaPars + nBkgdPars + nEtaPrimePars;
-	
-	// initialize fit function for each angular bin:
-	
-	f_fit = new TF1(funcName.Data(), this, &MggFitter::mggFitFunction, minFitRange, maxFitRange, nParameters);
-	
-	// set names for each parameter:
-	
-	for(int ipar = 0; ipar < parNames.size(); ipar++) f_fit->SetParName(ipar, parNames[ipar]);
-	
 	return nParameters;
 }
 
-
-void MggFitter::InitializeFitParameters()
+int MggFitter::InitializeFitParameters()
 {
 	// Initialize parameter values to something that will not produce nans:
 	
@@ -287,6 +184,13 @@ void MggFitter::InitializeFitParameters()
 			f_fit->FixParameter(3, 0.56);
 			f_fit->FixParameter(4, 0.02);
 			break;
+		case 7:
+			nParameters = 4;
+			f_fit->FixParameter(0, 0.0);
+			f_fit->FixParameter(1, 0.0);
+			f_fit->FixParameter(2, 0.0);
+			f_fit->FixParameter(3, 0.0);
+			break;
 	}
 	
 	switch(fitOption_omega) {
@@ -333,12 +237,18 @@ void MggFitter::InitializeFitParameters()
 	f_fit->FixParameter(nParameters+0, 0.0);
 	f_fit->FixParameter(nParameters+1, EtaAnalyzer::m_massEtap);
 	f_fit->FixParameter(nParameters+2, 0.02);
+	nParameters += 3;
 	
-	return;
+	// A free parameter for the normalization of the empty target background:
+	if(fitOption_empty==1) f_fit->FixParameter(nParameters, 1.0);
+	else f_fit->FixParameter(nParameters, 0.0);
+	nParameters += 1;
+	
+	return nParameters;
 }
 
 
-double MggFitter::mggFitFunction(double *x, double *par)
+double MggFitter::MggFitFunction(double *x, double *par)
 {
 	double locMgg = x[0];
 	
@@ -454,6 +364,22 @@ double MggFitter::mggFitFunction(double *x, double *par)
 			fEta += (A_eta_inc * exp(-0.5*pow(x_eta_inc,2.0)));
 			break;
 		}
+		case 7:
+		{
+			// Line shape from simulation:
+			
+			nSignalPars = 4;
+			
+			double     N_eta = par[0];
+			double   dmu_eta = par[1];
+			double   N_etapi = par[2];
+			double dmu_etapi = par[3];
+			
+			//fEta = (N_eta * h_etaLineshape->GetBinContent(h_etaLineshape->FindBin(locMgg-dmu_eta))
+			//	+ N_etapi * f_etaPionLineshape->Eval(locMgg-dmu_eta));
+			fEta = (N_eta*f_etaLineshape->Eval(locMgg-dmu_eta) + N_etapi*f_etaPionLineshape->Eval(locMgg-dmu_eta));
+			break;
+		}
 	}
 	
 	//==================================================================================//
@@ -544,7 +470,7 @@ double MggFitter::mggFitFunction(double *x, double *par)
 			// Chebyshev polynomial:
 			nBkgdPars = fitOption_poly + 1;
 			for(int ipar=0; ipar<=fitOption_poly; ipar++) {
-				double locPar = par[nSignalPars+nOmegaPars+ipar];
+				double locPar = par[nSignalPars + nOmegaPars + ipar];
 				f_chebyshev->SetParameter(ipar, locPar);
 			}
 			fBkgd = f_chebyshev->Eval(locMgg);
@@ -562,6 +488,7 @@ double MggFitter::mggFitFunction(double *x, double *par)
 	
 	double fEtaPrime = 0.0;
 	
+	int nEtapPars = 0;
 	if(fitOption_etap==1) {
 		double     N_etap = par[nSignalPars + nOmegaPars + nBkgdPars + 0];
 		double    mu_etap = par[nSignalPars + nOmegaPars + nBkgdPars + 1];
@@ -569,9 +496,20 @@ double MggFitter::mggFitFunction(double *x, double *par)
 		double     A_etap = N_etap * binSize / sqrt(2.0*TMath::Pi()) / sigma_etap;
 		
 		fEtaPrime = A_etap*exp(-0.5*pow((locMgg-mu_etap)/sigma_etap, 2.0));
+		nEtapPars = 3;
 	}
-	//----------------------------------------------------------------------------------//
 	
-	double fMgg = fEta + fOmega + fBkgd + fEtaPrime;
+	//==================================================================================//
+	// Empty target:
+	
+	double fEmpty = 0.0;
+	if(fitOption_empty==1) {
+		double N_empty = par[nSignalPars + nOmegaPars + nBkgdPars + nEtapPars];
+		fEmpty = N_empty * m_emptyRatio * f_empty->Eval(locMgg);
+	}
+	
+	//==================================================================================//
+	
+	double fMgg = fEta + fOmega + fBkgd + fEtaPrime + fEmpty;
 	return fMgg;
 }

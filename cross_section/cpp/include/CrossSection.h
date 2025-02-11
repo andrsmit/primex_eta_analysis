@@ -3,15 +3,16 @@
 
 #include "EtaAnalyzer.h"
 #include "MggFitter.h"
+#include "YieldFitter.h"
 #include "MyReadConfig.h"
 #include "TApplication.h"
 
 struct configSettings_t {
-	int primexPhase    = 1;
-	int analysisOption = 1;
+	int primexPhase    = -1;
+	int analysisOption =  1;
 };
 
-int LoadConfigSettings(EtaAnalyzer&, TString);
+int LoadConfigSettings(EtaAnalyzer&, TString, int);
 void printUsage(configSettings_t, int);
 
 // For styling:
@@ -31,9 +32,17 @@ double Chebyshev5(double, double, double, double, double, double, double);
 // Crystal Ball functions for Omega Lineshape fitting:
 double CrystalBall(double *x, double *par);
 double CrystalBall2(double *x, double *par);
+double CrystalBall_flip(double *x, double *par);
+double CrystalBall2_flip(double *x, double *par);
+double CrystalBall3_flip(double *x, double *par);
 
-// Function to initialize fitter object:
-void InitializeFitterSettings(MggFitter &fitter, EtaAnalyzer *anaObj);
+double DoubleGaus(double *x, double *par);
+
+// Function to mgg initialize fitter object:
+void InitializeMggFitter(MggFitter &fitter, EtaAnalyzer *anaObj, double angle);
+
+// Function to yield initialize fitter object:
+int InitializeYieldFitter(YieldFitter &fitter, EtaAnalyzer anaObj);
 
 // Main function of executable:
 

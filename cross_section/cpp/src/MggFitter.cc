@@ -14,8 +14,8 @@ void MggFitter::DrawFitResults(TCanvas &canvas)
 
 void MggFitter::FitData()
 {
-	if(f_fit==NULL) InitializeFitFunction();
-	InitializeFitParameters();
+	InitializeFitFunction(&f_fit);
+	m_nParameters = InitializeFitParameters();
 	
 	//-----------------------------------------------------------------//
 	// release omega parameters and fit the region around the peak:
@@ -48,6 +48,15 @@ void MggFitter::FitData()
 	
 	f_fit->SetRange(minFitRange, maxFitRange);
 	
+	// if we're fitting with the empty target pdf, release that normalization here:
+	if(fitOption_empty) {
+		if(emptyFitOption_eta>1)   f_empty->SetParameter("N_{#eta}",   0.0);
+		if(emptyFitOption_omega>1) f_empty->SetParameter("N_{#omega}", 0.0);
+		
+		GuessEmptyParameters();
+		h_data->Fit(f_fit, fitOption);
+	}
+	
 	GuessBkgdParameters();
 	h_data->Fit(f_fit, fitOption);
 	
@@ -65,7 +74,7 @@ void MggFitter::FitData()
 		h_data->Fit(f_fit, fitOption);
 	}
 	
-	if(fitOption_signal==6) {
+	if(fitOption_signal==6 && angle>0.5) {
 		
 		// Use a second Gaussian to approximate shape of inclusive background:
 		
@@ -77,14 +86,28 @@ void MggFitter::FitData()
 		f_fit->ReleaseParameter(   mu_eta_par);
 		f_fit->ReleaseParameter(sigma_eta_par);
 		
-		f_fit->SetParameter(    N_eta_par, f_fit->GetParameter(N_eta_par)    );
-		f_fit->SetParameter(   mu_eta_par, f_fit->GetParameter(mu_eta_par)   );
-		f_fit->SetParameter(sigma_eta_par, f_fit->GetParameter(sigma_eta_par));
-		
 		f_fit->SetParLimits(    N_eta_par, 0.,   1.e5);
 		f_fit->SetParLimits(   mu_eta_par, 0.55, 0.62);
 		f_fit->SetParLimits(sigma_eta_par, 0.015, 0.05);
 		
+		h_data->Fit(f_fit, fitOption);
+	}
+	
+	if(fitOption_signal==7) {
+		
+		FixBkgdParameters();
+		
+		// Use a eta+pion lineshape from bggen:
+		f_fit->SetRange(0.5, 0.62);
+		
+		int N_etapi_par = f_fit->GetParNumber("N_{#eta#pi}");
+		f_fit->ReleaseParameter(N_etapi_par);
+		f_fit->SetParLimits(N_etapi_par, 0., 1.e5);
+		
+		h_data->Fit(f_fit, fitOption);
+		
+		f_fit->SetRange(minFitRange, maxFitRange);
+		ReleaseBkgdParameters();
 		h_data->Fit(f_fit, fitOption);
 	}
 	
@@ -342,13 +365,13 @@ void MggFitter::GuessBkgdParameters() {
 			f_fit->SetParameter(p0Par, p0Guess);
 			f_fit->SetParameter(p1Par, p1Guess);
 			f_fit->SetParameter(p2Par, p2Guess);
-			//f_fit->SetParameter(p3Par, p3Guess);
+			f_fit->SetParameter(p3Par, p3Guess);
 			f_fit->SetParameter(p4Par, p4Guess);
 			
 			f_fit->SetParLimits(p0Par,  0.00, 1.e4);
 			f_fit->SetParLimits(p1Par, -1.e3, 1.e3);
-			f_fit->SetParLimits(p2Par, -1.e3, 1.e3);
-			//f_fit->SetParLimits(p3Par, -1.e3, 1.e3);
+			f_fit->SetParLimits(p2Par, -1.e3, 0.);
+			f_fit->SetParLimits(p3Par, -1.e3, 1.e3);
 			f_fit->SetParLimits(p4Par,  0.00, 0.50);
 			break;
 		}
@@ -363,7 +386,6 @@ void MggFitter::GuessBkgdParameters() {
 			break;
 		}
 	}
-	
 	return;
 }
 
@@ -401,7 +423,6 @@ void MggFitter::FixBkgdParameters() {
 			break;
 		}
 	}
-	
 	return;
 }
 
@@ -437,7 +458,7 @@ void MggFitter::ReleaseBkgdParameters() {
 			
 			f_fit->SetParLimits(p0Par,  0.00, 1.e4);
 			f_fit->SetParLimits(p1Par, -1.e3, 1.e3);
-			f_fit->SetParLimits(p2Par, -1.e3, 1.e3);
+			f_fit->SetParLimits(p2Par, -1.e3, 0.);
 			f_fit->SetParLimits(p3Par, -1.e3, 1.e3);
 			f_fit->SetParLimits(p4Par,  0.00, 0.50);
 			break;
@@ -448,12 +469,11 @@ void MggFitter::ReleaseBkgdParameters() {
 			for(int ipar=0; ipar<=fitOption_poly; ipar++) {
 				int locParIndex = f_fit->GetParNumber(Form("p%d",ipar));
 				f_fit->ReleaseParameter(locParIndex);
-				f_fit->SetParLimits(locParIndex, 0.0, 1.e4);
+				f_fit->SetParLimits(locParIndex, -1.e4, 1.e4);
 			}
 			break;
 		}
 	}
-	
 	return;
 }
 
@@ -494,8 +514,8 @@ void MggFitter::GuessEtaParameters() {
 	
 	// guess number of eta' by integrating histogram and subtracting background:
 	
-	double minEtaFit = 0.52;
-	double maxEtaFit = 0.59;
+	double minEtaFit = 0.50;
+	double maxEtaFit = 0.60;
 	
 	double     nEtaGuess = h_data->Integral(h_data->FindBin(minEtaFit), h_data->FindBin(maxEtaFit));
 	double    muEtaGuess = EtaAnalyzer::m_massEta;
@@ -552,13 +572,11 @@ void MggFitter::GuessEtaParameters() {
 			f_fit->SetParLimits(sigma1EtaPar,  0.01, 0.03);
 			f_fit->SetParLimits(sigma2EtaPar,  0.01, 0.05);
 			
-			/*
-			if(angle<1.0) {
+			if(angle<0.5) {
 				f_fit->FixParameter(    n2EtaPar, 0.0);
 				f_fit->FixParameter(   dmuEtaPar, 0.0);
 				f_fit->FixParameter(sigma2EtaPar, 2.0*sigmaEtaGuess);
 			}
-			*/
 			break;
 		}
 		case 3:
@@ -605,7 +623,21 @@ void MggFitter::GuessEtaParameters() {
 		}
 		case 6:
 		{
-			// Lineshape fit:
+			// Start with Lineshape fit:
+			
+			int   nEtaPar = f_fit->GetParNumber("N_{#eta}");
+			int dmuEtaPar = f_fit->GetParNumber("#Delta#mu_{#eta}");
+			
+			f_fit->SetParameter(  nEtaPar, nEtaGuess);
+			f_fit->SetParameter(dmuEtaPar, 0.005);
+			
+			f_fit->SetParLimits(  nEtaPar,  0.00, 1.e5);
+			f_fit->SetParLimits(dmuEtaPar, -0.01, 0.02);
+			break;
+		}
+		case 7:
+		{
+			// Start with Lineshape fit:
 			
 			int   nEtaPar = f_fit->GetParNumber("N_{#eta}");
 			int dmuEtaPar = f_fit->GetParNumber("#Delta#mu_{#eta}");
@@ -618,6 +650,289 @@ void MggFitter::GuessEtaParameters() {
 			break;
 		}
 	}
+	return;
+}
+
+
+void MggFitter::GuessEmptyParameters()
+{
+	if(fitOption_empty!=1) return;
+	
+	int nEmptyPar = f_fit->GetParNumber("N_{empty}");
+	f_fit->SetParameter(nEmptyPar, m_emptyRatio);
+	f_fit->SetParLimits(nEmptyPar, m_emptyRatio-m_emptyRatioErr, m_emptyRatio+m_emptyRatioErr);
+	
+	return;
+}
+
+void MggFitter::FixEmptyParameters()
+{
+	if(fitOption_empty!=1) return;
+	
+	int nEmptyPar = f_fit->GetParNumber("N_{empty}");
+	f_fit->FixParameter(nEmptyPar, f_fit->GetParameter(nEmptyPar));
+	return;
+}
+
+void MggFitter::FitEtaLineshape(int drawOption)
+{
+	if(h_etaLineshape==NULL) return;
+	
+	
+	TF1 *fEta1 = new TF1("fEta1", CrystalBall, 0.4, 0.65, 5);
+	
+	double     nEtaGuess = h_etaLineshape->Integral(h_etaLineshape->FindBin(0.5), 
+		h_etaLineshape->FindBin(0.6));
+	double    muEtaGuess = 0.547;
+	double sigmaEtaGuess = 0.015;
+	double alphaEtaGuess = 1.0;
+	double    nnEtaGuess = 2.0;
+	
+	fEta1->SetParameter(0,     nEtaGuess);
+	fEta1->SetParameter(1,    muEtaGuess);
+	fEta1->SetParameter(2, sigmaEtaGuess);
+	fEta1->SetParameter(3, alphaEtaGuess);
+	fEta1->SetParameter(4,    nnEtaGuess);
+	
+	fEta1->SetParLimits(0, 0.000, 1.e6);
+	fEta1->SetParLimits(1, 0.530, 0.560);
+	fEta1->SetParLimits(2, 0.005, 0.050);
+	fEta1->SetParLimits(3, 0.500, 9.999);
+	fEta1->SetParLimits(4, 0.100, 9.999);
+	
+	h_etaLineshape->Fit(fEta1, "R0QL");
+	
+	TF1 *fEta2 = new TF1("fEta2", CrystalBall2, 0.4, 0.65, 10);
+	for(int i=0; i<10; i++) {
+		fEta2->SetParameter(i, fEta1->GetParameter(i%5));
+	}
+	
+	fEta2->SetParameter(5, 0.0);
+	fEta2->SetParameter(7, fEta1->GetParameter(2)*2.0);
+	
+	fEta2->SetParLimits(0, 0.000, 1.e6);
+	fEta2->SetParLimits(1, 0.530, 0.560);
+	fEta2->SetParLimits(2, 0.005, 0.050);
+	fEta2->SetParLimits(3, 0.500, 9.999);
+	fEta2->SetParLimits(4, 0.100, 9.999);
+	
+	fEta2->SetParLimits(5, 0.000, 1.e6);
+	fEta2->SetParLimits(6, 0.500, 0.600);
+	fEta2->SetParLimits(7, 0.010, 0.100);
+	fEta2->SetParLimits(8, 0.500, 9.999);
+	fEta2->SetParLimits(9, 0.100, 9.999);
+	
+	h_etaLineshape->Fit(fEta2, "R0QL");
+	
+	if(drawOption) {
+		TCanvas *cEtaLS = new TCanvas("cEtaLS", "cEtaLS", 950, 700);
+		//cEtaLS->SetLogy();
+		h_etaLineshape->GetXaxis()->SetRangeUser(0.4,0.7);
+		h_etaLineshape->Draw();
+		fEta2->Draw("same");
+		
+		TF1 *fEtaA = new TF1("fEtaA", CrystalBall, 0.4, 0.7, 5);
+		for(int i=0; i<5; i++) fEtaA->SetParameter(i, fEta2->GetParameter(i));
+		fEtaA->SetLineColor(kBlue);
+		fEtaA->SetLineStyle(2);
+		
+		TF1 *fEtaB = new TF1("fEtaB", CrystalBall, 0.4, 0.7, 5);
+		for(int i=0; i<5; i++) fEtaB->SetParameter(i, fEta2->GetParameter(i+5));
+		fEtaB->SetLineColor(kMagenta);
+		fEtaB->SetLineStyle(2);
+		
+		fEtaA->Draw("same");
+		fEtaB->Draw("same");
+		
+		cEtaLS->Update();
+		getchar();
+		delete cEtaLS;
+	}
+	
+	f_etaLineshape = new TF1("f_etaLineshape", CrystalBall2, minFitRange, maxFitRange, 10);
+	f_etaLineshape->SetParameters(fEta2->GetParameters());
+	
+	fEta1->Delete();
+	fEta2->Delete();
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	/*
+	TF1 *fEta = new TF1("fEta", DoubleGaus, 0.45, 0.65, 6);
+	
+	fEta->FixParameter(3, 0.0);
+	fEta->FixParameter(4, 0.547);
+	fEta->FixParameter(5, 0.02);
+	
+	double aEtaGuess     = h_etaLineshape->GetMaximum();
+	double muEtaGuess    = h_etaLineshape->GetBinCenter(h_etaLineshape->GetMaximumBin());
+	double sigmaEtaGuess = 0.01;
+	
+	// fit only region around peak first:
+	
+	fEta->SetRange(muEtaGuess-1.5*sigmaEtaGuess, muEtaGuess+1.5*sigmaEtaGuess);
+	
+	fEta->SetParameter(0,     aEtaGuess);
+	fEta->SetParameter(1,    muEtaGuess);
+	fEta->SetParameter(2, sigmaEtaGuess);
+	
+	fEta->SetParLimits(0, 0.000, 1.000);
+	fEta->SetParLimits(1, 0.530, 0.580);
+	fEta->SetParLimits(2, 0.005, 0.030);
+	
+	h_etaLineshape->Fit(fEta, "R0Q");
+	
+	// Now let second Gaussian float:
+	
+	fEta->ReleaseParameter(3);
+	fEta->SetParameter(3, 0.1*fEta->GetParameter(0));
+	fEta->SetParLimits(3, 0.0, 1.0);
+	
+	fEta->ReleaseParameter(4);
+	fEta->SetParameter(4, fEta->GetParameter(1));
+	fEta->SetParLimits(4, 0.530, 0.580);
+	
+	fEta->ReleaseParameter(5);
+	fEta->SetParameter(5, 2.0*fEta->GetParameter(2));
+	fEta->SetParLimits(5, 0.010, 0.050);
+	
+	fEta->SetRange(0.5, 0.6);
+	
+	h_etaLineshape->Fit(fEta, "R0Q");
+	
+	if(drawOption) {
+		TCanvas *cEtaLS = new TCanvas("cEtaLS", "cEtaLS", 950, 700);
+		cEtaLS->SetLogy();
+		h_etaLineshape->GetXaxis()->SetRangeUser(0.4,0.7);
+		h_etaLineshape->Draw();
+		fEta->SetRange(0.4, 0.7);
+		fEta->Draw("same");
+		
+		TF1 *fEtaA = new TF1("fEtaA", "gaus", 0.4, 0.7);
+		for(int i=0; i<3; i++) fEtaA->SetParameter(i, fEta->GetParameter(i));
+		fEtaA->SetLineColor(kBlue);
+		fEtaA->SetLineStyle(2);
+		
+		TF1 *fEtaB = new TF1("fEtaB", "gaus", 0.4, 0.7);
+		for(int i=0; i<3; i++) fEtaB->SetParameter(i, fEta->GetParameter(i+3));
+		fEtaB->SetLineColor(kMagenta);
+		fEtaB->SetLineStyle(2);
+		
+		//fEtaA->Draw("same");
+		//fEtaB->Draw("same");
+		
+		cEtaLS->Update();
+		getchar();
+		delete cEtaLS;
+		delete fEtaA;
+		delete fEtaB;
+	}
+	
+	f_etaLineshape = new TF1("f_etaLineshape", DoubleGaus, minFitRange, maxFitRange, 6);
+	f_etaLineshape->SetParameters(fEta->GetParameters());
+	
+	fEta->Delete();
+	*/
+	return;
+}
+
+void MggFitter::FitEtaPionLineshape(int drawOption)
+{
+	if(fitOption_signal<7) return;
+	if(h_etaPionLineshape==NULL) return;
+	
+	TF1 *fEtaPion1 = new TF1("fEtaPion1", CrystalBall_flip, 0.5, 0.7, 5);
+	
+	double     nEtaPionGuess = h_etaPionLineshape->Integral(h_etaPionLineshape->FindBin(0.5), 
+		h_etaPionLineshape->FindBin(0.625));
+	double    muEtaPionGuess =  0.56;
+	double sigmaEtaPionGuess =  0.015;
+	double alphaEtaPionGuess =  1.0;
+	double    nnEtaPionGuess =  2.0;
+	
+	double locEtaPionMax = 0.0;
+	for(int ibin=h_etaPionLineshape->FindBin(0.5); ibin<=h_etaPionLineshape->FindBin(0.6); ibin++) {
+		if(h_etaPionLineshape->GetBinContent(ibin) > locEtaPionMax) {
+			locEtaPionMax  = h_etaPionLineshape->GetBinContent(ibin);
+			muEtaPionGuess = h_etaPionLineshape->GetBinCenter(ibin);
+		}
+	}
+	
+	fEtaPion1->SetParameter(0,     nEtaPionGuess);
+	fEtaPion1->SetParameter(1,    muEtaPionGuess);
+	fEtaPion1->SetParameter(2, sigmaEtaPionGuess);
+	fEtaPion1->SetParameter(3, alphaEtaPionGuess);
+	fEtaPion1->SetParameter(4,    nnEtaPionGuess);
+	
+	fEtaPion1->SetParLimits(0,  0.000,  1.e6);
+	fEtaPion1->SetParLimits(1,  0.540,  0.600);
+	fEtaPion1->SetParLimits(2,  0.010,  0.050);
+	fEtaPion1->SetParLimits(3,  0.500,  9.999);
+	fEtaPion1->SetParLimits(4,  0.100,  9.999);
+	
+	h_etaPionLineshape->Fit(fEtaPion1, "R0QL");
+	
+	TF1 *fEtaPion2 = new TF1("fEtaPion2", CrystalBall2_flip, 0.5, 0.7, 10);
+	for(int i=0; i<10; i++) {
+		fEtaPion2->SetParameter(i, fEtaPion1->GetParameter(i%5));
+	}
+	
+	fEtaPion2->SetParameter(5, 0.0);
+	fEtaPion2->SetParameter(7, fEtaPion1->GetParameter(2)*2.0);
+	
+	fEtaPion2->SetParLimits(0,  0.000,  1.e6);
+	fEtaPion2->SetParLimits(1,  0.540,  0.600);
+	fEtaPion2->SetParLimits(2,  0.010,  0.050);
+	fEtaPion2->SetParLimits(3,  0.500,  9.999);
+	fEtaPion2->SetParLimits(4,  0.100,  9.999);
+	
+	fEtaPion2->SetParLimits(5,  0.000,  1.e6);
+	fEtaPion2->SetParLimits(6,  0.540,  0.620);
+	fEtaPion2->SetParLimits(7,  0.010,  0.100);
+	fEtaPion2->SetParLimits(8,  0.500,  9.999);
+	fEtaPion2->SetParLimits(9,  0.100,  9.999);
+	
+	h_etaPionLineshape->Fit(fEtaPion2, "R0QL");
+	
+	if(drawOption) {
+		TCanvas *cEtaPionLS = new TCanvas("cEtaPionLS", "cEtaPionLS", 950, 700);
+		//cEtaPionLS->SetLogy();
+		h_etaPionLineshape->Draw();
+		fEtaPion2->Draw("same");
+		
+		TF1 *fEtaPionA = new TF1("fEtaPionA", CrystalBall_flip, 0.2, 1.0, 5);
+		for(int i=0; i<5; i++) fEtaPionA->SetParameter(i, fEtaPion2->GetParameter(i));
+		fEtaPionA->SetLineColor(kBlue);
+		fEtaPionA->SetLineStyle(2);
+		
+		TF1 *fEtaPionB = new TF1("fEtaPionB", CrystalBall_flip, 0.2, 1.0, 5);
+		for(int i=0; i<5; i++) fEtaPionB->SetParameter(i, fEtaPion2->GetParameter(i+5));
+		fEtaPionB->SetLineColor(kMagenta);
+		fEtaPionB->SetLineStyle(2);
+		
+		fEtaPionA->Draw("same");
+		fEtaPionB->Draw("same");
+		
+		cEtaPionLS->Update();
+		getchar();
+		delete cEtaPionLS;
+	}
+	
+	f_etaPionLineshape = new TF1("f_etaPionLineshape", CrystalBall2_flip, minFitRange, maxFitRange, 10);
+	f_etaPionLineshape->SetParameters(fEtaPion2->GetParameters());
+	
+	fEtaPion1->Delete();
+	fEtaPion2->Delete();
 	
 	return;
 }
@@ -713,6 +1028,100 @@ void MggFitter::FitOmegaLineshape(int drawOption)
 	return;
 }
 
+void MggFitter::FitFDCOmegaLineshape(int drawOption)
+{
+	if(h_fdcOmegaLineshape==NULL) return;
+	
+	TF1 *fOmega1 = new TF1("fOmega1", CrystalBall, 0.2, 0.7, 5);
+	
+	double    muOmegaGuess = h_fdcOmegaLineshape->GetBinCenter(h_fdcOmegaLineshape->GetMaximumBin());
+	double     nOmegaGuess = h_fdcOmegaLineshape->Integral(h_fdcOmegaLineshape->FindBin(muOmegaGuess-0.05), 
+		h_fdcOmegaLineshape->FindBin(muOmegaGuess+0.05));
+	double sigmaOmegaGuess = 0.025;
+	double alphaOmegaGuess = 1.0;
+	double    nnOmegaGuess = 2.0;
+	
+	fOmega1->SetParameter(0,     nOmegaGuess);
+	fOmega1->SetParameter(1,    muOmegaGuess);
+	fOmega1->SetParameter(2, sigmaOmegaGuess);
+	fOmega1->SetParameter(3, alphaOmegaGuess);
+	fOmega1->SetParameter(4,    nnOmegaGuess);
+	
+	fOmega1->SetParLimits(0, 0.000, 1.e6);
+	fOmega1->SetParLimits(1, muOmegaGuess-0.05, muOmegaGuess+0.05);
+	fOmega1->SetParLimits(2, 0.005, 0.050);
+	
+	h_fdcOmegaLineshape->Fit(fOmega1, "R0QL");
+	
+	TF1 *fOmega2 = new TF1("fOmega2", CrystalBall2, 0.2, 0.7, 10);
+	for(int i=0; i<10; i++) {
+		fOmega2->SetParameter(i, fOmega1->GetParameter(i%5));
+	}
+	
+	fOmega2->SetParameter(5, 0.0);
+	fOmega2->SetParameter(7, fOmega1->GetParameter(2)*2.0);
+	
+	fOmega2->SetParLimits(0, 0.000, 1.e6);
+	fOmega2->SetParLimits(1, muOmegaGuess-0.05, muOmegaGuess+0.05);
+	fOmega2->SetParLimits(2, 0.005, 0.050);
+	
+	fOmega2->SetParLimits(5, 0.000, 1.e6);
+	fOmega2->SetParLimits(6, muOmegaGuess-0.10, muOmegaGuess+0.05);
+	fOmega2->SetParLimits(7, 0.005, 0.200);
+	
+	h_fdcOmegaLineshape->Fit(fOmega2, "R0QL");
+	/*
+	TF1 *fOmega3 = new TF1("fOmega3", CrystalBall3, 0.2, 0.9, 10);
+	for(int i=0; i<15; i++) {
+		fOmega3->SetParameter(i, fOmega2->GetParameter(i%5));
+	}
+	
+	fOmega3->SetParameter(10, 0.0);
+	fOmega3->SetParameter(12, fOmega2->GetParameter(2)*2.0);
+	
+	fOmega2->SetParLimits(0, 0.000, 1.e6);
+	fOmega1->SetParLimits(1, muOmegaGuess-0.05, muOmegaGuess+0.05);
+	fOmega2->SetParLimits(2, 0.005, 0.050);
+	
+	fOmega2->SetParLimits(5, 0.000, 1.e6);
+	fOmega1->SetParLimits(6, muOmegaGuess-0.1, muOmegaGuess+0.1);
+	fOmega2->SetParLimits(7, 0.005, 0.100);
+	
+	h_fdcOmegaLineshape->Fit(fOmega2, "R0QL");
+	*/
+	if(drawOption) {
+		TCanvas *cFDCOmegaLS = new TCanvas("cFDCOmegaLS", "cFDCOmegaLS", 950, 700);
+		//cFDCOmegaLS->SetLogy();
+		h_fdcOmegaLineshape->Draw();
+		fOmega2->Draw("same");
+		
+		TF1 *fOmegaA = new TF1("fOmegaA", CrystalBall, 0.2, 1.0, 5);
+		for(int i=0; i<5; i++) fOmegaA->SetParameter(i, fOmega2->GetParameter(i));
+		fOmegaA->SetLineColor(kBlue);
+		fOmegaA->SetLineStyle(2);
+		
+		TF1 *fOmegaB = new TF1("fOmegaB", CrystalBall, 0.2, 1.0, 5);
+		for(int i=0; i<5; i++) fOmegaB->SetParameter(i, fOmega2->GetParameter(i+5));
+		fOmegaB->SetLineColor(kMagenta);
+		fOmegaB->SetLineStyle(2);
+		
+		fOmegaA->Draw("same");
+		fOmegaB->Draw("same");
+		
+		cFDCOmegaLS->Update();
+		getchar();
+		delete cFDCOmegaLS;
+	}
+	
+	f_fdcOmegaLineshape = new TF1("f_fdcOmegaLineshape", CrystalBall2, minFitRange, maxFitRange, 10);
+	f_fdcOmegaLineshape->SetParameters(fOmega2->GetParameters());
+	
+	fOmega1->Delete();
+	fOmega2->Delete();
+	
+	return;
+}
+
 void MggFitter::GetYield(double &yield, double &yieldErr, int useFitPars) {
 	
 	// if useFitPars==0 (default), extract yield by integrating counts and subtracting bkgd parameters
@@ -738,17 +1147,26 @@ void MggFitter::GetYield(double &yield, double &yieldErr, int useFitPars) {
 	//-----------------------------------------------//
 	
 	TF1 *locfBkgd;
-	InitializeFitFunction(&locfBkgd, "locBkgdClone");
+	int nParameters = InitializeFitFunction(&locfBkgd, "locBkgdClone");
 	locfBkgd->SetParameters(f_fit->GetParameters());
 	ZeroSignalPars(locfBkgd);
 	
 	if(useFitPars==0) {
 		for(int ibin=minMggBin; ibin<=maxMggBin; ibin++) {
+			double locData = h_data->GetBinContent(ibin);
 			double locBkgd = locfBkgd->Eval(h_data->GetBinCenter(ibin));
-			yield    += h_data->GetBinContent(ibin) - locBkgd;
-			yieldErr += h_data->GetBinContent(ibin) + locBkgd;
+			yield    += locData - locBkgd;
+			yieldErr += pow(h_data->GetBinError(ibin),2.0) + locBkgd;
+			//printf("  %f: %f  %f\n", h_data->GetBinCenter(ibin), locData, locBkgd);
 		}
 		yieldErr = sqrt(yieldErr);
+		/*
+		// For debugging:
+		printf("\n\n");
+		for(int ipar=0; ipar<nParameters; ipar++) {
+			printf(" %s: %f +/- %f\n", locfBkgd->GetParName(ipar), locfBkgd->GetParameter(ipar), locfBkgd->GetParError(ipar));
+		}
+		*/
 	}
 	else {
 		switch(fitOption_signal) {
@@ -849,8 +1267,8 @@ void MggFitter::GetYield(double &yield, double &yieldErr, int useFitPars) {
 				// Lineshape + Extra Gaussian:
 				int yieldPar = f_fit->GetParNumber("N_{#eta}");
 				
-				int locMinMggBin = h_etaLineshape->FindBin(locMinMggCut);
-				int locMaxMggBin = h_etaLineshape->FindBin(locMaxMggCut)-1;
+				int locMinMggBin = h_etaLineshape->FindBin(locMinMggCut + 0.5*h_etaLineshape->GetBinWidth(1));
+				int locMaxMggBin = h_etaLineshape->FindBin(locMaxMggCut - 0.5*h_etaLineshape->GetBinWidth(1));
 				
 				double lsMinMggCut = h_etaLineshape->GetBinCenter(locMinMggBin) - 0.5*h_etaLineshape->GetBinWidth(1);
 				double lsMaxMggCut = h_etaLineshape->GetBinCenter(locMaxMggBin) + 0.5*h_etaLineshape->GetBinWidth(1);
@@ -865,6 +1283,65 @@ void MggFitter::GetYield(double &yield, double &yieldErr, int useFitPars) {
 				double binSizeRatio = h_etaLineshape->GetBinWidth(1) / binSize;
 				
 				yield    = h_etaLineshape->Integral(locMinMggBin, locMaxMggBin) * f_fit->GetParameter(yieldPar) * binSizeRatio;
+				
+				// add in the yield measured by the additional Gaussian:
+				
+				double locN     = f_fit->GetParameter("N_{#eta,inc}");
+				double locMu    = f_fit->GetParameter("#mu_{#eta,inc}");
+				double locSigma = f_fit->GetParameter("#sigma_{#eta,inc}");
+				double locA     = locN * binSize / sqrt(2.0*TMath::Pi()) / locSigma;
+				
+				yield += (IntegrateGaussian(locA, locMu, locSigma, locMinMggCut, locMaxMggCut) / binSize);
+				
+				yieldErr = h_etaLineshape->Integral(locMinMggBin, locMaxMggBin) * f_fit->GetParameter(yieldPar) * binSizeRatio;
+				break;
+			}
+			case 7:
+			{
+				// Eta Lineshape + Eta+Pion Lineshape:
+				int yieldPar = f_fit->GetParNumber("N_{#eta}");
+				
+				int locMinMggBin = h_etaLineshape->FindBin(locMinMggCut + 0.5*h_etaLineshape->GetBinWidth(1));
+				int locMaxMggBin = h_etaLineshape->FindBin(locMaxMggCut - 0.5*h_etaLineshape->GetBinWidth(1));
+				
+				double lsMinMggCut = h_etaLineshape->GetBinCenter(locMinMggBin) - 0.5*h_etaLineshape->GetBinWidth(1);
+				double lsMaxMggCut = h_etaLineshape->GetBinCenter(locMaxMggBin) + 0.5*h_etaLineshape->GetBinWidth(1);
+				
+				// check that lsMinMggCut and lsMaxMggCut align with desired cut range:
+				if((fabs(lsMinMggCut-locMinMggCut)>1.e-6) || (fabs(lsMaxMggCut-locMaxMggCut)>1.e-6)) {
+					printf("\n\nWarning: Mgg binning of eta lineshape does not overlap with data.\n");
+					printf("  Lineshape cut range: %f GeV - %f GeV\n", lsMinMggCut, lsMaxMggCut);
+					printf("  Data cut range: %f GeV - %f GeV\n\n", locMinMggCut, locMaxMggCut);
+				}
+				
+				double binSizeRatio = h_etaLineshape->GetBinWidth(1) / binSize;
+				
+				//yield = h_etaLineshape->Integral(locMinMggBin, locMaxMggBin) * f_fit->GetParameter(yieldPar) * binSizeRatio;
+				yield = (f_etaLineshape->Integral(0.5,0.6)/binSize) * f_fit->GetParameter(yieldPar);
+				
+				// add in the yield measured by the additional Gaussian:
+				
+				int yieldPar2 = f_fit->GetParNumber("N_{#eta#pi}");
+				
+				int locMinMggBin2 = h_etaPionLineshape->FindBin(locMinMggCut + 0.5*h_etaPionLineshape->GetBinWidth(1));
+				int locMaxMggBin2 = h_etaPionLineshape->FindBin(locMaxMggCut - 0.5*h_etaPionLineshape->GetBinWidth(1));
+				
+				double lsMinMggCut2 = h_etaPionLineshape->GetBinCenter(locMinMggBin2) - 0.5*h_etaPionLineshape->GetBinWidth(1);
+				double lsMaxMggCut2 = h_etaPionLineshape->GetBinCenter(locMaxMggBin2) + 0.5*h_etaPionLineshape->GetBinWidth(1);
+				
+				// check that lsMinMggCut and lsMaxMggCut align with desired cut range:
+				if((fabs(lsMinMggCut2-locMinMggCut)>1.e-6) || (fabs(lsMaxMggCut2-locMaxMggCut)>1.e-6)) {
+					printf("\n\nWarning: Mgg binning of eta+pion lineshape does not overlap with data.\n");
+					printf("  Lineshape cut range: %f GeV - %f GeV\n", lsMinMggCut2, lsMaxMggCut2);
+					printf("  Data cut range: %f GeV - %f GeV\n\n", locMinMggCut, locMaxMggCut);
+				}
+				
+				double binSizeRatio2 = h_etaPionLineshape->GetBinWidth(1) / binSize;
+				
+				//yield += (h_etaPionLineshape->Integral(locMinMggBin2, locMaxMggBin2) * f_fit->GetParameter(yieldPar2) * binSizeRatio2);
+				//yield += ((f_etaPionLineshape->Integral(0.5,0.6)/binSize) * f_fit->GetParameter(yieldPar2));
+				
+				
 				yieldErr = h_etaLineshape->Integral(locMinMggBin, locMaxMggBin) * f_fit->GetParameter(yieldPar) * binSizeRatio;
 				break;
 			}
@@ -897,7 +1374,11 @@ void MggFitter::ZeroSignalPars(TF1 *f1)
 			break;
 		case 6:
 			f1->SetParameter("N_{#eta}",     0.0);
-			//f1->SetParameter("N_{#eta,inc}", 0.0);
+			f1->SetParameter("N_{#eta,inc}", 0.0);
+			break;
+		case 7:
+			f1->SetParameter("N_{#eta}",    0.0);
+			f1->SetParameter("N_{#eta#pi}", 0.0);
 			break;
 	}
 	return;
@@ -922,8 +1403,10 @@ void MggFitter::ZeroBkgdPars(TF1 *f1)
 			}
 			break;
 	}
-	f1->SetParameter("N_{#omega}", 0.0);
-	f1->SetParameter("N_{#eta'}", 0.0);
+	f1->SetParameter("N_{#omega}",  0.0);
+	f1->SetParameter("N_{#eta'}",   0.0);
+	f1->SetParameter("N_{#eta#pi}", 0.0);
+	f1->SetParameter("N_{empty}",   0.0);
 	return;
 }
 
@@ -937,7 +1420,6 @@ void MggFitter::FillPull(TH1F *h_pull)
 	if(h_pull->GetXaxis()->GetNbins() != h_data->GetXaxis()->GetNbins()) {
 		cout << "\nWarning: Issue with binning of pull histogram.\n" << endl;
 	}
-	
 	
 	for(int ibin=1; ibin<=h_pull->GetXaxis()->GetNbins(); ibin++) {
 		double loc_mgg = h_data->GetXaxis()->GetBinCenter(ibin);
@@ -958,10 +1440,50 @@ void MggFitter::FillPull(TH1F *h_pull)
 	return;
 }
 
+void MggFitter::FillEmptyPull(TH1F *h_pull)
+{
+	if(h_pull==NULL) {
+		return;
+	}
+	
+	// Just check that the binning of supplied histogram and h_data are consistent:
+	if(h_empty->GetXaxis()->GetNbins() != h_empty->GetXaxis()->GetNbins()) {
+		cout << "\nWarning: Issue with binning of empty pull histogram.\n" << endl;
+	}
+	
+	for(int ibin=1; ibin<=h_pull->GetXaxis()->GetNbins(); ibin++) {
+		double loc_mgg = h_empty->GetXaxis()->GetBinCenter(ibin);
+		double loc_unc = h_empty->GetBinError(ibin);
+		if(loc_unc <= 1.0) loc_unc = 1.0;
+		h_pull->SetBinContent(ibin, (h_empty->GetBinContent(ibin) - f_empty->Eval(loc_mgg))/loc_unc);
+		h_pull->SetBinError(ibin, 1.0);
+	}
+	h_pull->GetYaxis()->SetRangeUser(-6.5, 6.5);
+	
+	h_pull->GetXaxis()->SetTitleSize(0.15);
+	h_pull->GetXaxis()->SetLabelSize(0.10);
+	h_pull->GetYaxis()->SetTitle("#frac{Data-Fit}{#sigma}");
+	h_pull->GetYaxis()->SetTitleSize(0.125);
+	h_pull->GetYaxis()->SetTitleOffset(0.3);
+	h_pull->GetYaxis()->SetLabelSize(0.10);
+	
+	return;
+}
+
 double MggFitter::IntegrateGaussian(double A, double mu, double sigma, double x1, double x2)
 {
 	double erf1 = TMath::Erf((x1-mu)/(sqrt(2.0)*sigma));
 	double erf2 = TMath::Erf((x2-mu)/(sqrt(2.0)*sigma));
 	double integral = A * sigma * sqrt(TMath::Pi()/2.0) * (erf2 - erf1);
 	return integral;
+}
+
+void MggFitter::DumpFitParameters()
+{
+	printf("\n\nFit parameters:\n");
+	for(int ipar=0; ipar<m_nParameters; ipar++) {
+		printf("  p%d (%s): %f +/- %f\n", ipar, f_fit->GetParName(ipar), f_fit->GetParameter(ipar), f_fit->GetParError(ipar));
+	}
+	printf("\n\n");
+	return;
 }
