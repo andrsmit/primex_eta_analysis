@@ -80,18 +80,26 @@ int main(int argc, char **argv)
 	}
 	//------------------------------------------------//
 	
-	//locEtaAna.FitInvariantMass(0.4, 0.5, 1);
-	if(1) {
+	YieldFitter locFitter;
+	InitializeYieldFitter(locFitter, locEtaAna);
+	
+	if(0) {
 		locEtaAna.ExtractAngularYield(locDrawOption);
 		if(locEtaAna.CalcAcceptance()) {
 			cout << "\n\nProblem getting acceptance.\n\n" << endl;
 		}
 		locEtaAna.PlotAngularYield();
 		locEtaAna.PlotCrossSection();
+		locEtaAna.WriteROOTFile(Form("output/yield_phase%d.root",locEtaAna.GetPhase()));
+	}
+	else {
+		TFile *fIn = new TFile("output/yield_phase3.root", "READ");
+		TH1F *hYield = (TH1F*)fIn->Get("AngularYieldFit");
+		hYield->SetDirectory(0);
+		fIn->Close();
+		locFitter.SetYield(hYield);
 	}
 	
-	YieldFitter locFitter;
-	InitializeYieldFitter(locFitter, locEtaAna);
 	locFitter.FitAngularYield();
 	
 	gSystem->ProcessEvents();

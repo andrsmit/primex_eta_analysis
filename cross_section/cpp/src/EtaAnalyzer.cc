@@ -917,19 +917,9 @@ void EtaAnalyzer::ExtractAngularYield(int drawOption)
 			}
 			DrawFitResult(locHistFull, locPull, locfFit, locfSignal, locfBkgd, locfEtaPi, locfEmpty, locMinAngle, locMaxAngle);
 			
-			//getchar();
-			if((m_subtractEmpty==0) && (m_fitOption_empty==1)) {
-				//TF1 *locfEmpty = (TF1*)locFitter.GetEmptyFitFunction()->Clone("locfEmpty");
-				//locfEmpty->SetRange(m_minEmptyFitRange, m_maxEmptyFitRange);
-				
-				if(m_emptyFitOption_eta>0) {
-					double locNEmptyEtaPar = locFitter.GetEmptyEtaFitPar();
-					//locfEmpty->SetParameter("N_{#eta}", locNEmptyEtaPar);
-				}
-				if(m_emptyFitOption_omega>0) {
-					double locNEmptyOmegaPar = locFitter.GetEmptyOmegaFitPar();
-					//locfEmpty->SetParameter("N_{#omega}", locNEmptyOmegaPar);
-				}
+			// Draw the empty target fit results separately:
+			
+			if((m_fitOption_empty==1) && (m_subtractEmpty==0)) {
 				
 				locHistEmpty->GetXaxis()->SetRangeUser(m_minEmptyFitRange, m_maxEmptyFitRange);
 				
@@ -940,9 +930,6 @@ void EtaAnalyzer::ExtractAngularYield(int drawOption)
 				locHistEmptyWide->Draw("PE same");
 				locfEmpty->Draw("same");
 				
-				//TLatex locLatex;
-				//locLatex.DrawLatexNDC(0.137, 0.834, Form("#scale[1.0]{#theta_{#gamma#gamma}: %.2f#circ - %.2f#circ}", locMinAngle, locMaxAngle));
-				
 				TLegend *locLeg = new TLegend(0.60, 0.60, 0.95, 0.89);
 				locLeg->AddEntry(locHistEmpty,     Form("Empty Bkgd from %.2f#circ - %.2f#circ", locMinAngle,   locMaxAngle));
 				locLeg->AddEntry(locHistEmptyWide, Form("Empty Bkgd from %.2f#circ - %.2f#circ", emptyAngleLow, emptyAngleHigh));
@@ -950,8 +937,6 @@ void EtaAnalyzer::ExtractAngularYield(int drawOption)
 				
 				cEmpty->Update();
 				cEmpty->Modified();
-				
-				//getchar();
 			}
 		}
 		printf(" angle, yield1,  yield2 = %f,  %f,  %f\n", m_angularBin[iThetaBin].first, locYield, locYieldFit);
@@ -1181,6 +1166,20 @@ void InitializeMggFitter(MggFitter &fitter, EtaAnalyzer *anaObj, double angle)
 	fitter.emptyFitOption_bkgd  = anaObj->GetEmptyFitOption(4);
 	fitter.emptyFitOption_poly  = anaObj->GetEmptyFitOption(5);
 	anaObj->GetEmptyFitRange(fitter.minEmptyFitRange, fitter.maxEmptyFitRange);
+	return;
+}
+
+void EtaAnalyzer::WriteROOTFile(TString fileName)
+{
+	TFile *fOut = new TFile(fileName.Data(), "RECREATE");
+	fOut->cd();
+	if(h_Yield) h_Yield->Write();
+	if(h_YieldFit) h_YieldFit->Write();
+	if(h_CrossSection) h_CrossSection->Write();
+	if(h_CrossSectionFit) h_CrossSectionFit->Write();
+	fOut->Write();
+	fOut->Close();
+	
 	return;
 }
 

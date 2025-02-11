@@ -150,15 +150,9 @@ class MggFitter {
 			f1->SetLineStyle(4);
 			f1->SetLineWidth(2);
 			f1->SetNpx(1000);
+			/*
 			f1->SetParameter("N_{#eta}",   0.0);//m_nEmptyEtaPar);
 			f1->SetParameter("N_{#omega}", 0.0);//m_nEmptyOmegaPar);
-			/*
-			f1->SetParameter( 0, 0.0);
-			f1->SetParameter( 2, 0.0);
-			f1->SetParameter( 8, 0.0);
-			f1->SetParameter( 9, 0.0);
-			f1->SetParameter(10, 0.0);
-			f1->SetParameter(11, 0.0);
 			*/
 			return f1;
 		}

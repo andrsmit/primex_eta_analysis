@@ -50,8 +50,8 @@ void MggFitter::FitData()
 	
 	// if we're fitting with the empty target pdf, release that normalization here:
 	if(fitOption_empty) {
-		if(emptyFitOption_eta>1)   f_empty->SetParameter("N_{#eta}",   0.0);
-		if(emptyFitOption_omega>1) f_empty->SetParameter("N_{#omega}", 0.0);
+		//if(emptyFitOption_eta>1)   f_empty->SetParameter("N_{#eta}",   0.0);
+		//if(emptyFitOption_omega>1) f_empty->SetParameter("N_{#omega}", 0.0);
 		
 		GuessEmptyParameters();
 		h_data->Fit(f_fit, fitOption);

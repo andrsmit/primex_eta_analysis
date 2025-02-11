@@ -20,9 +20,15 @@ int EtaAnalyzer::LoadLuminosity() {
 	double integratedFlux = IntegrateFluxHist(locFluxHist, m_minBeamEnergy, m_maxBeamEnergy);
 	m_luminosity = integratedFlux * targetThickness;
 	
-	// to account for the residual-gas contribution when subtracting empty background:
-	
-	if(m_subtractEmpty==1) m_luminosity *= 0.9817;
+	//
+	// To account for the residual-gas contribution when subtracting empty background:
+	// Previously I only applied this correction factor if the empty target bkgd was subtracted 
+	// prior to fitting the invariant mass spectrum. However, there is no way to distinguish etas
+	// that were produced off the gas and etas produced off the target walls.
+	// So even when fitting and obtaining the pdf of the empty bkgd, I still subtract the full peak
+	// around the eta mass region and apply the correction to the target density accordingly.
+	// 
+	m_luminosity *= 0.9817;
 	
 	//------------------------------------------------//
 	// Store fraction of flux in each energy bin in h_fluxWeights:

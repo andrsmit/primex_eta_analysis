@@ -202,8 +202,12 @@ class EtaAnalyzer {
 		void    PlotAngularYield();
 		
 		void PlotCrossSection();
+		void WriteROOTFile(TString fileName="yield.root");
 		
-		TH1F* GetAngularYield() { return h_YieldFit; }
+		TH1F* GetAngularYield(int opt=0) { 
+			if(opt==0) return h_Yield;
+			else       return h_YieldFit;
+		}
 	
 	private:
 		

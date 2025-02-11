@@ -19,7 +19,7 @@ int InitializeYieldFitter(YieldFitter &fitter, EtaAnalyzer anaObj)
 	fitter.SetAngularMatrixFine((TH3F*)anaObj.GetAngularMatrixFine());
 	fitter.SetFluxWeights((TH1F*)anaObj.GetFluxWeights());
 	
-	fitter.SetYield((TH1F*)anaObj.GetAngularYield());
+	fitter.SetYield((TH1F*)anaObj.GetAngularYield(1));
 	
 	printf("Loading theory calculations...");
 	if(fitter.LoadTheoryHists()) return 1;
@@ -37,8 +37,13 @@ void YieldFitter::FitAngularYield(int drawOption)
 	f_yield->SetParLimits(2, 0.1, 5.0);
 	f_yield->SetParLimits(3, 0.1, 5.0);
 	f_yield->SetParLimits(4, -180.0, 180.0);
-	
-	f_yield->SetRange(0.0, 3.5);
+	/*
+	f_yield->FixParameter(1,  6.75607e-01);
+	f_yield->FixParameter(2,  4.82658e-01);
+	f_yield->FixParameter(3,  1.22440e+00);
+	f_yield->FixParameter(4, -2.15931e+01);
+	*/
+	f_yield->SetRange(0.0, 4.0);
 	h_yield->Fit(f_yield, "R0");
 	
 	if(drawOption) 
@@ -54,14 +59,35 @@ void YieldFitter::DrawFitResult()
 	c_fit = new TCanvas("yield_fit", "Yield Fit", 950, 700);
 	styleCanvas(c_fit);
 	
+	TF1 *fDraw, *fPrim, *fCoh, *fQFP, *fQFN, *fInt;
+	
+	InitializeDrawFunction(&fDraw, "f_Draw",             kBlack,   2, 3);
+	InitializeDrawFunction(&fPrim, "f_Primakoff",        kRed,     2, 2);
+	InitializeDrawFunction(&fCoh,  "f_Coherent",         kBlue,    2, 2);
+	InitializeDrawFunction(&fQFP,  "f_QuasifreeProton",  kGreen+2, 2, 2);
+	InitializeDrawFunction(&fQFN,  "f_QuasifreeNeutron", kGreen-7, 2, 2);
+	InitializeInterFunction(&fInt, "f_Interference",     kMagenta, 2, 2);
+	
+	fDraw->SetParameters(f_yield->GetParameters());
+	fPrim->SetParameters(f_yield->GetParameter(0), 0.0, 0.0, 0.0, 0.0);
+	fCoh->SetParameters(0.0, f_yield->GetParameter(1), 0.0, 0.0, 0.0);
+	fQFP->SetParameters(0.0, 0.0, f_yield->GetParameter(2), 0.0, 0.0);
+	fQFN->SetParameters(0.0, 0.0, 0.0, f_yield->GetParameter(3), 0.0);
+	fInt->SetParameters(f_yield->GetParameter(0), f_yield->GetParameter(1), f_yield->GetParameter(4));
+	
 	c_fit->cd();
-	h_yield->Draw();
-	f_yield->Draw("same");
+	h_yield->Draw("PE1X0");
+	fQFN->Draw("same");
+	fQFP->Draw("same");
+	fInt->Draw("same");
+	fCoh->Draw("same");
+	fPrim->Draw("same");
+	fDraw->Draw("same");
 	
 	return;
 }
 
-void YieldFitter::InitializeFitFunction(TF1 **f1, TString funcName)
+void YieldFitter::InitializeFitFunction(TF1 **f1, TString funcName, int lineColor)
 {
 	// initialize fit function for each angular bin:
 	
@@ -74,6 +100,48 @@ void YieldFitter::InitializeFitFunction(TF1 **f1, TString funcName)
 	(*f1)->SetParName(2, "A_{QFP}");
 	(*f1)->SetParName(3, "A_{QFN}");
 	(*f1)->SetParName(4, "#phi[#circ]");
+	
+	(*f1)->SetLineColor(lineColor);
+	
+	return;
+}
+
+void YieldFitter::InitializeDrawFunction(TF1 **f1, TString funcName, int lineColor, int lineStyle, int lineWidth)
+{
+	// initialize fit function for each angular bin:
+	
+	*f1 = new TF1(funcName.Data(), this, &YieldFitter::YieldDrawFunction, m_minReconAngle, m_maxReconAngle, 5);
+	
+	// set names for each parameter:
+	
+	(*f1)->SetParName(0, "#Gamma(#eta#rightarrow#gamma#gamma)[keV]");
+	(*f1)->SetParName(1, "A_{Coh}");
+	(*f1)->SetParName(2, "A_{QFP}");
+	(*f1)->SetParName(3, "A_{QFN}");
+	(*f1)->SetParName(4, "#phi[#circ]");
+	
+	(*f1)->SetLineColor(lineColor);
+	(*f1)->SetLineStyle(lineStyle);
+	(*f1)->SetLineWidth(lineWidth);
+	
+	return;
+}
+
+void YieldFitter::InitializeInterFunction(TF1 **f1, TString funcName, int lineColor, int lineStyle, int lineWidth)
+{
+	// initialize fit function for each angular bin:
+	
+	*f1 = new TF1(funcName.Data(), this, &YieldFitter::YieldDrawFunctionInterference, m_minReconAngle, m_maxReconAngle, 3);
+	
+	// set names for each parameter:
+	
+	(*f1)->SetParName(0, "#Gamma(#eta#rightarrow#gamma#gamma)[keV]");
+	(*f1)->SetParName(1, "A_{Coh}");
+	(*f1)->SetParName(2, "#phi[#circ]");
+	
+	(*f1)->SetLineColor(lineColor);
+	(*f1)->SetLineStyle(lineStyle);
+	(*f1)->SetLineWidth(lineWidth);
 	
 	return;
 }
@@ -166,12 +234,11 @@ double YieldFitter::YieldFitFunction(double *x, double *par)
 		for(int iThetaBin=1; iThetaBin<=h_matrix->GetXaxis()->GetNbins(); iThetaBin++) {
 			double locMatrix = h_matrix->GetBinContent(iThetaBin, reconAngleBin, iEnergyBin);
 			double locCS     = GetCrossSection(iEnergyBin-locMinEnergyBin, iThetaBin, Gamma, Acoh, AincP, AincN, Phi);
-			//printf("  %f  %f  %f\n", locMatrix, locCS, h_fluxWeights->GetBinContent(h_fluxWeights->FindBin(locEnergy)));
 			dNdTheta += (locMatrix * locCS * h_fluxWeights->GetBinContent(h_fluxWeights->FindBin(locEnergy)));
 		}
 	}
 	
-	double yield = dNdTheta * m_luminosity * 0.985 * 0.981 * EtaAnalyzer::m_branchingRatio * angleBinSize;
+	double yield = dNdTheta * m_luminosity * EtaAnalyzer::m_branchingRatio * angleBinSize;
 	return yield;
 }
 
@@ -183,6 +250,8 @@ double YieldFitter::YieldDrawFunction(double *x, double *par)
 	int reconAngleBin = h_matrixFine->GetYaxis()->FindBin(reconAngle);
 	
 	double angleBinSize = m_thrownAngleBinSize * TMath::DegToRad();
+	
+	double scaleFactor = h_matrix->GetYaxis()->GetBinWidth(1) / h_matrixFine->GetYaxis()->GetBinWidth(1);
 	
 	double Gamma = par[0];
 	double Acoh  = par[1];
@@ -199,11 +268,11 @@ double YieldFitter::YieldDrawFunction(double *x, double *par)
 		for(int iThetaBin=1; iThetaBin<=h_matrixFine->GetXaxis()->GetNbins(); iThetaBin++) {
 			double locMatrix = h_matrixFine->GetBinContent(iThetaBin, reconAngleBin, iEnergyBin);
 			double locCS     = GetCrossSection(iEnergyBin-locMinEnergyBin, iThetaBin, Gamma, Acoh, AincP, AincN, Phi);
-			dNdTheta += (locMatrix * locCS * h_fluxWeights->FindBin(locEnergy));
+			dNdTheta += (locMatrix * locCS * h_fluxWeights->GetBinContent(h_fluxWeights->FindBin(locEnergy)));
 		}
 	}
 	
-	double yield = dNdTheta * m_luminosity * 0.985 * 0.981 * EtaAnalyzer::m_branchingRatio * angleBinSize;
+	double yield = dNdTheta * m_luminosity * EtaAnalyzer::m_branchingRatio * angleBinSize * scaleFactor;
 	return yield;
 }
 
@@ -215,6 +284,7 @@ double YieldFitter::YieldDrawFunctionInterference(double *x, double *par)
 	int reconAngleBin = h_matrixFine->GetYaxis()->FindBin(reconAngle);
 	
 	double angleBinSize = m_thrownAngleBinSize * TMath::DegToRad();
+	double scaleFactor  = h_matrix->GetYaxis()->GetBinWidth(1) / h_matrixFine->GetYaxis()->GetBinWidth(1);
 	
 	double Gamma = par[0];
 	double Acoh  = par[1];
@@ -229,11 +299,11 @@ double YieldFitter::YieldDrawFunctionInterference(double *x, double *par)
 		for(int iThetaBin=1; iThetaBin<=h_matrixFine->GetXaxis()->GetNbins(); iThetaBin++) {
 			double locMatrix = h_matrixFine->GetBinContent(iThetaBin, reconAngleBin, iEnergyBin);
 			double locCS     = GetCrossSectionInterference(iEnergyBin-locMinEnergyBin, iThetaBin, Gamma, Acoh, Phi);
-			dNdTheta += (locMatrix * locCS * h_fluxWeights->FindBin(locEnergy));
+			dNdTheta += (locMatrix * locCS * h_fluxWeights->GetBinContent(h_fluxWeights->FindBin(locEnergy)));
 		}
 	}
 	
-	double yield = dNdTheta * m_luminosity * 0.985 * 0.981 * EtaAnalyzer::m_branchingRatio * angleBinSize;
+	double yield = dNdTheta * m_luminosity * 0.985 * 0.981 * EtaAnalyzer::m_branchingRatio * angleBinSize * scaleFactor;
 	return yield;
 }
 

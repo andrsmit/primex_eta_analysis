@@ -3,6 +3,8 @@
 
 int EtaAnalyzer::LoadAngularMatrix()
 {
+	int locPhase = m_phase;
+	
 	//------------------------------------------------------------//
 	// ROOT file where angular and acceptance matrix is stored:
 	
@@ -10,19 +12,19 @@ int EtaAnalyzer::LoadAngularMatrix()
 		m_matrixHistName = "AngularMatrix";
 	}
 	
-	TString matrixFileName = Form("phase%d_matrix.root", m_phase);
+	TString matrixFileName = Form("phase%d_matrix.root", locPhase);
 	if(m_matrixHistName.Contains("FCAL"))
 	{
-		matrixFileName = Form("phase%d_FCAL.root", m_phase);
+		matrixFileName = Form("phase%d_FCAL.root", locPhase);
 	}
 	else if(m_matrixHistName.Contains("TOF"))
 	{
-		matrixFileName = Form("phase%d_TOF.root", m_phase);
+		matrixFileName = Form("phase%d_TOF.root", locPhase);
 	}
 	
 	TString matrixFileNameFull = Form(
 		"/work/halld/home/andrsmit/primex_eta_analysis/eta_gg_matrix/analyze_trees/rootFiles/phase%d/%s", 
-		m_phase, matrixFileName.Data());
+		locPhase, matrixFileName.Data());
 	
 	// return if filename is not accessible:
 	if(gSystem->AccessPathName(matrixFileNameFull.Data())) return 1;
@@ -71,6 +73,11 @@ int EtaAnalyzer::LoadAngularMatrix()
 		printf("  Requested beam energy bin size: %.3f\n", m_beamEnergyBinSize);
 		printf("  Actual beam energy bin size: %.3f\n", testBinSize);
 	}
+	
+	printf("RebinsThrown = %d\n", nRebinsThrown);
+	printf("RebinsRecon  = %d\n", nRebinsRecon);
+	printf("RebinsEnergy = %d\n", nRebinsEnergy);
+	
 	
 	h_matrix->RebinX(nRebinsThrown);
 	h_matrix->RebinY(nRebinsRecon);

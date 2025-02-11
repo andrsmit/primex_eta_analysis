@@ -104,7 +104,9 @@ class YieldFitter {
 		double GetCrossSection(int, int, double, double, double, double, double);
 		double GetCrossSectionInterference(int, int, double, double, double);
 		
-		void InitializeFitFunction(TF1 **f1, TString funcName);
+		void InitializeFitFunction(TF1 **f1, TString funcName, int lineColor=kBlack);
+		void InitializeDrawFunction(TF1 **f1, TString funcName, int lineColor=kBlack, int lineStyle=1, int lineWidth=2);
+		void InitializeInterFunction(TF1 **f1, TString funcName, int lineColor=kBlack, int lineStyle=1, int lineWidth=2);
 		void DrawFitResult();
 };
 
