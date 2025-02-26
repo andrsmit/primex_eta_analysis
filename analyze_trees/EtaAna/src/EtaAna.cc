@@ -814,10 +814,12 @@ void EtaAna::RunAnalysis(TString inputFileName, int analysisOption) {
 	m_inputFile = new TFile(inputFileName.Data(), "READ");
 	int nTotalEvents = LoadTree();
 	
+	/*
 	// try to read in grid-acceptance:
 	if(GetAcceptanceHistogram()) {
 		std::cout << "Unable to get grid acceptance from ROOT file" << std::endl;
 	}
+	*/
 	
 	while(m_event < nTotalEvents) {
 		ReadEvent();
