@@ -222,6 +222,7 @@ Double_t* MyReadConfig::GetConfig1Par(TString name) {
 	for(Int_t i=0; i<nLine; i++) {
 		if(!(strLine[i].BeginsWith("#")) && strLine[i].Contains(name)) {
 			sscanf(strLine[i].Data(),"%*s %s",tmp1);
+			break;
 		}
 	}
 	
@@ -229,5 +230,3 @@ Double_t* MyReadConfig::GetConfig1Par(TString name) {
 	
 	return iPar; 
 }
-
-

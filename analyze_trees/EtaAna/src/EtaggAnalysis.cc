@@ -14,15 +14,32 @@ void EtaAna::EtaggAnalysis() {
 		PlotThrown(locThrownBeamEnergy, locThrownAngle);
 	}
 	
+	//-------------------------------------------//
+	// Get list of selected beam photons:
+	
 	vector<pair<int,double>> locGoodBeamPhotons; locGoodBeamPhotons.clear();
 	int locNBeamPhotons = GetBeamPhotonList(locGoodBeamPhotons, m_minBeamEnergyCut, m_maxBeamEnergyCut);
+	
+	//-------------------------------------------//
+	// Get list of 'good' FCAL showers:
 	
 	vector<int> locGoodFCALShowers; locGoodFCALShowers.clear();
 	int locNFCALShowers_EnergyCut;
 	int locNFCALShowers = GetFCALShowerList(locGoodFCALShowers, locNFCALShowers_EnergyCut, m_FCALEnergyCut, m_FCALExtraEnergyCut, 2.0, m_FCALRFCut);
 	
+	//-------------------------------------------//
+	// Get list of 'good' BCAL showers:
+	
 	vector<int> locGoodBCALShowers; locGoodBCALShowers.clear();
 	int locNBCALShowers = GetBCALShowerList(locGoodBCALShowers, 0.0, m_BCALRFCut);
+	
+	//-------------------------------------------//
+	// Get list of 'good' SC hits:
+	
+	vector<int> locGoodSCHits; locGoodSCHits.clear();
+	int locNSCHits = GetSCHitList(locGoodSCHits);
+	
+	//-------------------------------------------//
 	
 	int locNBCALShowers_1ns = 0.;
 	double locBCALRFDT = 0., locBCALPhi = 0.; // only useful when there's exactly 1 BCAL shower within timing cut
@@ -39,7 +56,26 @@ void EtaAna::EtaggAnalysis() {
 		}
 	}
 	
-	// Plot SC Timing Distribution for monitoring:
+	//-------------------------------------------//
+	// RF Timing distributions:
+	
+	// FCAL:
+	for(int ishow = 0; ishow < m_nfcal; ishow++) {
+		TVector3 locPos = GetFCALPosition(ishow);
+		double locT = m_fcalT[ishow] - (locPos.Mag()/m_c) - m_rfTime;
+		h_fcalRFdt->Fill(locT);
+	}
+	
+	// BCAL:
+	/*
+	for(int ishow = 0; ishow < m_nbcal; ishow++) {
+		TVector3 locPos = GetBCALPosition(ishow);
+		double locT = m_bcalT[ishow] - (locPos.Mag()/m_c) - m_rfTime;
+		h_bcalRFdt->Fill(locT);
+	}
+	*/
+	
+	// SC:
 	for(int isc = 0; isc < m_nsc; isc++) {
 		double locT  = m_scT[isc] - m_rfTime;
 		double locdE = m_scdE[isc];
@@ -48,12 +84,18 @@ void EtaAna::EtaggAnalysis() {
 		}
 	}
 	
-	// Plot TOF Timing Distribution for monitoring:
+	// TOF:
 	for(int itof = 0; itof < m_ntof; itof++) {
 		TVector3 locPos(m_tofX[itof], m_tofY[itof], m_tofZ[itof]);
 		locPos -= m_vertex;
 		double locT = m_tofT[itof] - (locPos.Mag()/m_c) - m_rfTime;
 		h_tofRFdt->Fill(locT);
+	}
+	
+	// Beam:
+	for(int igam = 0; igam < locNBeamPhotons; igam++) {
+		double locT = m_beamT[locGoodBeamPhotons[igam].first] - m_rfTime;
+		h_beamRFdt->Fill(locT);
 	}
 	
 	//=====================================================================================//
@@ -97,6 +139,9 @@ void EtaAna::EtaggAnalysis() {
 			//-----------------------------------------------------//
 			// TOF Veto
 			
+			int tof_match1 = tof_dr1 < m_FCALTOFCut ? 1.0 : 0.0;
+			int tof_match2 = tof_dr2 < m_FCALTOFCut ? 1.0 : 0.0;
+			
 			// reject combinations of FCAL showers where both showers are near a TOF hit:
 			bool isTOFVeto = false;
 			if((tof_dr1 < m_FCALTOFCut) && (tof_dr2 < m_FCALTOFCut)) isTOFVeto = true;
@@ -133,18 +178,10 @@ void EtaAna::EtaggAnalysis() {
 			
 			int locNSCHits = 0;
 			int locNSCHits_coplanar = 0;
-			for(int isc = 0; isc < m_nsc; isc++) {
-				
-				// only check hits between 1ns < (t_sc - t_RF) < 7ns 
-				//    and with dE > 0.0002 (from DNeutralShower_factory)
-				
-				double locT  = m_scT[isc] - m_rfTime;
-				double locdE = m_scdE[isc];
-				
-				if((1.0 < locT) && (locT < 9.0) && (locdE > 0.0002)) {
-					locNSCHits++;
-					if(fabs(fabs(m_scPhi[isc]-prodPhi)-180.0) < m_SCDeltaPhiCut) locNSCHits_coplanar++;
-				}
+			for(int isc=0; isc<locGoodSCHits.size(); isc++) {
+				int hitIndex = locGoodSCHits[isc];
+				double locDeltaPhi = prodPhi - m_scPhi[hitIndex];
+				if(IsCoplanarSC(locDeltaPhi)) locNSCHits_coplanar++;
 			}
 			
 			vector<int> locVetoOptions; locVetoOptions.clear();
@@ -159,28 +196,68 @@ void EtaAna::EtaggAnalysis() {
 			// Option 2 (loose): Remove events with any BCAL shower within +/-1ns:
 			if(locNBCALShowers_1ns==0) locVetoOptions[2] = 1;
 			
-			// Option 3 (looser): Keep events where there is EITHER (i) no BCAL shower within +/-12ns, 
-			//        OR (ii) 1 BCAL shower that has opposite phi angle to two-photon pair in FCAL:
-			if((locNBCALShowers==0) ||
-				((locNBCALShowers==1) && (fabs(fabs(locBCALPhi-prodPhi)-180.0) < m_BCALDeltaPhiCut))) locVetoOptions[3] = 1;
 			
-			// Option 4 (improvement on option 3): Keep events where there is EITHER (i) no BCAL shower within +/-12ns, 
-			//        OR (ii) 1 BCAL shower that has opposite phi angle to two-photon pair in FCAL 
-			//        and is more than 1ns removed from RF time:
-			if((locNBCALShowers==0) || 
-				((locNBCALShowers==1) && (fabs(fabs(locBCALPhi-prodPhi)-180.0) < m_BCALDeltaPhiCut) && (locBCALRFDT>1.0))) {
+			// Options 3-6:
+			//   If there are no showers within +/-12ns in the BCAL, accept event
+			//   If there is exactly 1 shower, then:
+			//      Require coplanarity cut (option 3)
+			//      Require coplanarity cut + timing > 1ns (option 4)
+			//      Require coplanarity cut + timing > 1ns + all SC hits are coplanar (option 5)
+			//      Require coplanarity cut + timing > 1ns + all SC hits are coplnar + less than 2 SC hits (option 6)
+			
+			if(locNBCALShowers==0) 
+			{
+				locVetoOptions[3] = 1;
 				locVetoOptions[4] = 1;
-				
-				// Option 5 (add in SC Veto): Remove events where there is a hit in the SC outside of the range:
-				//          150 < |phi_SC - phi_FCAL| < 210:
-				if(locNSCHits_coplanar==locNSCHits) locVetoOptions[5] = 1;
+				locVetoOptions[5] = 1;
+				locVetoOptions[6] = 1;
+			}
+			else if(locNBCALShowers==1) 
+			{
+				if(IsCoplanarBCAL(prodPhi-locBCALPhi)) {
+					locVetoOptions[3] = 1;
+					if(locBCALRFDT>1.0) {
+						locVetoOptions[4] = 1;
+						if(locNSCHits_coplanar==locNSCHits) {
+							locVetoOptions[5] = 1;
+							if(locNSCHits<=1) {
+								locVetoOptions[6] = 1;
+							}
+						}
+					}
+				}
 			}
 			
-			// Option 6: Use tight veto on SC only:
-			if(locNSCHits==0) locVetoOptions[6] = 1;
-			
-			// Option 7: tight SC + tight BCAL vetos:
+			// Option 7: strict SC + strict BCAL vetos:
 			if(locNSCHits==0 && locNBCALShowers==0) locVetoOptions[7] = 1;
+			
+			// Option 8: BCAL and SC are completely decoupled, but both need to be satisfied:
+			
+			bool isBCALVeto = true;
+			if(locNBCALShowers==0)
+			{
+				isBCALVeto = false;
+			}
+			else if(locNBCALShowers==1)
+			{
+				if(IsCoplanarBCAL(prodPhi-locBCALPhi)) {
+					if(locBCALRFDT>1.0) {
+						isBCALVeto = false;
+					}
+				}
+			}
+			
+			bool isSCVeto = true;
+			if(locNSCHits<=1)
+			{
+				if(locNSCHits==locNSCHits_coplanar) {
+					isSCVeto = false;
+				}
+			}
+			
+			if(!isSCVeto && !isBCALVeto) {
+				locVetoOptions[8] = 1;
+			}
 			
 			//-----------------------------------------------------//
 			// Loop over Beam photons
@@ -207,7 +284,7 @@ void EtaAna::EtaggAnalysis() {
 				bool isEta = IsEtaCut(invmass);
 				
 				// Plot timing distribution of beam photons after elasticity cut to see the level of accidentals:
-				if(isElastic && locVetoOptions[5]) {
+				if(isElastic && locVetoOptions[6]) {
 					h_beamRFdt_cut->Fill(brfdt);
 				}
 				
@@ -291,12 +368,6 @@ void EtaAna::EtaggAnalysis() {
 				//-----------------------------------------------------//
 				
 				/*
-				if(isEta) {
-					h_pT_vs_elas->Fill(Egg/etaEnergy, pggt/pTCalc, fillWeight);
-					if(locVetoOptions[5]) h_pT_vs_elas_cut->Fill(Egg/etaEnergy, pggt/pTCalc, fillWeight);
-				}
-				*/
-				/*
 				TLorentzVector locMesonP4(pggx, pggy, pggz, Egg);
 				
 				TVector3 locBoostVector_MesonCM = -1.0*(locMesonP4.BoostVector());
@@ -311,32 +382,54 @@ void EtaAna::EtaggAnalysis() {
 				
 				if(((e1/Egg)<0.3) || ((e2/Egg)<0.3)) continue;
 				
-				if(isEta && isElastic && locVetoOptions[5]) {
+				if(isEta && isElastic && locVetoOptions[6]) {
 					h_e_vs_theta->Fill(acos((px1*pggx + py1*pggy + pz1*pggz)/(e1*sqrt(pow(pggt,2.0)+pow(pggz,2.0)))), e1/Egg);
 					h_e_vs_theta->Fill(acos((px2*pggx + py2*pggy + pz2*pggz)/(e2*sqrt(pow(pggt,2.0)+pow(pggz,2.0)))), e2/Egg);
 				}
 				*/
+				
 				if(isEta && isElastic) {
-					if(locVetoOptions[5]) {
+					
+					if(locVetoOptions[6]) {
 						h_xy1->Fill(pos1.X(),pos1.Y());
 						h_xy2->Fill(pos2.X(),pos2.Y());
 						h_t_vs_theta->Fill(prodTheta, logt, fillWeight);
+						
+						// plot likelihood of TOF match as a function of radius:
+						
+						double rho1 = sqrt(pow(pos1.X(),2.0) + pow(pos1.Y(),2.0));
+						double rho2 = sqrt(pow(pos2.X(),2.0) + pow(pos2.Y(),2.0));
+						h_tofMatch->Fill(rho1, tof_match1, fillWeight);
+						h_tofMatch->Fill(rho2, tof_match2, fillWeight);
 					}
 					
 					// plot SC-DeltaPhi:
-					for(int isc = 0; isc < m_nsc; isc++) {
-						double locT  = m_scT[isc] - m_rfTime;
-						double locdE = m_scdE[isc];
-						if((1.0 < locT) && (locT < 9.0) && (locdE > 0.0002)) {
-							double deltaPhi = m_scPhi[isc]-prodPhi;
-							h_scDeltaPhi->Fill(prodTheta, deltaPhi);
+					
+					for(int isc=0; isc<locGoodSCHits.size(); isc++) {
+						int hitIndex = locGoodSCHits[isc];
+						double locDeltaPhi = prodPhi - m_scPhi[hitIndex];
+						h_scDeltaPhi->Fill(prodTheta, locDeltaPhi, fillWeight);
+						if(locGoodSCHits.size()==1) {
+							h_scDeltaPhi_singleHit->Fill(prodTheta, locDeltaPhi, fillWeight);
 						}
 					}
 					
 					// plot BCAL-DeltaPhi:
+					
 					for(int ibcal = 0; ibcal < locGoodBCALShowers.size(); ibcal++) {
-						double deltaPhi = GetBCALPosition(locGoodBCALShowers[ibcal]).Phi() * TMath::RadToDeg() - prodPhi;
-						h_bcalDeltaPhi->Fill(prodTheta, deltaPhi);
+						double locDeltaPhi = prodPhi - GetBCALPosition(locGoodBCALShowers[ibcal]).Phi() * TMath::RadToDeg();
+						h_bcalDeltaPhi->Fill(prodTheta, locDeltaPhi, fillWeight);
+						if(locGoodBCALShowers.size()==1) {
+							h_bcalDeltaPhi_singleHit->Fill(prodTheta, locDeltaPhi, fillWeight);
+						}
+					}
+					
+					// plot BCAL-RF dt for accepted events:
+					
+					for(int ishow = 0; ishow < m_nbcal; ishow++) {
+						TVector3 locPos = GetBCALPosition(ishow);
+						double locT = m_bcalT[ishow] - (locPos.Mag()/m_c) - m_rfTime;
+						h_bcalRFdt->Fill(locT, fillWeight);
 					}
 				}
 				
@@ -347,15 +440,15 @@ void EtaAna::EtaggAnalysis() {
 						h_elasticity[iveto]->Fill(prodTheta, Egg/etaEnergy, fillWeight);
 						h_elasticityConstr[iveto]->Fill(prodTheta, elasConstr, fillWeight);
 						
-						h_pt[iveto]->Fill(prodTheta, pggt - pTCalc, fillWeight);
-						h_ptCoh[iveto]->Fill(prodTheta, pggt - pTCalcCoh, fillWeight);
-						
 						h_mm[iveto]->Fill(prodTheta, mmSq, fillWeight);
 						h_mm_coh[iveto]->Fill(prodTheta, (mmSqCoh - pow(ParticleMass(Helium),2.0)), fillWeight);
 						if(isElastic) {
 							h_mm_elas[iveto]->Fill(prodTheta, mmSq, fillWeight);
 							h_mm_elas_coh[iveto]->Fill(prodTheta, (mmSqCoh - pow(ParticleMass(Helium),2.0)), fillWeight);
 						}
+						
+						h_pt[iveto]->Fill(prodTheta, pggt/pTCalc, fillWeight);
+						h_ptCoh[iveto]->Fill(prodTheta, pggt/pTCalcCoh, fillWeight);
 					}
 					
 					if(isElastic) {
@@ -369,8 +462,9 @@ void EtaAna::EtaggAnalysis() {
 					}
 				}
 				
-				if((m_nmc>0) && locVetoOptions[5] && isElastic) {
-					h_mgg_vs_vertex->Fill(m_mcZ[0], invmassConstr, fillWeight);
+				if((m_nmc>0) && locVetoOptions[6] && isElastic) {
+					h_mgg_vs_vertexZ->Fill(m_mcZ[0], invmassConstr, fillWeight);
+					h_mgg_vs_vertexR->Fill(sqrt(pow(m_mcX[0],2.0) + pow(m_mcY[0],2.0)), invmassConstr, fillWeight);
 				}
 				
 			} // end loop over beam photons
@@ -380,3 +474,282 @@ void EtaAna::EtaggAnalysis() {
 	return;
 }
 
+
+void EtaAna::InitializeDefaultHists() 
+{
+	int nInvmassBins     = (int)((m_maxInvmassBin-m_minInvmassBin)/m_invmassBinSize);
+	int nBeamEnergyBins  = (int)((m_maxBeamEnergyBin-m_minBeamEnergyBin)/m_beamEnergyBinSize);
+	int nRecAngleBins    = (int)((m_maxRecAngleBin-m_minRecAngleBin)/m_recAngleBinSize);
+	int nThrownAngleBins = (int)((m_maxThrownAngleBin-m_minThrownAngleBin)/m_thrownAngleBinSize);
+	
+	// DEFAULT ANALYSIS HISTOGRAMS:
+	
+	h_mcVertex         = new TH1F("vertex",          "Vertex Z Position (thrown)",   1000, 0., 600.);
+	h_mcVertexAccepted = new TH1F("vertex_accepted", "Vertex Z Position (filtered)", 1000, 0., 600.);
+	
+	// Timing histograms (for monitoring of calibrations):
+	
+	h_fcalRFdt     = new TH1F("fcal_rf_dt",     "t_{FCAL} - t_{RF}; [ns]", 10000, -100., 100.);
+	h_bcalRFdt     = new TH1F("bcal_rf_dt",     "t_{BCAL} - t_{RF}; [ns]", 10000, -100., 100.);
+	h_tofRFdt      = new TH1F( "tof_rf_dt",      "t_{TOF} - t_{RF}; [ns]", 10000, -100., 100.);
+	h_scRFdt       = new TH1F(  "sc_rf_dt",       "t_{SC} - t_{RF}; [ns]", 10000, -100., 100.);
+	h_beamRFdt     = new TH1F("beam_rf_dt",     "t_{CCAL} - t_{RF}; [ns]", 10000, -100., 100.);
+	h_beamRFdt_cut = new TH1F("beam_rf_dt_cut", "t_{Beam} - t_{RF}; [ns]", 10000, -100., 100.);
+	
+	// To study veto likelihood versus polar angle:
+	
+	h_tofMatch = new TH2F("tofMatch", "TOF Match vs. Radial Distance; r_{FCAL} [cm]", 1500, 0.0, 150.0, 2, -0.5, 1.5);
+	
+	// Invariant mass, elasticity, and missing mass distributions for different BCAL/SC veto options:
+	
+	for(int iveto=0; iveto<m_nVetos; iveto++) {
+		
+		h_elasticity[iveto] = new TH2F(Form("elasticity_veto_%d",iveto),
+			Form("Elasticity (Veto Option %d)",iveto), 
+			nRecAngleBins, m_minRecAngleBin, m_maxRecAngleBin, 1000, 0.0, 2.0);
+		h_elasticity[iveto]->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
+		h_elasticity[iveto]->GetYaxis()->SetTitle("E_{#gamma#gamma}/E_{#eta}#left(E_{#gamma},#theta_{#gamma#gamma}#right)");
+		
+		h_elasticityConstr[iveto] = new TH2F(Form("elasticity_const_veto_%d",iveto),
+			Form("Mass-Constrained Elasticity (Veto Option %d)",iveto), 
+			nRecAngleBins, m_minRecAngleBin, m_maxRecAngleBin, 1000, 0.0, 2.0);
+		h_elasticityConstr[iveto]->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
+		h_elasticityConstr[iveto]->GetYaxis()->SetTitle(
+			"E_{#gamma#gamma}^{Constr}/E_{#eta}#left(E_{#gamma},#theta_{#gamma#gamma}#right)");
+		
+		h_mgg[iveto] = new TH2F(Form("mgg_veto_%d",iveto), 
+			Form("Two-Photon Invariant Mass (Veto Option %d)",iveto), 
+			nRecAngleBins, m_minRecAngleBin, m_maxRecAngleBin, 
+			nInvmassBins, m_minInvmassBin, m_maxInvmassBin);
+		h_mgg[iveto]->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
+		h_mgg[iveto]->GetYaxis()->SetTitle("m_{#gamma#gamma} [GeV/c^{2}]");
+		h_mgg[iveto]->Sumw2();
+		
+		h_mggConstr[iveto] = new TH2F(Form("mgg_const_veto_%d",iveto), 
+			Form("Energy-Constrained Invariant Mass (Veto Option %d)",iveto), 
+			nRecAngleBins, m_minRecAngleBin, m_maxRecAngleBin, 
+			nInvmassBins, m_minInvmassBin, m_maxInvmassBin);
+		h_mggConstr[iveto]->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
+		h_mggConstr[iveto]->GetYaxis()->SetTitle("m_{#gamma#gamma}^{Constr} [GeV/c^{2}]");
+		h_mggConstr[iveto]->Sumw2();
+		
+		h_mggConstr_coh[iveto] = new TH2F(Form("mgg_const_coh_veto_%d",iveto), 
+			Form("Energy-Constrained Invariant Mass (Veto Option %d)",iveto), 
+			nRecAngleBins, m_minRecAngleBin, m_maxRecAngleBin, 
+			nInvmassBins, m_minInvmassBin, m_maxInvmassBin);
+		h_mggConstr_coh[iveto]->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
+		h_mggConstr_coh[iveto]->GetYaxis()->SetTitle("m_{#gamma#gamma}^{Constr} [GeV/c^{2}]");
+		h_mggConstr_coh[iveto]->Sumw2();
+		
+		h_mm[iveto] = new TH2F(Form("mm_veto_%d",iveto), 
+			Form("Missing Mass (Veto Option %d)",iveto), 
+			nRecAngleBins, m_minRecAngleBin, m_maxRecAngleBin, 1000, -20.0, 20.0);
+		h_mm[iveto]->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
+		h_mm[iveto]->GetYaxis()->SetTitle("#Deltam^{2} [GeV^{2}/c^{4}]");
+		h_mm[iveto]->Sumw2();
+		
+		h_mm_coh[iveto] = new TH2F(Form("mm_coh_veto_%d",iveto), 
+			Form("Missing Mass (Veto Option %d)",iveto), 
+			nRecAngleBins, m_minRecAngleBin, m_maxRecAngleBin, 1000, -20.0, 20.0);
+		h_mm_coh[iveto]->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
+		h_mm_coh[iveto]->GetYaxis()->SetTitle("#Deltam^{2} - m_{He}^{2} [GeV^{2}/c^{4}]");
+		h_mm_coh[iveto]->Sumw2();
+		
+		h_mm_elas[iveto] = new TH2F(Form("mm_elas_veto_%d",iveto), 
+			Form("Missing Mass (Veto Option %d)",iveto), 
+			nRecAngleBins, m_minRecAngleBin, m_maxRecAngleBin, 1000, -20.0, 20.0);
+		h_mm_elas[iveto]->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
+		h_mm_elas[iveto]->GetYaxis()->SetTitle("#Deltam^{2} [GeV^{2}/c^{4}]");
+		h_mm_elas[iveto]->Sumw2();
+		
+		h_mm_elas_coh[iveto] = new TH2F(Form("mm_elas_coh_veto_%d",iveto), 
+			Form("Missing Mass (Veto Option %d)",iveto), 
+			nRecAngleBins, m_minRecAngleBin, m_maxRecAngleBin, 1000, -20.0, 20.0);
+		h_mm_elas_coh[iveto]->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
+		h_mm_elas_coh[iveto]->GetYaxis()->SetTitle("#Deltam^{2} - m_{He}^{2} [GeV^{2}/c^{4}]");
+		h_mm_elas_coh[iveto]->Sumw2();
+		
+		h_pt[iveto] = new TH2F(Form("pt_veto_%d",iveto), 
+			Form("Transverse Momentum Ratio (Veto Option %d)",iveto), 
+			nRecAngleBins, m_minRecAngleBin, m_maxRecAngleBin, 1000, 0.0, 2.0);
+		h_pt[iveto]->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
+		h_pt[iveto]->GetYaxis()->SetTitle("p_{T} / p_{T}^{Calc} [GeV/c]");
+		h_pt[iveto]->Sumw2();
+		
+		h_ptCoh[iveto] = new TH2F(Form("ptConstr_veto_%d",iveto), 
+			Form("Transverse Momentum Ratio (Veto Option %d)",iveto), 
+			nRecAngleBins, m_minRecAngleBin, m_maxRecAngleBin, 1000, 0.0, 2.0);
+		h_ptCoh[iveto]->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
+		h_ptCoh[iveto]->GetYaxis()->SetTitle("p_{T} / p_{T}^{Calc} [GeV/c]");
+		h_ptCoh[iveto]->Sumw2();
+	}
+	
+	// Kinematics:
+	
+	h_t_vs_theta = new TH2F("t_vs_theta", "; #theta_{#gamma#gamma} [#circ]; -t [GeV/c^{2}]", 
+		nRecAngleBins, m_minRecAngleBin, m_maxRecAngleBin, 550, -4.0, 1.0);
+	
+	// in CM frame of eta:
+	
+	//h_e_vs_theta  = new TH2F("h_e_vs_theta", "; #theta_{cm} [#circ]; E_{CM} [GeV]", 500, 0.0, 1.0, 500, 0.0, 1.0);
+	//h_deltaPhi_CM = new TH1F("deltaPhi_CM", "; #Delta#phi_{cm} [#circ]", 3600, -360.0, 360.0);
+	
+	// Variation of invariant mass vs. thrown z position:
+	
+	h_mgg_vs_vertexZ = new TH2F("mgg_vs_vertexZ", "; z_{thrown} [cm]; m_{#gamma#gamma}^{Constr} [GeV/c^{2}]",
+		500, 0.0, 500.0, 300, 0.0, 1.2);
+	
+	// Variation of invariant mass vs. thrown radial distance:
+	
+	h_mgg_vs_vertexR = new TH2F("mgg_vs_vertexR", "; r_{thrown} [cm]; m_{#gamma#gamma}^{Constr} [GeV/c^{2}]",
+		500, 0.0, 5.0, 300, 0.0, 1.2);
+	
+	// DeltaPhi distributions from BCAL and SC:
+	
+	h_scDeltaPhi             = new TH2F("scDeltaPhi", 
+		"#phi_{SC} - #phi_{#gamma#gamma}; #theta_{#gamma#gamma} [#circ]; #Delta#phi [#circ]",
+		650, 0.0, 6.5, 2000, -360.0, 360.0);
+	
+	h_scDeltaPhi_singleHit   = new TH2F("scDeltaPhi_singleHit", 
+		"#phi_{SC} - #phi_{#gamma#gamma}; #theta_{#gamma#gamma} [#circ]; #Delta#phi [#circ]",
+		650, 0.0, 6.5, 2000, -360.0, 360.0);
+	
+	h_bcalDeltaPhi           = new TH2F("bcalDeltaPhi", 
+		"#phi_{BCAL} - #phi_{#gamma#gamma}; #theta_{#gamma#gamma} [#circ]; #Delta#phi [#circ]",
+		650, 0.0, 6.5, 2000, -360.0, 360.0);
+	
+	h_bcalDeltaPhi_singleHit = new TH2F("bcalDeltaPhi_singleHit", 
+		"#phi_{BCAL} - #phi_{#gamma#gamma}; #theta_{#gamma#gamma} [#circ]; #Delta#phi [#circ]",
+		650, 0.0, 6.5, 2000, -360.0, 360.0);
+	
+	// Distribution of accepted events in FCAL:
+	
+	h_xy1 = new TH2F("xy1", "Position of Shower 1; x_{1} [cm]; y_{1} [cm]", 500, -100., 100., 500, -100., 100.);
+	h_xy2 = new TH2F("xy2", "Position of Shower 2; x_{2} [cm]; y_{2} [cm]", 500, -100., 100., 500, -100., 100.);
+	
+	// Angular matrix needed for acceptance calculation:
+	
+	if(m_FillThrown) {
+		for(int iveto=0; iveto<m_nVetos; iveto++) {
+			TH3F *hMatrix = new TH3F(Form("AngularMatrix_veto_%d",iveto), 
+				Form("Veto Option %d; #theta(thrown) [#circ]; #theta(rec) [#circ]", iveto),
+				nThrownAngleBins, m_minThrownAngleBin, m_maxThrownAngleBin, 
+				nRecAngleBins,    m_minRecAngleBin,    m_maxRecAngleBin,
+				nBeamEnergyBins,  m_minBeamEnergyBin,  m_maxBeamEnergyBin);
+			hMatrix->SetDirectory(0);
+			h_AngularMatrix_vetos.push_back(hMatrix);
+		}
+	}
+	
+	return;
+}
+
+void EtaAna::ResetDefaultHists()
+{
+	h_mcVertex->Reset();
+	h_mcVertexAccepted->Reset();
+	
+	h_fcalRFdt->Reset();
+	h_bcalRFdt->Reset();
+	h_tofRFdt->Reset();
+	h_scRFdt->Reset();
+	h_beamRFdt->Reset();
+	h_beamRFdt_cut->Reset();
+	
+	h_tofMatch->Reset();
+	
+	for(int iveto=0; iveto<m_nVetos; iveto++) {
+		h_elasticity[iveto]->Reset();
+		h_elasticityConstr[iveto]->Reset();
+		h_mgg[iveto]->Reset();
+		h_mggConstr[iveto]->Reset();
+		h_mggConstr_coh[iveto]->Reset();
+		h_mm[iveto]->Reset();
+		h_mm_coh[iveto]->Reset();
+		h_mm_elas[iveto]->Reset();
+		h_mm_elas_coh[iveto]->Reset();
+		h_pt[iveto]->Reset();
+		h_ptCoh[iveto]->Reset();
+	}
+	h_t_vs_theta->Reset();
+	
+	h_mgg_vs_vertexZ->Reset();
+	h_mgg_vs_vertexR->Reset();
+	
+	h_scDeltaPhi->Reset();
+	h_scDeltaPhi_singleHit->Reset();
+	h_bcalDeltaPhi->Reset();
+	h_bcalDeltaPhi_singleHit->Reset();
+	
+	h_xy1->Reset();
+	h_xy2->Reset();
+	
+	if(h_AngularMatrix_vetos.size()) {
+		for(int i=0; i<h_AngularMatrix_vetos.size(); i++) {
+			h_AngularMatrix_vetos[i]->Reset();
+		}
+	}
+	
+	return;
+}
+
+void EtaAna::WriteDefaultHists()
+{
+	printf("  Writing default analysis option histograms...\n");
+	
+	h_mcVertex->Write();
+	h_mcVertexAccepted->Write();
+	
+	h_fcalRFdt->Write();
+	h_bcalRFdt->Write();
+	h_tofRFdt->Write();
+	h_scRFdt->Write();
+	h_beamRFdt->Write();
+	h_beamRFdt_cut->Write();
+	
+	h_tofMatch->Write();
+	
+	for(int iveto=0; iveto<m_nVetos; iveto++) {
+		
+		TDirectoryFile *dirVeto = new TDirectoryFile(Form("VetoOption%d",iveto), Form("VetoOption%d",iveto));
+		dirVeto->cd();
+		
+		h_elasticity[iveto]->Write();
+		h_elasticityConstr[iveto]->Write();
+		h_mgg[iveto]->Write();
+		h_mggConstr[iveto]->Write();
+		h_mggConstr_coh[iveto]->Write();
+		h_mm[iveto]->Write();
+		h_mm_coh[iveto]->Write();
+		h_mm_elas[iveto]->Write();
+		h_mm_elas_coh[iveto]->Write();
+		h_pt[iveto]->Write();
+		h_ptCoh[iveto]->Write();
+		
+		dirVeto->cd("../");
+	}
+	h_t_vs_theta->Write();
+	
+	h_mgg_vs_vertexZ->Write();
+	h_mgg_vs_vertexR->Write();
+	
+	h_scDeltaPhi->Write();
+	h_scDeltaPhi_singleHit->Write();
+	h_bcalDeltaPhi->Write();
+	h_bcalDeltaPhi_singleHit->Write();
+	
+	h_xy1->Write();
+	h_xy2->Write();
+	
+	TDirectory *dirMatrix = new TDirectoryFile("AngularMatrix","AngularMatrix");
+	dirMatrix->cd();
+	if(h_AngularMatrix_vetos.size()) {
+		for(int i=0; i<h_AngularMatrix_vetos.size(); i++) {
+			h_AngularMatrix_vetos[i]->Write();
+		}
+	}
+	dirMatrix->cd("../");
+	
+	printf("  Done.\n");
+	return;
+}

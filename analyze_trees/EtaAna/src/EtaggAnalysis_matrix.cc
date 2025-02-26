@@ -12,15 +12,32 @@ void EtaAna::EtaggAnalysis_matrix() {
 		PlotThrown(locThrownBeamEnergy, locThrownAngle);
 	}
 	
+	//-------------------------------------------//
+	// Get list of selected beam photons:
+	
 	vector<pair<int,double>> locGoodBeamPhotons; locGoodBeamPhotons.clear();
 	int locNBeamPhotons = GetBeamPhotonList(locGoodBeamPhotons, m_minBeamEnergyCut, m_maxBeamEnergyCut);
+	
+	//-------------------------------------------//
+	// Get list of 'good' FCAL showers:
 	
 	vector<int> locGoodFCALShowers; locGoodFCALShowers.clear();
 	int locNFCALShowers_EnergyCut;
 	int locNFCALShowers = GetFCALShowerList(locGoodFCALShowers, locNFCALShowers_EnergyCut, m_FCALEnergyCut, m_FCALExtraEnergyCut, 2.0, m_FCALRFCut);
 	
+	//-------------------------------------------//
+	// Get list of 'good' BCAL showers:
+	
 	vector<int> locGoodBCALShowers; locGoodBCALShowers.clear();
 	int locNBCALShowers = GetBCALShowerList(locGoodBCALShowers, 0.0, m_BCALRFCut);
+	
+	//-------------------------------------------//
+	// Get list of 'good' SC hits:
+	
+	vector<int> locGoodSCHits; locGoodSCHits.clear();
+	int locNSCHits = GetSCHitList(locGoodSCHits);
+	
+	//-------------------------------------------//
 	
 	int locNBCALShowers_1ns = 0.;
 	double locBCALRFDT = 0., locBCALPhi = 0.; // only useful when there's exactly 1 BCAL shower within timing cut
@@ -75,22 +92,15 @@ void EtaAna::EtaggAnalysis_matrix() {
 			CheckTOFMatch(pos2, tof_dx2, tof_dy2, tof_dt2, m_TOFRFCut);
 			double tof_dr2 = sqrt(pow(tof_dx2,2.0)+pow(tof_dy2,2.0));
 			
-			
-			
 			//-----------------------------------------------------//
 			// TEST: Try to smear shower energies by an additional 10% to see if lineshape will better match data:
+			
 			/*
 			if(m_nmc>0) {
 				SmearShowerEnergy(e1);
 				SmearShowerEnergy(e2);
 			}
 			*/
-			//-----------------------------------------------------//
-			
-			
-			
-			
-			
 			
 			//-----------------------------------------------------//
 			// TOF Veto
@@ -125,30 +135,32 @@ void EtaAna::EtaggAnalysis_matrix() {
 			double invmass = sqrt(2.0*e1*e2*(1.-cos12));
 			
 			//-----------------------------------------------------//
-			// check different veto options:
+			// BCAL+SC Veto:
 			
 			bool isHadronicVeto = true;
 			
 			int locNSCHits = 0;
 			int locNSCHits_coplanar = 0;
-			for(int isc = 0; isc < m_nsc; isc++) {
-				
-				// only check hits between 1ns < (t_sc - t_RF) < 7ns 
-				//    and with dE > 0.0002 (from DNeutralShower_factory)
-				
-				double locT  = m_scT[isc] - m_rfTime;
-				double locdE = m_scdE[isc];
-				
-				if((1.0 < locT) && (locT < 9.0) && (locdE > 0.0002)) {
-					locNSCHits++;
-					if(fabs(fabs(m_scPhi[isc]-prodPhi)-180.0) < m_SCDeltaPhiCut) locNSCHits_coplanar++;
+			for(int isc=0; isc<locGoodSCHits.size(); isc++) {
+				int hitIndex = locGoodSCHits[isc];
+				double locDeltaPhi = prodPhi - m_scPhi[hitIndex];
+				if(IsCoplanarSC(locDeltaPhi)) locNSCHits_coplanar++;
+			}
+			
+			if(locNBCALShowers==0) 
+			{
+				isHadronicVeto = false;
+			}
+			else if(locNBCALShowers==1) {
+				if(IsCoplanarBCAL(prodPhi-locBCALPhi) && (locBCALRFDT>1.0)) {
+					if(locNSCHits_coplanar==locNSCHits) {
+						if(locNSCHits<=1) {
+							isHadronicVeto = false;
+						}
+					}
 				}
 			}
 			
-			if((locNBCALShowers==0) || 
-				((locNBCALShowers==1) && (fabs(fabs(locBCALPhi-prodPhi)-180.0) < m_BCALDeltaPhiCut) && (locBCALRFDT>1.0))) {
-				if(locNSCHits_coplanar==locNSCHits) isHadronicVeto = false;
-			}
 			if(isHadronicVeto) continue;
 			
 			//-----------------------------------------------------//
@@ -214,5 +226,68 @@ void EtaAna::EtaggAnalysis_matrix() {
 		} // end loop 2 over fcal showers
 	} // end loop 1 over fcal showers
 	
+	return;
+}
+
+void EtaAna::InitializeMatrixHists()
+{
+	int nInvmassBins     = (int)((m_maxInvmassBin-m_minInvmassBin)/m_invmassBinSize);
+	int nBeamEnergyBins  = (int)((m_maxBeamEnergyBin-m_minBeamEnergyBin)/m_beamEnergyBinSize);
+	int nRecAngleBins    = (int)((m_maxRecAngleBin-m_minRecAngleBin)/m_recAngleBinSize);
+	int nThrownAngleBins = (int)((m_maxThrownAngleBin-m_minThrownAngleBin)/m_thrownAngleBinSize);
+	
+	h_invmassMatrix = new TH3F("invmassMatrix", 
+		"Invariant Mass Matrix; #theta(rec) [#circ]; m_{#gamma#gamma}^{Constr} [GeV/c^{2}]; E_{#gamma} [GeV]",
+		nRecAngleBins, m_minRecAngleBin, m_maxRecAngleBin, 
+		nInvmassBins, m_minInvmassBin, m_maxInvmassBin, 
+		nBeamEnergyBins, m_minBeamEnergyBin, m_maxBeamEnergyBin);
+	h_invmassMatrix->Sumw2();
+	h_invmassMatrix->SetDirectory(0);
+	
+	h_invmassMatrix_prompt = new TH3F("invmassMatrix_prompt",
+		"Invariant Mass matrix; #theta(rec) [#circ]; m_{#gamma#gamma}^{Constr} [GeV/c^{2}]; E_{#gamma} [GeV]",
+		nRecAngleBins, m_minRecAngleBin, m_maxRecAngleBin, 
+		nInvmassBins, m_minInvmassBin, m_maxInvmassBin, 
+		nBeamEnergyBins, m_minBeamEnergyBin, m_maxBeamEnergyBin);
+	h_invmassMatrix_prompt->SetDirectory(0);
+	h_invmassMatrix_prompt->Sumw2();
+	
+	h_invmassMatrix_acc = new TH3F("invmassMatrix_acc", 
+		"Invariant Mass Matrix; #theta(rec) [#circ]; m_{#gamma#gamma}^{Constr} [GeV/c^{2}]; E_{#gamma} [GeV]",
+		nRecAngleBins, m_minRecAngleBin, m_maxRecAngleBin, 
+		nInvmassBins, m_minInvmassBin, m_maxInvmassBin, 
+		nBeamEnergyBins, m_minBeamEnergyBin, m_maxBeamEnergyBin);
+	h_invmassMatrix_acc->SetDirectory(0);
+	h_invmassMatrix_acc->Sumw2();
+	
+	if(m_FillThrown) {
+		h_AngularMatrix = new TH3F("AngularMatrix", "; #theta(thrown) [#circ]; #theta(rec) [#circ]",
+			nThrownAngleBins, m_minThrownAngleBin, m_maxThrownAngleBin, 
+			nRecAngleBins,    m_minRecAngleBin,    m_maxRecAngleBin,
+			nBeamEnergyBins,  m_minBeamEnergyBin,  m_maxBeamEnergyBin);
+	}
+	return;
+}
+
+void EtaAna::ResetMatrixHists()
+{
+	if(h_invmassMatrix!=NULL) h_invmassMatrix->Reset();
+	if(h_invmassMatrix_prompt!=NULL) h_invmassMatrix_prompt->Reset();
+	if(h_invmassMatrix_acc!=NULL) h_invmassMatrix_acc->Reset();
+	if(h_AngularMatrix!=NULL) h_AngularMatrix->Reset();
+	
+	return;
+}
+
+void EtaAna::WriteMatrixHists()
+{
+	printf("\n  Writing angular and invariant mass matrices...\n");
+	
+	if(h_invmassMatrix!=NULL) h_invmassMatrix->Write();
+	if(h_invmassMatrix_prompt!=NULL) h_invmassMatrix_prompt->Write();
+	if(h_invmassMatrix_acc!=NULL) h_invmassMatrix_acc->Write();
+	if(h_AngularMatrix!=NULL) h_AngularMatrix->Write();
+	
+	printf("  Done.\n");
 	return;
 }

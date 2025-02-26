@@ -420,6 +420,28 @@ int EtaAna::GetBCALShowerList(vector<int> &goodShowers, double energyCut, double
 	return nBCALShowers;
 }
 
+int EtaAna::GetSCHitList(vector<int> &goodHits) {
+	
+	// Timing and dE cuts are hard coded for now
+	
+	int nSCHits = 0;
+	for(int ihit=0; ihit<m_nsc; ihit++) {
+		
+		// only check hits between 1ns < (t_sc - t_RF) < 7ns 
+		//    and with dE > 0.0002 (from DNeutralShower_factory)
+		
+		double locT  = m_scT[ihit] - m_rfTime;
+		double locdE = m_scdE[ihit];
+		
+		if((1.0 < locT) && (locT < 9.0) && (locdE > 0.0002)) {
+			nSCHits++;
+			goodHits.push_back(ihit);
+		}
+	}
+	
+	return nSCHits;
+}
+
 int EtaAna::GetBeamPhotonList(vector<pair<int,double>> &goodPhotons, double minEnergyCut, double maxEnergyCut) {
 	
 	int nBeamPhotons = 0;
@@ -473,6 +495,11 @@ int EtaAna::FCALFiducialCut(TVector3 pos, double cutLayer) {
 	double fcalFaceY = m_vertex.Y() + (pos.Y() * (m_fcalFace.Z() - m_vertex.Z())/pos.Z()) - m_fcalFace.Y();
 	
 	if((fabs(fcalFaceX) < fcalInnerLayerCut) && (fabs(fcalFaceY) < fcalInnerLayerCut)) locFiducialCut = 1;
+	
+	// exclude showers near outer layers:
+	
+	double fcalFaceR = sqrt(pow(fcalFaceX,2.0) + pow(fcalFaceY,2.0));
+	if(fcalFaceR > 100.0) locFiducialCut = 1;
 	
 	// only apply the next fiducial cut for runs from phase-I:
 	/*
@@ -550,6 +577,18 @@ double EtaAna::GetFCALEnergyResolution(double e) {
 void EtaAna::GetThrownEnergyAndAngle(double &thrownEnergy, double &thrownAngle) {
 	//if(m_nmc!=2) return;
 	
+	/*
+	The following code calculates the thrown beam energy assuming an eta 
+	was produced coherently on a He-4 nucleus at rest. However, this is only accurate
+	for the coherent grid simulation. Not the bggen or other background simulations.
+	That's why the last line of this function reads the thrown beam energy from a dedicated 
+	branch. This is how it should be done for all simulations, but when writing the trees initially,
+	this branch was not included. 
+	
+	In the future, when the trees are updated to include this branch, we should only use the last
+	line for getting the thrown beam energy.
+	*/
+	
 	thrownEnergy = -1.0*ParticleMass(Helium);
 	thrownAngle  =  0.0;
 	for(int imc=0; imc<m_nmc; imc++) {
@@ -559,6 +598,20 @@ void EtaAna::GetThrownEnergyAndAngle(double &thrownEnergy, double &thrownAngle) 
 	
 	if(m_thrownBeamEnergy>1.0) thrownEnergy = m_thrownBeamEnergy;
 	
+	return;
+}
+
+void EtaAna::GetThrownEnergyAndAngleBGGEN(double &thrownEnergy, double &thrownAngle) {
+	
+	// in principle all simulations should be analyzed in this way, but at the 
+	// time of writing this (2/18/25) only the BGGEN mc trees have been updated to 
+	// include the "thrownBeamEnergy" branch.
+	
+	thrownAngle  =  0.0;
+	for(int imc=0; imc<m_nmc; imc++) {
+		if(m_mcPDGType[imc]==PDGtype(Eta)) thrownAngle = m_mcTheta[imc];
+	}
+	thrownEnergy = m_thrownBeamEnergy;
 	return;
 }
 
@@ -572,6 +625,34 @@ bool EtaAna::IsElasticCut(double Egg, double Eeta, double theta) {
 bool EtaAna::IsEtaCut(double invmass) {
 	if((0.5<=invmass) && (invmass<0.6)) return true;
 	else return false;
+}
+
+bool EtaAna::IsCoplanarBCAL(double deltaPhi) {
+	
+	// deltaPhi = #phi_gg - #phi_BCAL
+	
+	if(m_phaseVal>1) {
+		if(((140.0<deltaPhi) && (deltaPhi<240.0)) || ((-220.0<deltaPhi) && (deltaPhi<-120.0)))
+			return true;
+		else 
+			return false;
+	}
+	else {
+		if(fabs(fabs(deltaPhi)-180.0) < m_BCALDeltaPhiCut)
+			return true;
+		else
+			return false;
+	}
+}
+
+bool EtaAna::IsCoplanarSC(double deltaPhi) {
+	
+	// deltaPhi = #phi_gg - #phi_SC
+	
+	if(fabs(fabs(deltaPhi)-180.0) < m_SCDeltaPhiCut)
+		return true;
+	else
+		return false;
 }
 
 void EtaAna::SmearShowerEnergy(double &e) {
@@ -775,406 +856,33 @@ void EtaAna::InitHistograms(int analysisOption) {
 	switch(analysisOption) {
 		case 0:
 		{
-			// DEFAULT ANALYSIS HISTOGRAMS:
-			
-			h_mcVertex         = new TH1F("vertex",          "Vertex Z Position (unweighted)", 1000, 0., 600.);
-			h_mcVertexAccepted = new TH1F("vertex_accepted", "Vertex Z Position (weighted)",   1000, 0., 600.);
-			
-			h_fcalRFdt     = new TH1F("fcal_rf_dt",     "t_{FCAL} - t_{RF}; [ns]", 10000, -100., 100.);
-			h_bcalRFdt     = new TH1F("bcal_rf_dt",     "t_{BCAL} - t_{RF}; [ns]", 10000, -100., 100.);
-			h_tofRFdt      = new TH1F( "tof_rf_dt",      "t_{TOF} - t_{RF}; [ns]", 10000, -100., 100.);
-			h_scRFdt       = new TH1F(  "sc_rf_dt",       "t_{SC} - t_{RF}; [ns]", 10000, -100., 100.);
-			
-			h_beamRFdt     = new TH1F("beam_rf_dt",     "t_{CCAL} - t_{RF}; [ns]", 10000, -100., 100.);
-			h_beamRFdt_cut = new TH1F("beam_rf_dt_cut", "t_{Beam} - t_{RF}; [ns]", 10000, -100., 100.);
-			
-			for(int iveto=0; iveto<m_nVetos; iveto++) {
-				
-				h_elasticity[iveto] = new TH2F(Form("elasticity_veto_%d",iveto),
-					Form("Elasticity (Veto Option %d)",iveto), 
-					nRecAngleBins, m_minRecAngleBin, m_maxRecAngleBin, 1000, 0.0, 2.0);
-				h_elasticity[iveto]->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
-				h_elasticity[iveto]->GetYaxis()->SetTitle("E_{#gamma#gamma}/E_{#eta}#left(E_{#gamma},#theta_{#gamma#gamma}#right)");
-				
-				h_elasticityConstr[iveto] = new TH2F(Form("elasticity_const_veto_%d",iveto),
-					Form("Mass-Constrained Elasticity (Veto Option %d)",iveto), 
-					nRecAngleBins, m_minRecAngleBin, m_maxRecAngleBin, 1000, 0.0, 2.0);
-				h_elasticityConstr[iveto]->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
-				h_elasticityConstr[iveto]->GetYaxis()->SetTitle(
-					"E_{#gamma#gamma}^{Constr}/E_{#eta}#left(E_{#gamma},#theta_{#gamma#gamma}#right)");
-				
-				h_mgg[iveto] = new TH2F(Form("mgg_veto_%d",iveto), 
-					Form("Two-Photon Invariant Mass (Veto Option %d)",iveto), 
-					nRecAngleBins, m_minRecAngleBin, m_maxRecAngleBin, 
-					nInvmassBins, m_minInvmassBin, m_maxInvmassBin);
-				h_mgg[iveto]->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
-				h_mgg[iveto]->GetYaxis()->SetTitle("m_{#gamma#gamma} [GeV/c^{2}]");
-				h_mgg[iveto]->Sumw2();
-				
-				h_mggConstr[iveto] = new TH2F(Form("mgg_const_veto_%d",iveto), 
-					Form("Energy-Constrained Invariant Mass (Veto Option %d)",iveto), 
-					nRecAngleBins, m_minRecAngleBin, m_maxRecAngleBin, 
-					nInvmassBins, m_minInvmassBin, m_maxInvmassBin);
-				h_mggConstr[iveto]->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
-				h_mggConstr[iveto]->GetYaxis()->SetTitle("m_{#gamma#gamma}^{Constr} [GeV/c^{2}]");
-				h_mggConstr[iveto]->Sumw2();
-				
-				h_mggConstr_coh[iveto] = new TH2F(Form("mgg_const_coh_veto_%d",iveto), 
-					Form("Energy-Constrained Invariant Mass (Veto Option %d)",iveto), 
-					nRecAngleBins, m_minRecAngleBin, m_maxRecAngleBin, 
-					nInvmassBins, m_minInvmassBin, m_maxInvmassBin);
-				h_mggConstr_coh[iveto]->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
-				h_mggConstr_coh[iveto]->GetYaxis()->SetTitle("m_{#gamma#gamma}^{Constr} [GeV/c^{2}]");
-				h_mggConstr_coh[iveto]->Sumw2();
-				
-				h_pt[iveto] = new TH2F(Form("pt_veto_%d",iveto), 
-					Form("Transverse Momentum Difference (Veto Option %d)",iveto), 
-					nRecAngleBins, m_minRecAngleBin, m_maxRecAngleBin, 1000, -0.5, 0.5);
-				h_pt[iveto]->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
-				h_pt[iveto]->GetYaxis()->SetTitle("p_{T} - p_{T}^{Calc} [GeV/c]");
-				h_pt[iveto]->Sumw2();
-				
-				h_ptCoh[iveto] = new TH2F(Form("ptConstr_veto_%d",iveto), 
-					Form("Transverse Momentum Differnce (Veto Option %d)",iveto), 
-					nRecAngleBins, m_minRecAngleBin, m_maxRecAngleBin, 1000, -0.5, 0.5);
-				h_ptCoh[iveto]->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
-				h_ptCoh[iveto]->GetYaxis()->SetTitle("p_{T} - p_{T}^{Calc} [GeV/c]");
-				h_ptCoh[iveto]->Sumw2();
-				
-				h_mm[iveto] = new TH2F(Form("mm_veto_%d",iveto), 
-					Form("Missing Mass (Veto Option %d)",iveto), 
-					nRecAngleBins, m_minRecAngleBin, m_maxRecAngleBin, 1000, -20.0, 20.0);
-				h_mm[iveto]->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
-				h_mm[iveto]->GetYaxis()->SetTitle("#Deltam^{2} [GeV^{2}/c^{4}]");
-				h_mm[iveto]->Sumw2();
-				
-				h_mm_coh[iveto] = new TH2F(Form("mm_coh_veto_%d",iveto), 
-					Form("Missing Mass (Veto Option %d)",iveto), 
-					nRecAngleBins, m_minRecAngleBin, m_maxRecAngleBin, 1000, -20.0, 20.0);
-				h_mm_coh[iveto]->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
-				h_mm_coh[iveto]->GetYaxis()->SetTitle("#Deltam^{2} - m_{He}^{2} [GeV^{2}/c^{4}]");
-				h_mm_coh[iveto]->Sumw2();
-				
-				h_mm_elas[iveto] = new TH2F(Form("mm_elas_veto_%d",iveto), 
-					Form("Missing Mass (Veto Option %d)",iveto), 
-					nRecAngleBins, m_minRecAngleBin, m_maxRecAngleBin, 1000, -20.0, 20.0);
-				h_mm_elas[iveto]->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
-				h_mm_elas[iveto]->GetYaxis()->SetTitle("#Deltam^{2} [GeV^{2}/c^{4}]");
-				h_mm_elas[iveto]->Sumw2();
-				
-				h_mm_elas_coh[iveto] = new TH2F(Form("mm_elas_coh_veto_%d",iveto), 
-					Form("Missing Mass (Veto Option %d)",iveto), 
-					nRecAngleBins, m_minRecAngleBin, m_maxRecAngleBin, 1000, -20.0, 20.0);
-				h_mm_elas_coh[iveto]->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
-				h_mm_elas_coh[iveto]->GetYaxis()->SetTitle("#Deltam^{2} - m_{He}^{2} [GeV^{2}/c^{4}]");
-				h_mm_elas_coh[iveto]->Sumw2();
-			}
-			
-			h_t_vs_theta = new TH2F("t_vs_theta", "; #theta_{#gamma#gamma} [#circ]; -t [GeV/c^{2}]", 
-				nRecAngleBins, m_minRecAngleBin, m_maxRecAngleBin, 550, -4.0, 1.0);
-			
-			h_e_vs_theta = new TH2F("h_e_vs_theta", "; #theta_{cm} [#circ]; E_{CM} [GeV]", 500, 0.0, 1.0, 500, 0.0, 1.0);
-			
-			h_deltaPhi_CM = new TH1F("deltaPhi_CM", "; #Delta#phi_{cm} [#circ]", 3600, -360.0, 360.0);
-			
-			h_mgg_vs_vertex = new TH2F("mgg_vs_vertex", "; z_{thrown} [cm]; m_{#gamma#gamma}^{Constr} [GeV/c^{2}]",
-				500, 0.0, 500.0, 300, 0.0, 1.2);
-			
-			/*
-			h_pT_vs_elas     = new TH2F("pT_vs_elas", 
-				"; E_{#gamma#gamma} / E_{Calc}#left(E_{#gamma},#theta_{#gamma#gamma}#right); p_{T} / p_{T}^{Calc}",
-				1000, 0.0, 2.0, 1000, 0.0, 2.0);
-			h_pT_vs_elas_cut = new TH2F("pT_vs_elas_cut", 
-				"; E_{#gamma#gamma} / E_{Calc}#left(E_{#gamma},#theta_{#gamma#gamma}#right); p_{T} / p_{T}^{Calc}",
-				1000, 0.0, 2.0, 1000, 0.0, 2.0);
-			*/
-			
-			h_scDeltaPhi = new TH2F("scDeltaPhi", 
-				"#phi_{SC} - #phi_{#gamma#gamma}; #theta_{#gamma#gamma} [#circ]; #Delta#phi [#circ]",
-				650, 0.0, 6.5, 2000, -360.0, 360.0);
-			
-			h_bcalDeltaPhi = new TH2F("bcalDeltaPhi", 
-				"#phi_{BCAL} - #phi_{#gamma#gamma}; #theta_{#gamma#gamma} [#circ]; #Delta#phi [#circ]",
-				650, 0.0, 6.5, 2000, -360.0, 360.0);
-			
-			h_xy1 = new TH2F("xy1", "Position of Shower 1; x_{1} [cm]; y_{1} [cm]", 500, -100., 100., 500, -100., 100.);
-			h_xy2 = new TH2F("xy2", "Position of Shower 2; x_{2} [cm]; y_{2} [cm]", 500, -100., 100., 500, -100., 100.);
-			
-			if(m_FillThrown) {
-				for(int iveto=0; iveto<m_nVetos; iveto++) {
-					TH3F *hMatrix = new TH3F(Form("AngularMatrix_veto_%d",iveto), 
-						Form("Veto Option %d; #theta(thrown) [#circ]; #theta(rec) [#circ]", iveto),
-						nThrownAngleBins, m_minThrownAngleBin, m_maxThrownAngleBin, 
-						nRecAngleBins,    m_minRecAngleBin,    m_maxRecAngleBin,
-						nBeamEnergyBins,  m_minBeamEnergyBin,  m_maxBeamEnergyBin);
-					hMatrix->SetDirectory(0);
-					h_AngularMatrix_vetos.push_back(hMatrix);
-				}
-			}
+			InitializeDefaultHists();
 			break;
 		}
 		case 1:
 		{
-			h_invmassMatrix = new TH3F("invmassMatrix", 
-				"Invariant Mass Matrix; #theta(rec) [#circ]; m_{#gamma#gamma}^{Constr} [GeV/c^{2}]; E_{#gamma} [GeV]",
-				nRecAngleBins, m_minRecAngleBin, m_maxRecAngleBin, 
-				nInvmassBins, m_minInvmassBin, m_maxInvmassBin, 
-				nBeamEnergyBins, m_minBeamEnergyBin, m_maxBeamEnergyBin);
-			h_invmassMatrix->Sumw2();
-			h_invmassMatrix->SetDirectory(0);
-			
-			h_invmassMatrix_prompt = new TH3F("invmassMatrix_prompt",
-				"Invariant Mass matrix; #theta(rec) [#circ]; m_{#gamma#gamma}^{Constr} [GeV/c^{2}]; E_{#gamma} [GeV]",
-				nRecAngleBins, m_minRecAngleBin, m_maxRecAngleBin, 
-				nInvmassBins, m_minInvmassBin, m_maxInvmassBin, 
-				nBeamEnergyBins, m_minBeamEnergyBin, m_maxBeamEnergyBin);
-			h_invmassMatrix_prompt->SetDirectory(0);
-			h_invmassMatrix_prompt->Sumw2();
-			
-			h_invmassMatrix_acc = new TH3F("invmassMatrix_acc", 
-				"Invariant Mass Matrix; #theta(rec) [#circ]; m_{#gamma#gamma}^{Constr} [GeV/c^{2}]; E_{#gamma} [GeV]",
-				nRecAngleBins, m_minRecAngleBin, m_maxRecAngleBin, 
-				nInvmassBins, m_minInvmassBin, m_maxInvmassBin, 
-				nBeamEnergyBins, m_minBeamEnergyBin, m_maxBeamEnergyBin);
-			h_invmassMatrix_acc->SetDirectory(0);
-			h_invmassMatrix_acc->Sumw2();
-			
-			if(m_FillThrown) {
-				h_AngularMatrix = new TH3F("AngularMatrix", "; #theta(thrown) [#circ]; #theta(rec) [#circ]",
-					nThrownAngleBins, m_minThrownAngleBin, m_maxThrownAngleBin, 
-					nRecAngleBins,    m_minRecAngleBin,    m_maxRecAngleBin,
-					nBeamEnergyBins,  m_minBeamEnergyBin,  m_maxBeamEnergyBin);
-			}
+			InitializeMatrixHists();
 			break;
 		}
 		case 2:
 		{
-			// VARY FCAL CUTS:
-			
-			h_mgg_FCAL = new TH2F("mgg_FCAL", "No Multiplicity Cut", 
-				nRecAngleBins, m_minRecAngleBin, m_maxRecAngleBin,
-				nInvmassBins, m_minInvmassBin, m_maxInvmassBin);
-			h_mgg_FCAL->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
-			h_mgg_FCAL->GetYaxis()->SetTitle("m_{#gamma#gamma}^{Constr} [GeV/c^{2}]");
-			h_mgg_FCAL->Sumw2();
-			
-			// with minimum energy cuts:
-			
-			h_mgg_FCALECut = new TH2F("mgg_FCAL_ecut", Form("E_{1,2} > %.2f GeV", m_FCALEnergyCut), 
-				nRecAngleBins, m_minRecAngleBin, m_maxRecAngleBin,
-				nInvmassBins, m_minInvmassBin, m_maxInvmassBin);
-			h_mgg_FCALECut->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
-			h_mgg_FCALECut->GetYaxis()->SetTitle("m_{#gamma#gamma}^{Constr} [GeV/c^{2}]");
-			h_mgg_FCALECut->Sumw2();
-			
-			// with fiducial cuts:
-			
-			h_mgg_FCALFidCut = new TH2F("mgg_FCAL_fidcut", "Fiducial Cut Applied", 
-				nRecAngleBins, m_minRecAngleBin, m_maxRecAngleBin,
-				nInvmassBins, m_minInvmassBin, m_maxInvmassBin);
-			h_mgg_FCALFidCut->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
-			h_mgg_FCALFidCut->GetYaxis()->SetTitle("m_{#gamma#gamma}^{Constr} [GeV/c^{2}]");
-			h_mgg_FCALFidCut->Sumw2();
-			
-			// with both energy and fiducial cuts:
-			
-			h_mgg_FCALCuts = new TH2F("mgg_FCAL_cuts", "Fiducial+Energy Cuts Applied", 
-				nRecAngleBins, m_minRecAngleBin, m_maxRecAngleBin,
-				nInvmassBins, m_minInvmassBin, m_maxInvmassBin);
-			h_mgg_FCALCuts->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
-			h_mgg_FCALCuts->GetYaxis()->SetTitle("m_{#gamma#gamma}^{Constr} [GeV/c^{2}]");
-			h_mgg_FCALCuts->Sumw2();
-			
-			// with 'good' multiplicity = 2:
-			
-			h_mgg_FCALGoodMult = new TH2F("mgg_FCAL_good_mult", "2 Good FCAL Showers", 
-				nRecAngleBins, m_minRecAngleBin, m_maxRecAngleBin,
-				nInvmassBins, m_minInvmassBin, m_maxInvmassBin);
-			h_mgg_FCALGoodMult->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
-			h_mgg_FCALGoodMult->GetYaxis()->SetTitle("m_{#gamma#gamma}^{Constr} [GeV/c^{2}]");
-			h_mgg_FCALGoodMult->Sumw2();
-			
-			// with total multiplicity = 2:
-			
-			h_mgg_FCALMult = new TH2F("mgg_FCAL_mult", "2 FCAL Showers", 
-				nRecAngleBins, m_minRecAngleBin, m_maxRecAngleBin,
-				nInvmassBins, m_minInvmassBin, m_maxInvmassBin);
-			h_mgg_FCALMult->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
-			h_mgg_FCALMult->GetYaxis()->SetTitle("m_{#gamma#gamma}^{Constr} [GeV/c^{2}]");
-			h_mgg_FCALMult->Sumw2();
-			
-			// vary the size of the fiducial cut:
-			
-			m_fcalFiducialCuts.clear();
-			for(int icut=0; icut<17; icut++) {
-				double locCut = 0.0 + 0.25*(double)(icut);
-				m_fcalFiducialCuts.push_back(locCut);
-			}
-			
-			for(int icut=0; icut<m_fcalFiducialCuts.size(); icut++) {
-				TH2F *loc_h_mgg = new TH2F(Form("mgg_FCAL_fid_%02d", icut),
-					Form("Inner layers removed by fiducial cut: %.1f", m_fcalFiducialCuts[icut]), 
-					nRecAngleBins, m_minRecAngleBin, m_maxRecAngleBin,
-					nInvmassBins, m_minInvmassBin, m_maxInvmassBin);
-				loc_h_mgg->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
-				loc_h_mgg->GetYaxis()->SetTitle("m_{#gamma#gamma}^{Constr} [GeV/c^{2}]");
-				loc_h_mgg->Sumw2();
-				h_mgg_FCALFidCutVec.push_back(loc_h_mgg);
-			}
-			
-			// vary the minimum energy cut:
-			
-			m_fcalEnergyCuts.clear();
-			for(int icut=0; icut<20; icut++) {
-				double locCut = 0.0 + 0.05*(double)(icut);
-				m_fcalEnergyCuts.push_back(locCut);
-			}
-			
-			for(int icut=0; icut<m_fcalEnergyCuts.size(); icut++) {
-				TH2F *loc_h_mgg = new TH2F(Form("mgg_FCAL_ecut_%02d", icut),
-					Form("Minimum Energy Cut: %.2f GeV", m_fcalEnergyCuts[icut]), 
-					nRecAngleBins, m_minRecAngleBin, m_maxRecAngleBin,
-					nInvmassBins, m_minInvmassBin, m_maxInvmassBin);
-				loc_h_mgg->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
-				loc_h_mgg->GetYaxis()->SetTitle("m_{#gamma#gamma}^{Constr} [GeV/c^{2}]");
-				loc_h_mgg->Sumw2();
-				h_mgg_FCALECutVec.push_back(loc_h_mgg);
-			}
-			
-			for(int icut=0; icut<m_fcalEnergyCuts.size(); icut++) {
-				TH2F *loc_h_mgg = new TH2F(Form("mgg_FCAL_extra_ecut_%02d", icut),
-					Form("Minimum Energy Cut: %.2f GeV", m_fcalEnergyCuts[icut]), 
-					nRecAngleBins, m_minRecAngleBin, m_maxRecAngleBin,
-					nInvmassBins, m_minInvmassBin, m_maxInvmassBin);
-				loc_h_mgg->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
-				loc_h_mgg->GetYaxis()->SetTitle("m_{#gamma#gamma}^{Constr} [GeV/c^{2}]");
-				loc_h_mgg->Sumw2();
-				h_mgg_FCALExtraECutVec.push_back(loc_h_mgg);
-			}
-			
-			if(m_FillThrown) InitializeAngularMatrices_FCAL();
+			InitializeFCALHists();
 			break;
 		}
 		case 5:
 		{
-			// VARY TOF CUTS:
-			
-			h_mgg_noTOF = new TH2F("mgg_noTOF", "No TOF Veto", 
-				nRecAngleBins, m_minRecAngleBin, m_maxRecAngleBin,
-				nInvmassBins, m_minInvmassBin, m_maxInvmassBin);
-			h_mgg_noTOF->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
-			h_mgg_noTOF->GetYaxis()->SetTitle("m_{#gamma#gamma}^{Constr} [GeV/c^{2}]");
-			h_mgg_noTOF->Sumw2();
-			
-			// with standard veto:
-			
-			h_mgg_TOF = new TH2F("mgg_TOF", "Standard TOF Veto", 
-				nRecAngleBins, m_minRecAngleBin, m_maxRecAngleBin,
-				nInvmassBins, m_minInvmassBin, m_maxInvmassBin);
-			h_mgg_TOF->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
-			h_mgg_TOF->GetYaxis()->SetTitle("m_{#gamma#gamma}^{Constr} [GeV/c^{2}]");
-			h_mgg_TOF->Sumw2();
-			
-			// with single-shower TOF veto:
-			
-			h_mgg_singleTOF = new TH2F("mgg_singleTOF", "Veto on single-shower TOF match", 
-				nRecAngleBins, m_minRecAngleBin, m_maxRecAngleBin,
-				nInvmassBins, m_minInvmassBin, m_maxInvmassBin);
-			h_mgg_singleTOF->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
-			h_mgg_singleTOF->GetYaxis()->SetTitle("m_{#gamma#gamma}^{Constr} [GeV/c^{2}]");
-			h_mgg_singleTOF->Sumw2();
-			
-			// vary the timing cut used for TOF veto:
-			
-			m_TOFTimingCuts.clear();
-			for(int icut=0; icut<7; icut++) {
-				double locCut = 0.5 + 0.25*(double)(icut);
-				m_TOFTimingCuts.push_back(locCut);
-			}
-			m_TOFTimingCuts.push_back(6.0);
-			
-			for(int icut=0; icut<m_TOFTimingCuts.size(); icut++) {
-				TH2F *loc_h_mgg = new TH2F(Form("mgg_TOFTiming_%02d", icut),
-					Form("TOF Timing Cut: #left|t_{TOF} - t_{RF}#right| < %.2f ns", m_TOFTimingCuts[icut]), 
-					nRecAngleBins, m_minRecAngleBin, m_maxRecAngleBin,
-					nInvmassBins, m_minInvmassBin, m_maxInvmassBin);
-				loc_h_mgg->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
-				loc_h_mgg->GetYaxis()->SetTitle("m_{#gamma#gamma}^{Constr} [GeV/c^{2}]");
-				loc_h_mgg->Sumw2();
-				h_mgg_TOFTimingCutVec.push_back(loc_h_mgg);
-			}
-			
-			// vary the distance cut used for TOF veto:
-			
-			m_TOFDistanceCuts.clear();
-			for(int icut=0; icut<15; icut++) {
-				double locCut = 5.0 + 0.5*(double)(icut);
-				m_TOFDistanceCuts.push_back(locCut);
-			}
-			m_TOFDistanceCuts.push_back(500.0);
-			
-			for(int icut=0; icut<m_TOFDistanceCuts.size(); icut++) {
-				TH2F *loc_h_mgg = new TH2F(Form("mgg_TOFDistance_%02d", icut),
-					Form("TOF Distance Cut: #DeltaR_{FCAL-TOF} < %.1f cm", m_TOFDistanceCuts[icut]), 
-					nRecAngleBins, m_minRecAngleBin, m_maxRecAngleBin,
-					nInvmassBins, m_minInvmassBin, m_maxInvmassBin);
-				loc_h_mgg->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
-				loc_h_mgg->GetYaxis()->SetTitle("m_{#gamma#gamma}^{Constr} [GeV/c^{2}]");
-				loc_h_mgg->Sumw2();
-				h_mgg_TOFDistanceCutVec.push_back(loc_h_mgg);
-			}
-			
-			if(m_FillThrown) InitializeAngularMatrices_TOF();
+			InitializeTOFHists();
 			break;
 		}
 		case 6:
 		{
-			// BGGEN Analysis:
-			
 			InitializeReactionTypes();
 			InitializeBGGENHists();
+			break;
 		}
 		case 7:
 		{
-			// Omega->pi0+gamma:
-			
-			h_3gamma_m12 = new TH1F("3gamma_m12", ";m_{12} [GeV/c^{2}]", 1200, 0.0, 1.2);
-			h_3gamma_m13 = new TH1F("3gamma_m13", ";m_{13} [GeV/c^{2}]", 1200, 0.0, 1.2);
-			h_3gamma_m23 = new TH1F("3gamma_m23", ";m_{23} [GeV/c^{2}]", 1200, 0.0, 1.2);
-			h_3gamma_m3g = new TH1F("3gamma_m3g", ";m_{3#gamma} [GeV/c^{2}]", 1200, 0.0, 1.2);
-			
-			h_3gamma_m12_elas = new TH1F("3gamma_m12_elas", ";m_{12} [GeV/c^{2}]", 1200, 0.0, 1.2);
-			h_3gamma_m13_elas = new TH1F("3gamma_m13_elas", ";m_{13} [GeV/c^{2}]", 1200, 0.0, 1.2);
-			h_3gamma_m23_elas = new TH1F("3gamma_m23_elas", ";m_{23} [GeV/c^{2}]", 1200, 0.0, 1.2);
-			h_3gamma_m3g_elas = new TH1F("3gamma_m3g_elas", ";m_{3#gamma} [GeV/c^{2}]", 1200, 0.0, 1.2);
-			
-			h_3gamma_vz      = new TH1F("3gamma_vz", "Calculated Vertex Z position for #omega#rightarrow#pi^{0}#gamma; z_{vertex} [cm]",
-				1000, -500.0, 500.0);
-			h_3gamma_vz_elas = new TH1F("3gamma_vz_elas", "Calculated Vertex Z position for #omega#rightarrow#pi^{0}#gamma; z_{vertex} [cm]",
-				1000, -500.0, 500.0);
-			
-			h_3gamma_theta_targ = new TH1F("3gamma_theta_targ", 
-				"Angular Distribution of #omega's produced near target; #theta_{#omega} [#circ]",
-				1000, 0.0, 6.0);
-			h_3gamma_theta_fdc1 = new TH1F("3gamma_theta_fdc1", 
-				"Angular Distribution of #omega's produced near FDC Package 1; #theta_{#omega} [#circ]",
-				1000, 0.0, 6.0);
-			h_3gamma_theta_fdc2 = new TH1F("3gamma_theta_fdc2", 
-				"Angular Distribution of #omega's produced near FDC Package 2; #theta_{#omega} [#circ]",
-				1000, 0.0, 6.0);
-			h_3gamma_theta_fdc3 = new TH1F("3gamma_theta_fdc3", 
-				"Angular Distribution of #omega's produced near FDC Package 3; #theta_{#omega} [#circ]",
-				1000, 0.0, 6.0);
-			
-			h_xy_targ = new TH2F("xy_targ", "#omega's from Target Area; x_{FCAL} [cm]; y_{FCAL} [cm]", 
-				600, -150.0, 150.0, 600, -150.0, 150.0);
-			h_xy_fdc1 = new TH2F("xy_fdc1", "#omega's from 1st FDC Package; x_{FCAL} [cm]; y_{FCAL} [cm]", 
-				600, -150.0, 150.0, 600, -150.0, 150.0);
-			h_xy_fdc2 = new TH2F("xy_fdc2", "#omega's from 2nd FDC Package; x_{FCAL} [cm]; y_{FCAL} [cm]", 
-				600, -150.0, 150.0, 600, -150.0, 150.0);
-			h_xy_fdc3 = new TH2F("xy_fdc3", "#omega's from 3rd FDC Package; x_{FCAL} [cm]; y_{FCAL} [cm]", 
-				600, -150.0, 150.0, 600, -150.0, 150.0);
-			
+			InitializeOmegaHists();
 			break;
 		}
 	}
@@ -1187,118 +895,22 @@ void EtaAna::ResetHistograms(int analysisOption) {
 	switch(analysisOption) {
 		case 0:
 		{
-			h_mcVertex->Reset();
-			h_mcVertexAccepted->Reset();
-			h_mgg_vs_vertex->Reset();
-			
-			h_fcalRFdt->Reset();
-			h_bcalRFdt->Reset();
-			h_tofRFdt->Reset();
-			h_scRFdt->Reset();
-			h_beamRFdt->Reset();
-			h_beamRFdt_cut->Reset();
-			
-			for(int iveto=0; iveto<m_nVetos; iveto++) {
-				h_elasticity[iveto]->Reset();
-				h_elasticityConstr[iveto]->Reset();
-				h_mgg[iveto]->Reset();
-				h_mggConstr[iveto]->Reset();
-				h_mggConstr_coh[iveto]->Reset();
-				h_pt[iveto]->Reset();
-				h_ptCoh[iveto]->Reset();
-				h_mm[iveto]->Reset();
-				h_mm_coh[iveto]->Reset();
-				h_mm_elas[iveto]->Reset();
-				h_mm_elas_coh[iveto]->Reset();
-			}
-			h_t_vs_theta->Reset();
-			h_e_vs_theta->Reset();
-			h_deltaPhi_CM->Reset();
-			
-			/*
-			h_pT_vs_elas->Reset();
-			h_pT_vs_elas_cut->Reset();
-			*/
-			h_scDeltaPhi->Reset();
-			h_bcalDeltaPhi->Reset();
-			
-			h_xy1->Reset();
-			h_xy2->Reset();
-			
-			if(h_AngularMatrix_vetos.size()) {
-				for(int i=0; i<h_AngularMatrix_vetos.size(); i++) {
-					h_AngularMatrix_vetos[i]->Reset();
-				}
-			}
+			ResetDefaultHists();
 			break;
 		}
 		case 1:
 		{
-			if(h_AngularMatrix!=NULL) h_AngularMatrix->Reset();
-			if(h_invmassMatrix!=NULL) h_invmassMatrix->Reset();
-			if(h_invmassMatrix_prompt!=NULL) h_invmassMatrix_prompt->Reset();
-			if(h_invmassMatrix_acc!=NULL) h_invmassMatrix_acc->Reset();
+			ResetMatrixHists();
 			break;
 		}
 		case 2:
 		{
-			h_mgg_FCAL->Reset();
-			h_mgg_FCALECut->Reset();
-			h_mgg_FCALFidCut->Reset();
-			h_mgg_FCALCuts->Reset();
-			h_mgg_FCALGoodMult->Reset();
-			h_mgg_FCALMult->Reset();
-			for(int icut=0; icut<m_fcalFiducialCuts.size(); icut++) h_mgg_FCALFidCutVec[icut]->Reset();
-			for(int icut=0; icut<m_fcalEnergyCuts.size(); icut++) {
-				h_mgg_FCALECutVec[icut]->Reset();
-				h_mgg_FCALExtraECutVec[icut]->Reset();
-			}
-			
-			if(h_AngularMatrix_FCALECutVec.size()) {
-				for(int i=0; i<h_AngularMatrix_FCALECutVec.size(); i++) {
-					h_AngularMatrix_FCALECutVec[i]->Reset();
-				}
-			}
-			if(h_AngularMatrix_FCALExtraECutVec.size()) {
-				for(int i=0; i<h_AngularMatrix_FCALExtraECutVec.size(); i++) {
-					h_AngularMatrix_FCALExtraECutVec[i]->Reset();
-				}
-			}
-			if(h_AngularMatrix_FCALFidCutVec.size()) {
-				for(int i=0; i<h_AngularMatrix_FCALFidCutVec.size(); i++) {
-					h_AngularMatrix_FCALFidCutVec[i]->Reset();
-				}
-			}
-			
+			ResetFCALHists();
 			break;
 		}
 		case 5:
 		{
-			h_mgg_noTOF->Reset();
-			if(h_AngularMatrix_noTOF!=NULL) h_AngularMatrix_noTOF->Reset();
-			
-			h_mgg_TOF->Reset();
-			if(h_AngularMatrix_TOF!=NULL) h_AngularMatrix_TOF->Reset();
-			
-			h_mgg_singleTOF->Reset();
-			if(h_AngularMatrix_singleTOF!=NULL) h_AngularMatrix_singleTOF->Reset();
-			
-			for(int icut=0; icut<m_TOFTimingCuts.size(); icut++) {
-				h_mgg_TOFTimingCutVec[icut]->Reset();
-			}
-			for(int icut=0; icut<m_TOFDistanceCuts.size(); icut++) {
-				h_mgg_TOFDistanceCutVec[icut]->Reset();
-			}
-			if(h_AngularMatrix_TOFTimingCutVec.size()) {
-				for(int i=0; i<h_AngularMatrix_TOFTimingCutVec.size(); i++) {
-					h_AngularMatrix_TOFTimingCutVec[i]->Reset();
-				}
-			}
-			if(h_AngularMatrix_TOFDistanceCutVec.size()) {
-				for(int i=0; i<h_AngularMatrix_TOFDistanceCutVec.size(); i++) {
-					h_AngularMatrix_TOFDistanceCutVec[i]->Reset();
-				}
-			}
+			ResetTOFHists();
 			break;
 		}
 		case 6:
@@ -1308,25 +920,8 @@ void EtaAna::ResetHistograms(int analysisOption) {
 		}
 		case 7:
 		{
-			h_3gamma_m12->Reset();
-			h_3gamma_m13->Reset();
-			h_3gamma_m23->Reset();
-			h_3gamma_m3g->Reset();
-			h_3gamma_m12_elas->Reset();
-			h_3gamma_m13_elas->Reset();
-			h_3gamma_m23_elas->Reset();
-			h_3gamma_m3g_elas->Reset();
-			h_3gamma_vz->Reset();
-			h_3gamma_vz_elas->Reset();
-			
-			h_3gamma_theta_targ->Reset();
-			h_3gamma_theta_fdc1->Reset();
-			h_3gamma_theta_fdc2->Reset();
-			h_3gamma_theta_fdc3->Reset();
-			h_xy_targ->Reset();
-			h_xy_fdc1->Reset();
-			h_xy_fdc2->Reset();
-			h_xy_fdc3->Reset();
+			ResetOmegaHists();
+			break;
 		}
 	}
 	
@@ -1344,149 +939,22 @@ void EtaAna::WriteHistograms(int analysisOption) {
 	switch(analysisOption) {
 		case 0:
 		{
-			h_mcVertex->Write();
-			h_mcVertexAccepted->Write();
-			h_mgg_vs_vertex->Write();
-			
-			h_fcalRFdt->Write();
-			h_bcalRFdt->Write();
-			h_tofRFdt->Write();
-			h_scRFdt->Write();
-			h_beamRFdt->Write();
-			h_beamRFdt_cut->Write();
-			
-			for(int iveto=0; iveto<m_nVetos; iveto++) {
-				h_elasticity[iveto]->Write();
-				h_elasticityConstr[iveto]->Write();
-				h_mgg[iveto]->Write();
-				h_mggConstr[iveto]->Write();
-				h_mggConstr_coh[iveto]->Write();
-				h_pt[iveto]->Write();
-				h_ptCoh[iveto]->Write();
-				h_mm[iveto]->Write();
-				h_mm_coh[iveto]->Write();
-				h_mm_elas[iveto]->Write();
-				h_mm_elas_coh[iveto]->Write();
-			}
-			h_t_vs_theta->Write();
-			h_e_vs_theta->Write();
-			h_deltaPhi_CM->Write();
-			
-			/*
-			h_pT_vs_elas->Write();
-			h_pT_vs_elas_cut->Write();
-			*/
-			h_scDeltaPhi->Write();
-			h_bcalDeltaPhi->Write();
-			
-			h_xy1->Write();
-			h_xy2->Write();
-			
-			if(h_AngularMatrix_vetos.size()) {
-				printf("\nWriting thrown angular matrices...\n");
-				TDirectory *dirMatrix = new TDirectoryFile("AngularMatrix","AngularMatrix");
-				dirMatrix->cd();
-				for(int i=0; i<h_AngularMatrix_vetos.size(); i++) {
-					h_AngularMatrix_vetos[i]->Write();
-				}
-				dirMatrix->cd("../");
-				printf("Done.\n");
-			}
+			WriteDefaultHists();
 			break;
 		}
 		case 1:
 		{
-			printf("\nWriting angular and invariant mass matrices...\n");
-			if(h_AngularMatrix!=NULL) h_AngularMatrix->Write();
-			if(h_invmassMatrix!=NULL) h_invmassMatrix->Write();
-			if(h_invmassMatrix_prompt!=NULL) h_invmassMatrix_prompt->Write();
-			if(h_invmassMatrix_acc!=NULL) h_invmassMatrix_acc->Write();
-			printf("Done.\n");
+			WriteMatrixHists();
 			break;
 		}
 		case 2:
 		{
-			h_mgg_FCAL->Write();
-			h_mgg_FCALECut->Write();
-			h_mgg_FCALFidCut->Write();
-			h_mgg_FCALCuts->Write();
-			h_mgg_FCALGoodMult->Write();
-			h_mgg_FCALMult->Write();
-			
-			TDirectory *dirECut = new TDirectoryFile("ECut", "ECut");
-			dirECut->cd();
-			for(int icut=0; icut<m_fcalEnergyCuts.size(); icut++) {
-				h_mgg_FCALECutVec[icut]->Write();
-			}
-			if(h_AngularMatrix_FCALECutVec.size()) {
-				for(int i=0; i<h_AngularMatrix_FCALECutVec.size(); i++) {
-					h_AngularMatrix_FCALECutVec[i]->Write();
-				}
-			}
-			dirECut->cd("../");
-			
-			TDirectory *dirExtraECut = new TDirectoryFile("ExtraECut", "ExtraECut");
-			dirExtraECut->cd();
-			for(int icut=0; icut<h_mgg_FCALExtraECutVec.size(); icut++) {
-				h_mgg_FCALExtraECutVec[icut]->Write();
-			}
-			if(h_AngularMatrix_FCALExtraECutVec.size()) {
-				for(int i=0; i<h_AngularMatrix_FCALExtraECutVec.size(); i++) {
-					h_AngularMatrix_FCALExtraECutVec[i]->Write();
-				}
-			}
-			dirExtraECut->cd("../");
-			
-			TDirectory *dirFidCut = new TDirectoryFile("FidCut", "FidCut");
-			dirFidCut->cd();
-			for(int icut=0; icut<m_fcalFiducialCuts.size(); icut++) {
-				h_mgg_FCALFidCutVec[icut]->Write();
-			}
-			if(h_AngularMatrix_FCALFidCutVec.size()) {
-				for(int i=0; i<h_AngularMatrix_FCALFidCutVec.size(); i++) {
-					h_AngularMatrix_FCALFidCutVec[i]->Write();
-				}
-			}
-			dirFidCut->cd("../");
-			
+			WriteFCALHists();
 			break;
 		}
 		case 5:
 		{
-			printf("\nWriting TOF histograms...\n");
-			h_mgg_noTOF->Write();
-			if(h_AngularMatrix_noTOF!=NULL) h_AngularMatrix_noTOF->Write();
-			
-			h_mgg_TOF->Write();
-			if(h_AngularMatrix_TOF!=NULL) h_AngularMatrix_TOF->Write();
-			
-			h_mgg_singleTOF->Write();
-			if(h_AngularMatrix_singleTOF!=NULL) h_AngularMatrix_singleTOF->Write();
-			
-			TDirectory *dirTOFTimingCut = new TDirectoryFile("TOFTimingCut", "TOFTimingCut");
-			dirTOFTimingCut->cd();
-			for(int icut=0; icut<m_TOFTimingCuts.size(); icut++) {
-				h_mgg_TOFTimingCutVec[icut]->Write();
-			}
-			if(h_AngularMatrix_TOFTimingCutVec.size()) {
-				for(int i=0; i<h_AngularMatrix_TOFTimingCutVec.size(); i++) {
-					h_AngularMatrix_TOFTimingCutVec[i]->Write();
-				}
-			}
-			dirTOFTimingCut->cd("../");
-			
-			TDirectory *dirTOFDistanceCut = new TDirectoryFile("TOFDistanceCut", "TOFDistanceCut");
-			dirTOFDistanceCut->cd();
-			for(int icut=0; icut<m_TOFDistanceCuts.size(); icut++) {
-				h_mgg_TOFDistanceCutVec[icut]->Write();
-			}
-			if(h_AngularMatrix_TOFDistanceCutVec.size()) {
-				for(int i=0; i<h_AngularMatrix_TOFDistanceCutVec.size(); i++) {
-					h_AngularMatrix_TOFDistanceCutVec[i]->Write();
-				}
-			}
-			dirTOFDistanceCut->cd("../");
-			printf("Done.\n");
+			WriteTOFHists();
 			break;
 		}
 		case 6:
@@ -1496,37 +964,20 @@ void EtaAna::WriteHistograms(int analysisOption) {
 		}
 		case 7:
 		{
-			h_3gamma_m12->Write();
-			h_3gamma_m13->Write();
-			h_3gamma_m23->Write();
-			h_3gamma_m3g->Write();
-			h_3gamma_m12_elas->Write();
-			h_3gamma_m13_elas->Write();
-			h_3gamma_m23_elas->Write();
-			h_3gamma_m3g_elas->Write();
-			h_3gamma_vz->Write();
-			h_3gamma_vz_elas->Write();
-			
-			h_3gamma_theta_targ->Write();
-			h_3gamma_theta_fdc1->Write();
-			h_3gamma_theta_fdc2->Write();
-			h_3gamma_theta_fdc3->Write();
-			h_xy_targ->Write();
-			h_xy_fdc1->Write();
-			h_xy_fdc2->Write();
-			h_xy_fdc3->Write();
+			WriteOmegaHists();
+			break;
 		}
 	}
 	
 	if(h_thrown!=NULL) {
-		printf("\nWriting thrown histogram...\n");
+		printf("\n  Writing thrown histogram...\n");
 		h_thrown->Write();
-		printf("Done.\n");
+		printf("  Done.\n");
 	}
 	
-	printf("\nWriting ROOT file...\n");
+	printf("\n  Writing ROOT file...\n");
 	fOut->Write();
-	printf("Done.\n");
+	printf("  Done.\n");
 	
 	return;
 }

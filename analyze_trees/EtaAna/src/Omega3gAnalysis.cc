@@ -306,3 +306,100 @@ double EtaAna::CalcProdThetaShifted(double deltaZ, double e1, double e2, double 
 	double prodTheta = CalcProdTheta(e1, e2, e3, pos1_new, pos2_new, pos3_new);
 	return prodTheta;
 }
+
+void EtaAna::InitializeOmegaHists()
+{
+	// Omega->pi0+gamma:
+	
+	h_3gamma_m12 = new TH1F("3gamma_m12", ";m_{12} [GeV/c^{2}]", 1200, 0.0, 1.2);
+	h_3gamma_m13 = new TH1F("3gamma_m13", ";m_{13} [GeV/c^{2}]", 1200, 0.0, 1.2);
+	h_3gamma_m23 = new TH1F("3gamma_m23", ";m_{23} [GeV/c^{2}]", 1200, 0.0, 1.2);
+	h_3gamma_m3g = new TH1F("3gamma_m3g", ";m_{3#gamma} [GeV/c^{2}]", 1200, 0.0, 1.2);
+	
+	h_3gamma_m12_elas = new TH1F("3gamma_m12_elas", ";m_{12} [GeV/c^{2}]", 1200, 0.0, 1.2);
+	h_3gamma_m13_elas = new TH1F("3gamma_m13_elas", ";m_{13} [GeV/c^{2}]", 1200, 0.0, 1.2);
+	h_3gamma_m23_elas = new TH1F("3gamma_m23_elas", ";m_{23} [GeV/c^{2}]", 1200, 0.0, 1.2);
+	h_3gamma_m3g_elas = new TH1F("3gamma_m3g_elas", ";m_{3#gamma} [GeV/c^{2}]", 1200, 0.0, 1.2);
+	
+	h_3gamma_vz      = new TH1F("3gamma_vz", "Calculated Vertex Z position for #omega#rightarrow#pi^{0}#gamma; z_{vertex} [cm]",
+		1000, -500.0, 500.0);
+	h_3gamma_vz_elas = new TH1F("3gamma_vz_elas", "Calculated Vertex Z position for #omega#rightarrow#pi^{0}#gamma; z_{vertex} [cm]",
+		1000, -500.0, 500.0);
+	
+	h_3gamma_theta_targ = new TH1F("3gamma_theta_targ", 
+		"Angular Distribution of #omega's produced near target; #theta_{#omega} [#circ]",
+		1000, 0.0, 6.0);
+	h_3gamma_theta_fdc1 = new TH1F("3gamma_theta_fdc1", 
+		"Angular Distribution of #omega's produced near FDC Package 1; #theta_{#omega} [#circ]",
+		1000, 0.0, 6.0);
+	h_3gamma_theta_fdc2 = new TH1F("3gamma_theta_fdc2", 
+		"Angular Distribution of #omega's produced near FDC Package 2; #theta_{#omega} [#circ]",
+		1000, 0.0, 6.0);
+	h_3gamma_theta_fdc3 = new TH1F("3gamma_theta_fdc3", 
+		"Angular Distribution of #omega's produced near FDC Package 3; #theta_{#omega} [#circ]",
+		1000, 0.0, 6.0);
+	
+	h_xy_targ = new TH2F("xy_targ", "#omega's from Target Area; x_{FCAL} [cm]; y_{FCAL} [cm]", 
+		600, -150.0, 150.0, 600, -150.0, 150.0);
+	h_xy_fdc1 = new TH2F("xy_fdc1", "#omega's from 1st FDC Package; x_{FCAL} [cm]; y_{FCAL} [cm]", 
+		600, -150.0, 150.0, 600, -150.0, 150.0);
+	h_xy_fdc2 = new TH2F("xy_fdc2", "#omega's from 2nd FDC Package; x_{FCAL} [cm]; y_{FCAL} [cm]", 
+		600, -150.0, 150.0, 600, -150.0, 150.0);
+	h_xy_fdc3 = new TH2F("xy_fdc3", "#omega's from 3rd FDC Package; x_{FCAL} [cm]; y_{FCAL} [cm]", 
+		600, -150.0, 150.0, 600, -150.0, 150.0);
+	
+	return;
+}
+
+void EtaAna::ResetOmegaHists()
+{
+	h_3gamma_m12->Reset();
+	h_3gamma_m13->Reset();
+	h_3gamma_m23->Reset();
+	h_3gamma_m3g->Reset();
+	h_3gamma_m12_elas->Reset();
+	h_3gamma_m13_elas->Reset();
+	h_3gamma_m23_elas->Reset();
+	h_3gamma_m3g_elas->Reset();
+	h_3gamma_vz->Reset();
+	h_3gamma_vz_elas->Reset();
+	
+	h_3gamma_theta_targ->Reset();
+	h_3gamma_theta_fdc1->Reset();
+	h_3gamma_theta_fdc2->Reset();
+	h_3gamma_theta_fdc3->Reset();
+	h_xy_targ->Reset();
+	h_xy_fdc1->Reset();
+	h_xy_fdc2->Reset();
+	h_xy_fdc3->Reset();
+	
+	return;
+}
+
+void EtaAna::WriteOmegaHists()
+{
+	printf("\n  Writing omega histograms...\n");
+	
+	h_3gamma_m12->Write();
+	h_3gamma_m13->Write();
+	h_3gamma_m23->Write();
+	h_3gamma_m3g->Write();
+	h_3gamma_m12_elas->Write();
+	h_3gamma_m13_elas->Write();
+	h_3gamma_m23_elas->Write();
+	h_3gamma_m3g_elas->Write();
+	h_3gamma_vz->Write();
+	h_3gamma_vz_elas->Write();
+	
+	h_3gamma_theta_targ->Write();
+	h_3gamma_theta_fdc1->Write();
+	h_3gamma_theta_fdc2->Write();
+	h_3gamma_theta_fdc3->Write();
+	h_xy_targ->Write();
+	h_xy_fdc1->Write();
+	h_xy_fdc2->Write();
+	h_xy_fdc3->Write();
+	
+	printf("  Done.\n");
+	return;
+}

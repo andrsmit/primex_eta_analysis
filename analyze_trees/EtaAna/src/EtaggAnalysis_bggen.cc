@@ -8,44 +8,61 @@ void EtaAna::EtaggAnalysis_bggen() {
 		return;
 	}
 	
-	// Skip events where the initial energy is below cut:
-	
-	double locMCEnergy = 0.0;
-	for(int imc=0; imc<m_nmc; imc++) locMCEnergy += m_mcE[imc];
-	if(locMCEnergy < (m_minBeamEnergyCut+ParticleMass(Proton))) return;
-	
 	// Distribute events realistically inside target:
 	
 	if(AcceptRejectEvent()) return;
 	
-	// get reaction index:
+	// Get thrown energy and angle:
+	
+	double locThrownBeamEnergy = 0.0, locThrownAngle = 0.0;
+	GetThrownEnergyAndAngleBGGEN(locThrownBeamEnergy, locThrownAngle);
+	
+	// Skip events which were generated outside our beam energy range:
+	
+	if((locThrownBeamEnergy<m_minBeamEnergyCut) || (locThrownBeamEnergy>=m_maxBeamEnergyCut)) return;
+	
+	// Get reaction index and fill thrown histograms:
 	
 	int locFinalState = GetFinalState_bggen();
 	h_thrown_reactions_bggen->Fill(locFinalState);
 	
-	double locThrownBeamEnergy = 0.0, locThrownAngle = 0.0;
-	GetThrownEnergyAndAngle(locThrownBeamEnergy, locThrownAngle);
+	// Plot thrown distributions for proton and neutron cases:
+	
 	if(locFinalState==0) {
 		h_thrown_proton->Fill(locThrownBeamEnergy, locThrownAngle);
+		h_thrown_proton_1d->Fill(locThrownAngle);
 	}
 	else if(locFinalState==1) {
 		h_thrown_neutron->Fill(locThrownBeamEnergy, locThrownAngle);
+		h_thrown_neutron_1d->Fill(locThrownAngle);
 	}
 	
-	PlotThrown(locThrownBeamEnergy, locThrownAngle);
-	
-	
-	// Get list of good photons, FCAL showers, and BCAL showers to analyze:
+	//-------------------------------------------//
+	// Get list of selected beam photons:
 	
 	vector<pair<int,double>> locGoodBeamPhotons; locGoodBeamPhotons.clear();
 	int locNBeamPhotons = GetBeamPhotonList(locGoodBeamPhotons, m_minBeamEnergyCut, m_maxBeamEnergyCut);
+	
+	//-------------------------------------------//
+	// Get list of 'good' FCAL showers:
 	
 	vector<int> locGoodFCALShowers; locGoodFCALShowers.clear();
 	int locNFCALShowers_EnergyCut;
 	int locNFCALShowers = GetFCALShowerList(locGoodFCALShowers, locNFCALShowers_EnergyCut, m_FCALEnergyCut, m_FCALExtraEnergyCut, 2.0, m_FCALRFCut);
 	
+	//-------------------------------------------//
+	// Get list of 'good' BCAL showers:
+	
 	vector<int> locGoodBCALShowers; locGoodBCALShowers.clear();
 	int locNBCALShowers = GetBCALShowerList(locGoodBCALShowers, 0.0, m_BCALRFCut);
+	
+	//-------------------------------------------//
+	// Get list of 'good' SC hits:
+	
+	vector<int> locGoodSCHits; locGoodSCHits.clear();
+	int locNSCHits = GetSCHitList(locGoodSCHits);
+	
+	//-------------------------------------------//
 	
 	int locNBCALShowers_1ns = 0.;
 	double locBCALRFDT = 0., locBCALPhi = 0.; // only useful when there's exactly 1 BCAL shower within timing cut
@@ -67,6 +84,15 @@ void EtaAna::EtaggAnalysis_bggen() {
 	// Apply multiplicity cut on the number of FCAL showers: 
 	int locNGoodFCALShowers = (int)locGoodFCALShowers.size();
 	if((locNFCALShowers_EnergyCut!=2) || (locNGoodFCALShowers!=2)) return;
+	
+	// Plot thrown distributions for proton and neutron cases:
+	
+	if(locFinalState==0) {
+		h_rec_proton_1d->Fill(locThrownAngle);
+	}
+	else if(locFinalState==1) {
+		h_rec_neutron_1d->Fill(locThrownAngle);
+	}
 	
 	for(int ishow=0; ishow<(locNGoodFCALShowers-1); ishow++) {
 		
@@ -104,10 +130,8 @@ void EtaAna::EtaggAnalysis_bggen() {
 			// TOF Veto
 			
 			// reject combinations of FCAL showers where both showers are near a TOF hit:
-			bool isTOFVeto = false;
-			if((tof_dr1 < m_FCALTOFCut) && (tof_dr2 < m_FCALTOFCut)) isTOFVeto = true;
 			
-			if(isTOFVeto) continue;
+			if((tof_dr1 < m_FCALTOFCut) && (tof_dr2 < m_FCALTOFCut)) continue;
 			
 			//-----------------------------------------------------//
 			// Two-Photon kinematics:
@@ -133,31 +157,34 @@ void EtaAna::EtaggAnalysis_bggen() {
 			double invmass = sqrt(2.0*e1*e2*(1.-cos12));
 			
 			//-----------------------------------------------------//
-			// check different veto options:
+			// BCAL+SC Veto:
 			
 			bool isHadronicVeto = true;
 			
 			int locNSCHits = 0;
 			int locNSCHits_coplanar = 0;
-			for(int isc = 0; isc < m_nsc; isc++) {
-				
-				// only check hits between 1ns < (t_sc - t_RF) < 7ns 
-				//    and with dE > 0.0002 (from DNeutralShower_factory)
-				
-				double locT  = m_scT[isc] - m_rfTime;
-				double locdE = m_scdE[isc];
-				
-				if((1.0 < locT) && (locT < 9.0) && (locdE > 0.0002)) {
-					locNSCHits++;
-					if(fabs(fabs(m_scPhi[isc]-prodPhi)-180.0) < m_SCDeltaPhiCut) locNSCHits_coplanar++;
+			for(int isc=0; isc<locGoodSCHits.size(); isc++) {
+				int hitIndex = locGoodSCHits[isc];
+				double locDeltaPhi = prodPhi - m_scPhi[hitIndex];
+				if(IsCoplanarSC(locDeltaPhi)) locNSCHits_coplanar++;
+			}
+			
+			if(locNBCALShowers==0) 
+			{
+				isHadronicVeto = false;
+			}
+			else if(locNBCALShowers==1) {
+				if(IsCoplanarBCAL(prodPhi-locBCALPhi) && (locBCALRFDT>1.0)) {
+					if(locNSCHits_coplanar==locNSCHits) {
+						if(locNSCHits<=1) {
+							isHadronicVeto = false;
+						}
+					}
 				}
 			}
 			
-			if((locNBCALShowers==0) || 
-				((locNBCALShowers==1) && (fabs(fabs(locBCALPhi-prodPhi)-180.0) < m_BCALDeltaPhiCut) && (locBCALRFDT>1.0))) {
-				if(locNSCHits_coplanar==locNSCHits) isHadronicVeto = false;
-			}
-			if(isHadronicVeto) continue;
+			//if(isHadronicVeto) continue;
+			//  (apply hadronic veto later bc I want to see coplanarity distribution first)
 			
 			//-----------------------------------------------------//
 			// Loop over Beam photons
@@ -196,6 +223,28 @@ void EtaAna::EtaggAnalysis_bggen() {
 				double invmassConstr = sqrt(2.*e1c*e2c*(1.-cos12));
 				
 				//-----------------------------------------------------//
+				// Look at coplanarity distributions from the BCAL and SC:
+				
+				if(isElastic && isEta && (locNBCALShowers==1) && (locBCALRFDT>1.0)) {
+					h_bcalDeltaPhi_bggen[locFinalState]->Fill(prodTheta, (prodPhi-locBCALPhi), fillWeight);
+				}
+				if(isElastic && isEta) {
+					for(int isc=0; isc<locGoodSCHits.size(); isc++) {
+						int hitIndex = locGoodSCHits[isc];
+						double locDeltaPhi = prodPhi - m_scPhi[hitIndex];
+						h_scDeltaPhi_bggen[locFinalState]->Fill(prodTheta, locDeltaPhi, fillWeight);
+						if(locGoodSCHits.size()==1) {
+							h_scDeltaPhi_singleHit_bggen[locFinalState]->Fill(prodTheta, locDeltaPhi, fillWeight);
+						}
+					}
+				}
+				
+				// Now we can remove events based on the hadronic background veto:
+				
+				if(isHadronicVeto) continue;
+				
+				//-----------------------------------------------------//
+				// Plot invariant mass and elasticity for different, general cases:
 				
 				if((locFinalState==0) || (locFinalState==1)) {
 					// gamma+N -> eta+N
@@ -205,38 +254,61 @@ void EtaAna::EtaggAnalysis_bggen() {
 					if(isEta) h_elas_bggen_signal_cut->Fill(prodTheta, Egg/etaEnergy, fillWeight);
 				}
 				else if((locFinalState>=2) && (locFinalState<=5)) {
-					// gamma+N -> eta+pion+N'
+					// gamma+N -> eta+pi0+N
+					// gamma+N -> eta+pip(m)+N'
 					
 					if(isElastic) h_mgg_const_bggen_etapion->Fill(prodTheta, invmassConstr, fillWeight);
 					h_elas_bggen_etapion->Fill(prodTheta, Egg/etaEnergy, fillWeight);
 					if(isEta) h_elas_bggen_etapion_cut->Fill(prodTheta, Egg/etaEnergy, fillWeight);
 				}
+				else if((locFinalState>=12) && (locFinalState<=17)) {
+					// gamma+N -> eta+pi0+pi0+N
+					// gamma+N -> eta+pip+pim+N
+					// gamma+N -> eta+pi0+pip(m)+N'
+					
+					if(isElastic) h_mgg_const_bggen_eta2pion->Fill(prodTheta, invmassConstr, fillWeight);
+					h_elas_bggen_eta2pion->Fill(prodTheta, Egg/etaEnergy, fillWeight);
+					if(isEta) h_elas_bggen_eta2pion_cut->Fill(prodTheta, Egg/etaEnergy, fillWeight);
+				}
+				else if((locFinalState==6) || (locFinalState==7)) {
+					// gamma+N -> omega+N
+					
+					if(isElastic) h_mgg_const_bggen_omega->Fill(prodTheta, invmassConstr, fillWeight);
+					h_elas_bggen_omega->Fill(prodTheta, Egg/etaEnergy, fillWeight);
+					if(isEta) h_elas_bggen_omega_cut->Fill(prodTheta, Egg/etaEnergy, fillWeight);
+				}
+				else if((locFinalState==8) || (locFinalState==9)) {
+					// gamma+N -> rho0+N
+					
+					if(isElastic) h_mgg_const_bggen_rho->Fill(prodTheta, invmassConstr, fillWeight);
+					h_elas_bggen_rho->Fill(prodTheta, Egg/etaEnergy, fillWeight);
+					if(isEta) h_elas_bggen_rho_cut->Fill(prodTheta, Egg/etaEnergy, fillWeight);
+				}
 				else {
-					// gamma+N -> eta+pion+N'
+					// Everything else
 					
 					if(isElastic) h_mgg_const_bggen_bkgd->Fill(prodTheta, invmassConstr, fillWeight);
 					h_elas_bggen_bkgd->Fill(prodTheta, Egg/etaEnergy, fillWeight);
 					if(isEta) h_elas_bggen_bkgd_cut->Fill(prodTheta, Egg/etaEnergy, fillWeight);
 				}
 				
-				// make individual plots for every specified channel:
+				//-----------------------------------------------------//
+				
+				// Plot invariant mass for every specified channel:
+				/*
 				if(isElastic) {
 					h_mgg_const_bggen[locFinalState]->Fill(prodTheta, invmassConstr, fillWeight);
-					if(isEta && (locNBCALShowers==1)) {
-						h_bcalDeltaPhi_bggen[locFinalState]->Fill(prodTheta, fabs(locBCALPhi-prodPhi), fillWeight);
-					}
 				}
+				*/
 				
 				if(isElastic && isEta) {
 					h_rec_reactions_bggen->Fill(locFinalState, fillWeight);
 					
-					if((m_minBeamEnergyBin<=locThrownBeamEnergy) && (locThrownBeamEnergy<m_maxBeamEnergyBin)) {
-						if(locFinalState==0) {
-							h_AngularMatrix_proton->Fill(locThrownAngle, prodTheta, locThrownBeamEnergy, fillWeight);
-						}
-						else if(locFinalState==1) {
-							h_AngularMatrix_neutron->Fill(locThrownAngle, prodTheta, locThrownBeamEnergy, fillWeight);
-						}
+					if(locFinalState==0) {
+						h_AngularMatrix_proton->Fill(locThrownAngle, prodTheta, locThrownBeamEnergy, fillWeight);
+					}
+					else if(locFinalState==1) {
+						h_AngularMatrix_neutron->Fill(locThrownAngle, prodTheta, locThrownBeamEnergy, fillWeight);
 					}
 				}
 				
@@ -286,6 +358,21 @@ void EtaAna::InitializeBGGENHists() {
 		nRecAngleBins, m_minRecAngleBin, m_maxRecAngleBin, nInvmassBins, m_minInvmassBin, m_maxInvmassBin);
 	h_mgg_const_bggen_etapion->Sumw2();
 	
+	h_mgg_const_bggen_eta2pion = new TH2F("mgg_const_bggen_eta2pion",
+		"Eta+Pion+Pion (#eta+N#rightarrow#eta+2#pi+N'); #theta_{rec.} [#circ]; m_{#gamma#gamma}^{Constr.} [GeV/c^{2}]",
+		nRecAngleBins, m_minRecAngleBin, m_maxRecAngleBin, nInvmassBins, m_minInvmassBin, m_maxInvmassBin);
+	h_mgg_const_bggen_etapion->Sumw2();
+	
+	h_mgg_const_bggen_omega = new TH2F("mgg_const_bggen_omega",
+		"#omega (#eta+N#rightarrow#omega+N'); #theta_{rec.} [#circ]; m_{#gamma#gamma}^{Constr.} [GeV/c^{2}]",
+		nRecAngleBins, m_minRecAngleBin, m_maxRecAngleBin, nInvmassBins, m_minInvmassBin, m_maxInvmassBin);
+	h_mgg_const_bggen_omega->Sumw2();
+	
+	h_mgg_const_bggen_rho = new TH2F("mgg_const_bggen_rho",
+		"#rho^{0} (#eta+N#rightarrow#rho^{0}+N'); #theta_{rec.} [#circ]; m_{#gamma#gamma}^{Constr.} [GeV/c^{2}]",
+		nRecAngleBins, m_minRecAngleBin, m_maxRecAngleBin, nInvmassBins, m_minInvmassBin, m_maxInvmassBin);
+	h_mgg_const_bggen_rho->Sumw2();
+	
 	h_mgg_const_bggen_bkgd = new TH2F("mgg_const_bggen_bkgd",
 		"Other Bkgd; #theta_{rec.} [#circ]; m_{#gamma#gamma}^{Constr.} [GeV/c^{2}]",
 		nRecAngleBins, m_minRecAngleBin, m_maxRecAngleBin, nInvmassBins, m_minInvmassBin, m_maxInvmassBin);
@@ -294,29 +381,53 @@ void EtaAna::InitializeBGGENHists() {
 	//-----------------------------------------------------------------------------//
 	
 	h_elas_bggen_signal = new TH2F("elas_bggen_signal",
-		"Signal (#eta+N#rightarrow#eta+N); #theta_{rec.} [#circ]; m_{#gamma#gamma}^{Constr.} [GeV/c^{2}]",
+		"Signal (#eta+N#rightarrow#eta+N); #theta_{rec.} [#circ]; E_{#gamma#gamma} / E_{#eta}#left(#theta,E_{#gamma}#right)",
 		nRecAngleBins, m_minRecAngleBin, m_maxRecAngleBin, 1000, 0.0, 2.0);
 	
 	h_elas_bggen_etapion = new TH2F("elas_bggen_etapion",
-		"Eta+Pion (#eta+N#rightarrow#eta+#pi+N'); #theta_{rec.} [#circ]; m_{#gamma#gamma}^{Constr.} [GeV/c^{2}]",
+		"Eta+Pion (#eta+N#rightarrow#eta+#pi+N'); #theta_{rec.} [#circ]; E_{#gamma#gamma} / E_{#eta}#left(#theta,E_{#gamma}#right)",
+		nRecAngleBins, m_minRecAngleBin, m_maxRecAngleBin, 1000, 0.0, 2.0);
+	
+	h_elas_bggen_eta2pion = new TH2F("elas_bggen_eta2pion",
+		"Eta+Pion+Pion (#eta+N#rightarrow#eta+2#pi+N'); #theta_{rec.} [#circ]; E_{#gamma#gamma} / E_{#eta}#left(#theta,E_{#gamma}#right)",
+		nRecAngleBins, m_minRecAngleBin, m_maxRecAngleBin, 1000, 0.0, 2.0);
+	
+	h_elas_bggen_omega = new TH2F("elas_bggen_omega",
+		"#omega (#eta+N#rightarrow#omega+N'); #theta_{rec.} [#circ]; E_{#gamma#gamma} / E_{#eta}#left(#theta,E_{#gamma}#right)",
+		nRecAngleBins, m_minRecAngleBin, m_maxRecAngleBin, 1000, 0.0, 2.0);
+	
+	h_elas_bggen_rho = new TH2F("elas_bggen_rho",
+		"#rho^{0} (#eta+N#rightarrow#rho^{0}+N'); #theta_{rec.} [#circ]; E_{#gamma#gamma} / E_{#eta}#left(#theta,E_{#gamma}#right)",
 		nRecAngleBins, m_minRecAngleBin, m_maxRecAngleBin, 1000, 0.0, 2.0);
 	
 	h_elas_bggen_bkgd = new TH2F("elas_bggen_bkgd",
-		"Other Bkgd; #theta_{rec.} [#circ]; m_{#gamma#gamma}^{Constr.} [GeV/c^{2}]",
+		"Other Bkgd; #theta_{rec.} [#circ]; E_{#gamma#gamma} / E_{#eta}#left(#theta,E_{#gamma}#right)",
 		nRecAngleBins, m_minRecAngleBin, m_maxRecAngleBin, 1000, 0.0, 2.0);
 	
 	//-----------------------------------------------------------------------------//
 	
 	h_elas_bggen_signal_cut = new TH2F("elas_bggen_signal_cut",
-		"Signal (#eta+N#rightarrow#eta+N); #theta_{rec.} [#circ]; m_{#gamma#gamma}^{Constr.} [GeV/c^{2}]",
+		"Signal (#eta+N#rightarrow#eta+N); #theta_{rec.} [#circ]; E_{#gamma#gamma} / E_{#eta}#left(#theta,E_{#gamma}#right)",
 		nRecAngleBins, m_minRecAngleBin, m_maxRecAngleBin, 1000, 0.0, 2.0);
 	
 	h_elas_bggen_etapion_cut = new TH2F("elas_bggen_etapion_cut",
-		"Eta+Pion (#eta+N#rightarrow#eta+#pi+N'); #theta_{rec.} [#circ]; m_{#gamma#gamma}^{Constr.} [GeV/c^{2}]",
+		"Eta+Pion (#eta+N#rightarrow#eta+#pi+N'); #theta_{rec.} [#circ]; E_{#gamma#gamma} / E_{#eta}#left(#theta,E_{#gamma}#right)",
+		nRecAngleBins, m_minRecAngleBin, m_maxRecAngleBin, 1000, 0.0, 2.0);
+	
+	h_elas_bggen_eta2pion_cut = new TH2F("elas_bggen_eta2pion_cut",
+		"Eta+Pion+Pion (#eta+N#rightarrow#eta+2#pi+N'); #theta_{rec.} [#circ]; E_{#gamma#gamma} / E_{#eta}#left(#theta,E_{#gamma}#right)",
+		nRecAngleBins, m_minRecAngleBin, m_maxRecAngleBin, 1000, 0.0, 2.0);
+	
+	h_elas_bggen_omega_cut = new TH2F("elas_bggen_omega_cut",
+		"#omega (#eta+N#rightarrow#omega+N'); #theta_{rec.} [#circ]; E_{#gamma#gamma} / E_{#eta}#left(#theta,E_{#gamma}#right)",
+		nRecAngleBins, m_minRecAngleBin, m_maxRecAngleBin, 1000, 0.0, 2.0);
+	
+	h_elas_bggen_rho_cut = new TH2F("elas_bggen_rho_cut",
+		"#rho^{0} (#eta+N#rightarrow#rho^{0}+N'); #theta_{rec.} [#circ]; E_{#gamma#gamma} / E_{#eta}#left(#theta,E_{#gamma}#right)",
 		nRecAngleBins, m_minRecAngleBin, m_maxRecAngleBin, 1000, 0.0, 2.0);
 	
 	h_elas_bggen_bkgd_cut = new TH2F("elas_bggen_bkgd_cut",
-		"Other Bkgd; #theta_{rec.} [#circ]; m_{#gamma#gamma}^{Constr.} [GeV/c^{2}]",
+		"Other Bkgd; #theta_{rec.} [#circ]; E_{#gamma#gamma} / E_{#eta}#left(#theta,E_{#gamma}#right)",
 		nRecAngleBins, m_minRecAngleBin, m_maxRecAngleBin, 1000, 0.0, 2.0);
 	
 	//-----------------------------------------------------------------------------//
@@ -335,16 +446,20 @@ void EtaAna::InitializeBGGENHists() {
 			}
 		}
 		
-		TH2F *loc_h2 = new TH2F(Form("mgg_const_bggen_%s",hist_label.Data()),
-			Form("%s; #theta_{rec.} [#circ]; m_{#gamma#gamma}^{Constr.} [GeV/c^{2}]", hist_title.Data()),
-			nRecAngleBins, m_minRecAngleBin, m_maxRecAngleBin, nInvmassBins, m_minInvmassBin, m_maxInvmassBin);
-		loc_h2->Sumw2();
-		h_mgg_const_bggen.push_back(loc_h2);
-		
-		TH2F *loc_h2_deltaPhi = new TH2F(Form("bcal_deltaPhi_bggen_%s",hist_label.Data()),
+		TH2F *loc_bcalDeltaPhi = new TH2F(Form("bcal_deltaPhi_bggen_%s",hist_label.Data()),
 			Form("%s; #theta_{rec.} [#circ]; #left|#phi_{#gamma#gamma}-#phi_{BCAL}#right| [#circ]", hist_title.Data()),
-			nRecAngleBins, m_minRecAngleBin, m_maxRecAngleBin, 1800, 0.0, 360.0);
-		h_bcalDeltaPhi_bggen.push_back(loc_h2_deltaPhi);
+			nRecAngleBins, m_minRecAngleBin, m_maxRecAngleBin, 1800, -360.0, 360.0);
+		h_bcalDeltaPhi_bggen.push_back(loc_bcalDeltaPhi);
+		
+		TH2F *loc_scDeltaPhi = new TH2F(Form("sc_deltaPhi_bggen_%s",hist_label.Data()),
+			Form("%s; #theta_{rec.} [#circ]; #left|#phi_{#gamma#gamma}-#phi_{SC}#right| [#circ]", hist_title.Data()),
+			nRecAngleBins, m_minRecAngleBin, m_maxRecAngleBin, 1800, -360.0, 360.0);
+		h_scDeltaPhi_bggen.push_back(loc_scDeltaPhi);
+		
+		TH2F *loc_scDeltaPhi_singleHit = new TH2F(Form("sc_deltaPhi_singleHit_bggen_%s",hist_label.Data()),
+			Form("%s; #theta_{rec.} [#circ]; #left|#phi_{#gamma#gamma}-#phi_{SC}#right| [#circ]", hist_title.Data()),
+			nRecAngleBins, m_minRecAngleBin, m_maxRecAngleBin, 1800, -360.0, 360.0);
+		h_scDeltaPhi_singleHit_bggen.push_back(loc_scDeltaPhi_singleHit);
 	}
 	
 	//-----------------------------------------------------------------------------//
@@ -371,6 +486,22 @@ void EtaAna::InitializeBGGENHists() {
 		nRecAngleBins,    m_minRecAngleBin,    m_maxRecAngleBin,
 		nBeamEnergyBins,  m_minBeamEnergyBin,  m_maxBeamEnergyBin);
 	
+	h_thrown_proton_1d = new TH1F("thrown_proton_1d", 
+		"Distribution of thrown events (#gamma+p#rightarrow#eta+p); #theta(thrown) [#circ]",
+		nThrownAngleBins, m_minThrownAngleBin, m_maxThrownAngleBin);
+	
+	h_rec_proton_1d = new TH1F("rec_proton_1d", 
+		"Distribution of reconstructed events (#gamma+p#rightarrow#eta+p); #theta(thrown) [#circ]",
+		nThrownAngleBins, m_minThrownAngleBin, m_maxThrownAngleBin);
+	
+	h_thrown_neutron_1d = new TH1F("thrown_neutron_1d", 
+		"Distribution of thrown events (#gamma+n#rightarrow#eta+n); #theta(thrown) [#circ]",
+		nThrownAngleBins, m_minThrownAngleBin, m_maxThrownAngleBin);
+	
+	h_rec_neutron_1d = new TH1F("rec_neutron_1d", 
+		"Distribution of reconstructed events (#gamma+n#rightarrow#eta+n); #theta(thrown) [#circ]",
+		nThrownAngleBins, m_minThrownAngleBin, m_maxThrownAngleBin);
+	
 	return;
 }
 
@@ -378,57 +509,101 @@ void EtaAna::ResetBGGENHists() {
 	
 	h_mgg_const_bggen_signal->Reset();
 	h_mgg_const_bggen_etapion->Reset();
+	h_mgg_const_bggen_eta2pion->Reset();
+	h_mgg_const_bggen_omega->Reset();
+	h_mgg_const_bggen_rho->Reset();
 	h_mgg_const_bggen_bkgd->Reset();
 	
 	h_elas_bggen_signal->Reset();
 	h_elas_bggen_etapion->Reset();
+	h_elas_bggen_eta2pion->Reset();
+	h_elas_bggen_omega->Reset();
+	h_elas_bggen_rho->Reset();
 	h_elas_bggen_bkgd->Reset();
 	
 	h_elas_bggen_signal_cut->Reset();
 	h_elas_bggen_etapion_cut->Reset();
+	h_elas_bggen_eta2pion_cut->Reset();
+	h_elas_bggen_omega_cut->Reset();
+	h_elas_bggen_rho_cut->Reset();
 	h_elas_bggen_bkgd_cut->Reset();
 	
 	h_thrown_reactions_bggen->Reset();
 	h_rec_reactions_bggen->Reset();
 	
-	for(int irea=0; irea<(int)h_mgg_const_bggen.size(); irea++) {
-		h_mgg_const_bggen[irea]->Reset();
+	for(int irea=0; irea<(int)h_bcalDeltaPhi_bggen.size(); irea++) {
 		h_bcalDeltaPhi_bggen[irea]->Reset();
+	}
+	for(int irea=0; irea<(int)h_scDeltaPhi_bggen.size(); irea++) {
+		h_scDeltaPhi_bggen[irea]->Reset();
+		h_scDeltaPhi_singleHit_bggen[irea]->Reset();
 	}
 	
 	h_thrown_proton->Reset();
 	h_thrown_neutron->Reset();
 	h_AngularMatrix_proton->Reset();
 	h_AngularMatrix_neutron->Reset();
+	
+	h_thrown_proton_1d->Reset();
+	h_thrown_neutron_1d->Reset();
+	h_rec_proton_1d->Reset();
+	h_rec_neutron_1d->Reset();
+	
 	return;
 }
 
 void EtaAna::WriteBGGENHists() {
 	printf("\nWriting BGGEN histograms...\n");
+	
 	h_mgg_const_bggen_signal->Write();
 	h_mgg_const_bggen_etapion->Write();
+	h_mgg_const_bggen_eta2pion->Write();
+	h_mgg_const_bggen_omega->Write();
+	h_mgg_const_bggen_rho->Write();
 	h_mgg_const_bggen_bkgd->Write();
 	
 	h_elas_bggen_signal->Write();
 	h_elas_bggen_etapion->Write();
+	h_elas_bggen_eta2pion->Write();
+	h_elas_bggen_omega->Write();
+	h_elas_bggen_rho->Write();
 	h_elas_bggen_bkgd->Write();
 	
 	h_elas_bggen_signal_cut->Write();
 	h_elas_bggen_etapion_cut->Write();
+	h_elas_bggen_eta2pion_cut->Write();
+	h_elas_bggen_omega_cut->Write();
+	h_elas_bggen_rho_cut->Write();
 	h_elas_bggen_bkgd_cut->Write();
 	
 	h_thrown_reactions_bggen->Write();
 	h_rec_reactions_bggen->Write();
 	
-	for(int irea=0; irea<(int)h_mgg_const_bggen.size(); irea++) {
-		h_mgg_const_bggen[irea]->Write();
+	TDirectory *dirBCALDeltaPhi = new TDirectoryFile("bcalDeltaPhi", "bcalDeltaPhi");
+	dirBCALDeltaPhi->cd();
+	for(int irea=0; irea<(int)h_bcalDeltaPhi_bggen.size(); irea++) {
 		h_bcalDeltaPhi_bggen[irea]->Write();
 	}
+	dirBCALDeltaPhi->cd("../");
+	
+	TDirectory *dirSCDeltaPhi = new TDirectoryFile("scDeltaPhi", "scDeltaPhi");
+	dirSCDeltaPhi->cd();
+	for(int irea=0; irea<(int)h_scDeltaPhi_bggen.size(); irea++) {
+		h_scDeltaPhi_bggen[irea]->Write();
+		h_scDeltaPhi_singleHit_bggen[irea]->Write();
+	}
+	dirSCDeltaPhi->cd("../");
 	
 	h_thrown_proton->Write();
 	h_thrown_neutron->Write();
 	h_AngularMatrix_proton->Write();
 	h_AngularMatrix_neutron->Write();
+	
+	h_thrown_proton_1d->Write();
+	h_thrown_neutron_1d->Write();
+	h_rec_proton_1d->Write();
+	h_rec_neutron_1d->Write();
+	
 	printf("Done.\n");
 	return;
 }

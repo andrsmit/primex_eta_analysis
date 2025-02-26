@@ -90,6 +90,7 @@ class EtaAna {
 		int GetFCALShowerList(vector<int> &goodShowers, int &nFCALShowers_EnergyCut, 
 			double energyCut, double extraEnergyCut, double fiducialCut, double timingCut);
 		int GetBCALShowerList(vector<int> &goodShowers, double energyCut, double timingCut);
+		int GetSCHitList(vector<int> &goodHits);
 		int GetBeamPhotonList(vector<pair<int,double>> &goodPhotons, double minEnergyCut, double maxEnergyCut);
 		
 		TVector3 GetFCALPosition(int index);
@@ -103,20 +104,53 @@ class EtaAna {
 		double CalcProdThetaShifted(double deltaZ, double e1, double e2, double e3, TVector3 pos1, TVector3 pos2, TVector3 pos3);
 		double CalculateCost(double deltaZ, double e1, double e2, double e3, TVector3 pos1, TVector3 pos2, TVector3 pos3);
 		
-		int FCALFiducialCut(TVector3 pos, double cutLayer);
+		int FCALFiducialCut(TVector3, double);
 		
-		void CheckTOFMatch(TVector3 pos, double &dxMin, double &dyMin, double &dtMin, double rfTimingCut);
+		void CheckTOFMatch(TVector3, double&, double&, double&, double);
 		
-		double GetEnergyAfterRecoil(double eb, double theta, double m0, double mp);
-		double GetFCALEnergyResolution(double e);
-		void GetThrownEnergyAndAngle(double &thrownEnergy, double &thrownAngle);
+		double GetEnergyAfterRecoil(double, double, double, double);
+		double GetFCALEnergyResolution(double);
+		void GetThrownEnergyAndAngle(double&, double&);
+		void GetThrownEnergyAndAngleBGGEN(double&, double&);
 		
 		void SmearShowerEnergy(double&);
 		
 		int GetAcceptanceHistogram();
 		
-		bool IsElasticCut(double Egg, double Eeta, double theta);
-		bool IsEtaCut(double invmass);
+		bool IsElasticCut(double, double, double);
+		bool IsEtaCut(double);
+		bool IsCoplanarBCAL(double);
+		bool IsCoplanarSC(double);
+		
+		//-------------------------------------------------------------------//
+		
+		// Different ways to do analysis (each function is defined in it's own .cc file):
+		void EtaggAnalysis();
+		void EtaggAnalysis_matrix();
+		void EtaggAnalysis_FCAL();
+		void EtaggAnalysis_TOF();
+		void EtaggAnalysis_bggen();
+		void Omega3gAnalysis();
+		
+		// functions for default analysis option:
+		void InitializeDefaultHists();
+		void      ResetDefaultHists();
+		void      WriteDefaultHists();
+		
+		// functions for matrix analysis option:
+		void InitializeMatrixHists();
+		void      ResetMatrixHists();
+		void      WriteMatrixHists();
+		
+		// functions for FCAL analysis option:
+		void InitializeFCALHists();
+		void      ResetFCALHists();
+		void      WriteFCALHists();
+		
+		// functions for TOF analysis option:
+		void InitializeTOFHists();
+		void      ResetTOFHists();
+		void      WriteTOFHists();
 		
 		// functions for analyzing bggen mc:
 		void InitializeReactionTypes();
@@ -125,15 +159,11 @@ class EtaAna {
 		void      WriteBGGENHists();
 		int  GetFinalState_bggen(int debug=0);
 		
-		// Different ways to do analysis (each function is defined in it's own .cc file):
-		void EtaggAnalysis();
-		void EtaggAnalysis_matrix();
-		void EtaggAnalysis_FCAL();
-		void EtaggAnalysis_BCAL();
-		void EtaggAnalysis_BEAM();
-		void EtaggAnalysis_TOF();
-		void EtaggAnalysis_bggen();
-		void Omega3gAnalysis();
+		// functions for omega->pi0+gamma analysis option:
+		void InitializeOmegaHists();
+		void      ResetOmegaHists();
+		void      WriteOmegaHists();
+		
 		//-------------------------------------------------------------------//
 		// TTree Variables:
 		
@@ -216,36 +246,31 @@ class EtaAna {
 		// Defulat Analysis:
 		
 		TH1F *h_mcVertex, *h_mcVertexAccepted;
-		TH1F *h_mcReactionWeight;
 		TH2F *h_thrown;
 		
 		TH1F *h_fcalRFdt, *h_bcalRFdt, *h_tofRFdt, *h_scRFdt;
 		TH1F *h_beamRFdt, *h_beamRFdt_cut;
 		
-		static const int m_nVetos = 8;
+		TH2F *h_tofMatch;
+		
+		static const int m_nVetos = 9;
 		TH2F *h_elasticity[m_nVetos];
 		TH2F *h_elasticityConstr[m_nVetos];
 		TH2F *h_mgg[m_nVetos];
 		TH2F *h_mggConstr[m_nVetos];
 		TH2F *h_mggConstr_coh[m_nVetos];
-		TH2F *h_mgg_vs_t[m_nVetos];
-		TH2F *h_mgg_vs_t_cor[m_nVetos];
+		TH2F *h_mm[m_nVetos],      *h_mm_coh[m_nVetos];
+		TH2F *h_mm_elas[m_nVetos], *h_mm_elas_coh[m_nVetos];
+		TH2F *h_pt[m_nVetos],      *h_ptCoh[m_nVetos];
 		
 		TH2F *h_t_vs_theta;
 		
-		TH1F *h_deltaPhi_CM;
-		TH2F *h_e_vs_theta;
+		TH2F *h_mgg_vs_vertexZ, *h_mgg_vs_vertexR;
 		
-		TH2F *h_mgg_vs_vertex;
+		TH2F *h_scDeltaPhi,           *h_bcalDeltaPhi;
+		TH2F *h_scDeltaPhi_singleHit, *h_bcalDeltaPhi_singleHit;
 		
-		TH2F *h_pt[m_nVetos],      *h_ptCoh[m_nVetos];
-		TH2F *h_mm[m_nVetos],      *h_mm_coh[m_nVetos];
-		TH2F *h_mm_elas[m_nVetos], *h_mm_elas_coh[m_nVetos];
-		
-		TH2F *h_scDeltaPhi, *h_bcalDeltaPhi;
 		TH2F *h_xy1, *h_xy2;
-		
-		TH2F *h_pT_vs_elas, *h_pT_vs_elas_cut;
 		
 		vector<TH3F*> h_AngularMatrix_vetos;
 		
@@ -274,8 +299,6 @@ class EtaAna {
 		vector<TH2F*> h_mgg_FCALFidCutVec;
 		vector<TH3F*> h_AngularMatrix_FCALFidCutVec;
 		
-		void InitializeAngularMatrices_FCAL();
-		
 		/////////////////////////////////////////
 		// Varying TOF Cuts:
 		
@@ -290,26 +313,29 @@ class EtaAna {
 		TH2F *h_mgg_noTOF, *h_mgg_TOF, *h_mgg_singleTOF;
 		TH3F *h_AngularMatrix_noTOF, *h_AngularMatrix_TOF, *h_AngularMatrix_singleTOF;
 		
-		void InitializeAngularMatrices_TOF();
-		
 		/////////////////////////////////////////
 		// Varying Beam Cuts:
 		
 		/////////////////////////////////////////
 		// BGGEN Analysis:
 		
-		TH2F *h_mgg_const_bggen_signal, *h_mgg_const_bggen_etapion, *h_mgg_const_bggen_bkgd;
-		TH2F *h_elas_bggen_signal,      *h_elas_bggen_etapion,      *h_elas_bggen_bkgd;
-		TH2F *h_elas_bggen_signal_cut,  *h_elas_bggen_etapion_cut,  *h_elas_bggen_bkgd_cut;
+		TH2F *h_mgg_const_bggen_signal,   *h_elas_bggen_signal,   *h_elas_bggen_signal_cut;
+		TH2F *h_mgg_const_bggen_etapion,  *h_elas_bggen_etapion,  *h_elas_bggen_etapion_cut;
+		TH2F *h_mgg_const_bggen_eta2pion, *h_elas_bggen_eta2pion, *h_elas_bggen_eta2pion_cut;
+		TH2F *h_mgg_const_bggen_omega,    *h_elas_bggen_omega,    *h_elas_bggen_omega_cut;
+		TH2F *h_mgg_const_bggen_rho,      *h_elas_bggen_rho,      *h_elas_bggen_rho_cut;
+		TH2F *h_mgg_const_bggen_bkgd,     *h_elas_bggen_bkgd,     *h_elas_bggen_bkgd_cut;
 		
 		TH1F *h_thrown_reactions_bggen;
 		TH1F *h_rec_reactions_bggen;
 		
-		vector<TH2F*> h_mgg_const_bggen;
-		vector<TH2F*> h_bcalDeltaPhi_bggen;
+		vector<TH2F*> h_bcalDeltaPhi_bggen, h_scDeltaPhi_bggen, h_scDeltaPhi_singleHit_bggen;
 		
 		TH2F *h_thrown_proton,        *h_thrown_neutron;
 		TH3F *h_AngularMatrix_proton, *h_AngularMatrix_neutron;
+		
+		TH1F *h_thrown_proton_1d,  *h_rec_proton_1d;
+		TH1F *h_thrown_neutron_1d, *h_rec_neutron_1d;
 		
 		/////////////////////////////////////////
 		// Omega->pi0+gamma:

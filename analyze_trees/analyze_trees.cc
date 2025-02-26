@@ -155,7 +155,7 @@ int main(int argc, char **argv) {
 				
 				// skip this target+field setting if no run list exists:
 				if(gSystem->AccessPathName(runListFileName.Data())) continue;
-				
+				cout << runListFileName.Data() << endl;
 				// store runs in a vector of integers:
 				vector<int> runList; runList.clear();
 				

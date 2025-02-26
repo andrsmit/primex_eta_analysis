@@ -13,15 +13,32 @@ void EtaAna::EtaggAnalysis_FCAL() {
 		PlotThrown(locThrownBeamEnergy, locThrownAngle);
 	}
 	
+	//-------------------------------------------//
+	// Get list of selected beam photons:
+	
 	vector<pair<int,double>> locGoodBeamPhotons; locGoodBeamPhotons.clear();
 	int locNBeamPhotons = GetBeamPhotonList(locGoodBeamPhotons, m_minBeamEnergyCut, m_maxBeamEnergyCut);
+	
+	//-------------------------------------------//
+	// Get list of 'good' FCAL showers:
 	
 	vector<int> locGoodFCALShowers; locGoodFCALShowers.clear();
 	int locNFCALShowers_EnergyCut;
 	int locNFCALShowers = GetFCALShowerList(locGoodFCALShowers, locNFCALShowers_EnergyCut, 0.0, m_FCALExtraEnergyCut, 0.0, m_FCALRFCut);
 	
+	//-------------------------------------------//
+	// Get list of 'good' BCAL showers:
+	
 	vector<int> locGoodBCALShowers; locGoodBCALShowers.clear();
 	int locNBCALShowers = GetBCALShowerList(locGoodBCALShowers, 0.0, m_BCALRFCut);
+	
+	//-------------------------------------------//
+	// Get list of 'good' SC hits:
+	
+	vector<int> locGoodSCHits; locGoodSCHits.clear();
+	int locNSCHits = GetSCHitList(locGoodSCHits);
+	
+	//-------------------------------------------//
 	
 	int locNBCALShowers_1ns = 0.;
 	double locBCALRFDT = 0., locBCALPhi = 0.; // only useful when there's exactly 1 BCAL shower within timing cut
@@ -38,6 +55,7 @@ void EtaAna::EtaggAnalysis_FCAL() {
 		}
 	}
 	
+	//-------------------------------------------//
 	/*
 	The vector 'locGoodFCALShowers' stores the indices for all FCAL showers within +/-2ns of the RF time.
 	In the following code, we loop over different values of minimum energy cuts and determine whether or not 
@@ -127,31 +145,32 @@ void EtaAna::EtaggAnalysis_FCAL() {
 			double invmass = sqrt(2.0*e1*e2*(1.-cos12));
 			
 			//-----------------------------------------------------//
-			// check different veto options:
+			// BCAL+SC Veto:
 			
 			bool isHadronicVeto = true;
 			
 			int locNSCHits = 0;
 			int locNSCHits_coplanar = 0;
-			for(int isc = 0; isc < m_nsc; isc++) {
-				
-				// only check hits between 1ns < (t_sc - t_RF) < 7ns 
-				//    and with dE > 0.0002 (from DNeutralShower_factory)
-				
-				double locT  = m_scT[isc] - m_rfTime;
-				double locdE = m_scdE[isc];
-				
-				if((1.0 < locT) && (locT < 7.0) && (locdE > 0.0002)) {
-					locNSCHits++;
-					if(fabs(fabs(m_scPhi[isc]-prodPhi)-180.0) < m_SCDeltaPhiCut) locNSCHits_coplanar++;
+			for(int isc=0; isc<locGoodSCHits.size(); isc++) {
+				int hitIndex = locGoodSCHits[isc];
+				double locDeltaPhi = prodPhi - m_scPhi[hitIndex];
+				if(IsCoplanarSC(locDeltaPhi)) locNSCHits_coplanar++;
+			}
+			
+			if(locNBCALShowers==0) 
+			{
+				isHadronicVeto = false;
+			}
+			else if(locNBCALShowers==1) {
+				if(IsCoplanarBCAL(prodPhi-locBCALPhi) && (locBCALRFDT>1.0)) {
+					if(locNSCHits_coplanar==locNSCHits) {
+						if(locNSCHits<=1) {
+							isHadronicVeto = false;
+						}
+					}
 				}
 			}
 			
-			if((locNBCALShowers==0) || 
-				((locNBCALShowers==1) && (fabs(fabs(locBCALPhi-prodPhi)-180.0) < m_BCALDeltaPhiCut) && (locBCALRFDT>1.0))) {
-				
-				if(locNSCHits_coplanar==locNSCHits) isHadronicVeto = false;
-			}
 			if(isHadronicVeto) continue;
 			
 			//-----------------------------------------------------//
@@ -256,41 +275,232 @@ void EtaAna::EtaggAnalysis_FCAL() {
 	return;
 }
 
-void EtaAna::InitializeAngularMatrices_FCAL() {
-	
+void EtaAna::InitializeFCALHists()
+{
+	int nInvmassBins     = (int)((m_maxInvmassBin-m_minInvmassBin)/m_invmassBinSize);
 	int nBeamEnergyBins  = (int)((m_maxBeamEnergyBin-m_minBeamEnergyBin)/m_beamEnergyBinSize);
 	int nRecAngleBins    = (int)((m_maxRecAngleBin-m_minRecAngleBin)/m_recAngleBinSize);
 	int nThrownAngleBins = (int)((m_maxThrownAngleBin-m_minThrownAngleBin)/m_thrownAngleBinSize);
 	
+	// VARY FCAL CUTS:
+	
+	h_mgg_FCAL = new TH2F("mgg_FCAL", "No Multiplicity Cut", 
+		nRecAngleBins, m_minRecAngleBin, m_maxRecAngleBin,
+		nInvmassBins, m_minInvmassBin, m_maxInvmassBin);
+	h_mgg_FCAL->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
+	h_mgg_FCAL->GetYaxis()->SetTitle("m_{#gamma#gamma}^{Constr} [GeV/c^{2}]");
+	h_mgg_FCAL->Sumw2();
+	
+	// with minimum energy cuts:
+	
+	h_mgg_FCALECut = new TH2F("mgg_FCAL_ecut", Form("E_{1,2} > %.2f GeV", m_FCALEnergyCut), 
+		nRecAngleBins, m_minRecAngleBin, m_maxRecAngleBin,
+		nInvmassBins, m_minInvmassBin, m_maxInvmassBin);
+	h_mgg_FCALECut->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
+	h_mgg_FCALECut->GetYaxis()->SetTitle("m_{#gamma#gamma}^{Constr} [GeV/c^{2}]");
+	h_mgg_FCALECut->Sumw2();
+	
+	// with fiducial cuts:
+	
+	h_mgg_FCALFidCut = new TH2F("mgg_FCAL_fidcut", "Fiducial Cut Applied", 
+		nRecAngleBins, m_minRecAngleBin, m_maxRecAngleBin,
+		nInvmassBins, m_minInvmassBin, m_maxInvmassBin);
+	h_mgg_FCALFidCut->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
+	h_mgg_FCALFidCut->GetYaxis()->SetTitle("m_{#gamma#gamma}^{Constr} [GeV/c^{2}]");
+	h_mgg_FCALFidCut->Sumw2();
+	
+	// with both energy and fiducial cuts:
+	
+	h_mgg_FCALCuts = new TH2F("mgg_FCAL_cuts", "Fiducial+Energy Cuts Applied", 
+		nRecAngleBins, m_minRecAngleBin, m_maxRecAngleBin,
+		nInvmassBins, m_minInvmassBin, m_maxInvmassBin);
+	h_mgg_FCALCuts->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
+	h_mgg_FCALCuts->GetYaxis()->SetTitle("m_{#gamma#gamma}^{Constr} [GeV/c^{2}]");
+	h_mgg_FCALCuts->Sumw2();
+	
+	// with 'good' multiplicity = 2:
+	
+	h_mgg_FCALGoodMult = new TH2F("mgg_FCAL_good_mult", "2 Good FCAL Showers", 
+		nRecAngleBins, m_minRecAngleBin, m_maxRecAngleBin,
+		nInvmassBins, m_minInvmassBin, m_maxInvmassBin);
+	h_mgg_FCALGoodMult->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
+	h_mgg_FCALGoodMult->GetYaxis()->SetTitle("m_{#gamma#gamma}^{Constr} [GeV/c^{2}]");
+	h_mgg_FCALGoodMult->Sumw2();
+	
+	// with total multiplicity = 2:
+	
+	h_mgg_FCALMult = new TH2F("mgg_FCAL_mult", "2 FCAL Showers", 
+		nRecAngleBins, m_minRecAngleBin, m_maxRecAngleBin,
+		nInvmassBins, m_minInvmassBin, m_maxInvmassBin);
+	h_mgg_FCALMult->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
+	h_mgg_FCALMult->GetYaxis()->SetTitle("m_{#gamma#gamma}^{Constr} [GeV/c^{2}]");
+	h_mgg_FCALMult->Sumw2();
+	
+	// vary the size of the fiducial cut:
+	
+	m_fcalFiducialCuts.clear();
+	for(int icut=0; icut<17; icut++) {
+		double locCut = 0.0 + 0.25*(double)(icut);
+		m_fcalFiducialCuts.push_back(locCut);
+	}
+	
 	for(int icut=0; icut<m_fcalFiducialCuts.size(); icut++) {
-		TH3F *hMatrix = new TH3F(Form("AngularMatrix_FCALFidCut_%02d",icut), 
-			Form("Inner layers removed by fiducial cut: %.1f; #theta(thrown) [#circ]; #theta(rec) [#circ]", m_fcalFiducialCuts[icut]),
-			nThrownAngleBins, m_minThrownAngleBin, m_maxThrownAngleBin, 
-			nRecAngleBins,    m_minRecAngleBin,    m_maxRecAngleBin,
-			nBeamEnergyBins,  m_minBeamEnergyBin,  m_maxBeamEnergyBin);
-		hMatrix->SetDirectory(0);
-		h_AngularMatrix_FCALFidCutVec.push_back(hMatrix);
+		TH2F *loc_h_mgg = new TH2F(Form("mgg_FCAL_fid_%02d", icut),
+			Form("Inner layers removed by fiducial cut: %.1f", m_fcalFiducialCuts[icut]), 
+			nRecAngleBins, m_minRecAngleBin, m_maxRecAngleBin,
+			nInvmassBins, m_minInvmassBin, m_maxInvmassBin);
+		loc_h_mgg->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
+		loc_h_mgg->GetYaxis()->SetTitle("m_{#gamma#gamma}^{Constr} [GeV/c^{2}]");
+		loc_h_mgg->Sumw2();
+		h_mgg_FCALFidCutVec.push_back(loc_h_mgg);
+	}
+	
+	// vary the minimum energy cut:
+	
+	m_fcalEnergyCuts.clear();
+	for(int icut=0; icut<20; icut++) {
+		double locCut = 0.0 + 0.05*(double)(icut);
+		m_fcalEnergyCuts.push_back(locCut);
 	}
 	
 	for(int icut=0; icut<m_fcalEnergyCuts.size(); icut++) {
-		TH3F *hMatrix = new TH3F(Form("AngularMatrix_FCALECut_%02d",icut), 
-			Form("Minimum Energy Cut: %.2f GeV; #theta(thrown) [#circ]; #theta(rec) [#circ]", m_fcalEnergyCuts[icut]),
-			nThrownAngleBins, m_minThrownAngleBin, m_maxThrownAngleBin, 
-			nRecAngleBins,    m_minRecAngleBin,    m_maxRecAngleBin,
-			nBeamEnergyBins,  m_minBeamEnergyBin,  m_maxBeamEnergyBin);
-		hMatrix->SetDirectory(0);
-		h_AngularMatrix_FCALECutVec.push_back(hMatrix);
+		TH2F *loc_h_mgg = new TH2F(Form("mgg_FCAL_ecut_%02d", icut),
+			Form("Minimum Energy Cut: %.2f GeV", m_fcalEnergyCuts[icut]), 
+			nRecAngleBins, m_minRecAngleBin, m_maxRecAngleBin,
+			nInvmassBins, m_minInvmassBin, m_maxInvmassBin);
+		loc_h_mgg->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
+		loc_h_mgg->GetYaxis()->SetTitle("m_{#gamma#gamma}^{Constr} [GeV/c^{2}]");
+		loc_h_mgg->Sumw2();
+		h_mgg_FCALECutVec.push_back(loc_h_mgg);
 	}
 	
 	for(int icut=0; icut<m_fcalEnergyCuts.size(); icut++) {
-		TH3F *hMatrix = new TH3F(Form("AngularMatrix_FCALExtraECut_%02d",icut), 
-			Form("Extra Energy Cut: %.2f GeV; #theta(thrown) [#circ]; #theta(rec) [#circ]", m_fcalEnergyCuts[icut]),
-			nThrownAngleBins, m_minThrownAngleBin, m_maxThrownAngleBin, 
-			nRecAngleBins,    m_minRecAngleBin,    m_maxRecAngleBin,
-			nBeamEnergyBins,  m_minBeamEnergyBin,  m_maxBeamEnergyBin);
-		hMatrix->SetDirectory(0);
-		h_AngularMatrix_FCALExtraECutVec.push_back(hMatrix);
+		TH2F *loc_h_mgg = new TH2F(Form("mgg_FCAL_extra_ecut_%02d", icut),
+			Form("Minimum Energy Cut: %.2f GeV", m_fcalEnergyCuts[icut]), 
+			nRecAngleBins, m_minRecAngleBin, m_maxRecAngleBin,
+			nInvmassBins, m_minInvmassBin, m_maxInvmassBin);
+		loc_h_mgg->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
+		loc_h_mgg->GetYaxis()->SetTitle("m_{#gamma#gamma}^{Constr} [GeV/c^{2}]");
+		loc_h_mgg->Sumw2();
+		h_mgg_FCALExtraECutVec.push_back(loc_h_mgg);
+	}
+	
+	if(m_FillThrown) 
+	{
+		for(int icut=0; icut<m_fcalFiducialCuts.size(); icut++) {
+			TH3F *hMatrix = new TH3F(Form("AngularMatrix_FCALFidCut_%02d",icut), 
+				Form("Inner layers removed by fiducial cut: %.1f; #theta(thrown) [#circ]; #theta(rec) [#circ]", m_fcalFiducialCuts[icut]),
+				nThrownAngleBins, m_minThrownAngleBin, m_maxThrownAngleBin, 
+				nRecAngleBins,    m_minRecAngleBin,    m_maxRecAngleBin,
+				nBeamEnergyBins,  m_minBeamEnergyBin,  m_maxBeamEnergyBin);
+			hMatrix->SetDirectory(0);
+			h_AngularMatrix_FCALFidCutVec.push_back(hMatrix);
+		}
+		
+		for(int icut=0; icut<m_fcalEnergyCuts.size(); icut++) {
+			TH3F *hMatrix = new TH3F(Form("AngularMatrix_FCALECut_%02d",icut), 
+				Form("Minimum Energy Cut: %.2f GeV; #theta(thrown) [#circ]; #theta(rec) [#circ]", m_fcalEnergyCuts[icut]),
+				nThrownAngleBins, m_minThrownAngleBin, m_maxThrownAngleBin, 
+				nRecAngleBins,    m_minRecAngleBin,    m_maxRecAngleBin,
+				nBeamEnergyBins,  m_minBeamEnergyBin,  m_maxBeamEnergyBin);
+			hMatrix->SetDirectory(0);
+			h_AngularMatrix_FCALECutVec.push_back(hMatrix);
+		}
+		
+		for(int icut=0; icut<m_fcalEnergyCuts.size(); icut++) {
+			TH3F *hMatrix = new TH3F(Form("AngularMatrix_FCALExtraECut_%02d",icut), 
+				Form("Extra Energy Cut: %.2f GeV; #theta(thrown) [#circ]; #theta(rec) [#circ]", m_fcalEnergyCuts[icut]),
+				nThrownAngleBins, m_minThrownAngleBin, m_maxThrownAngleBin, 
+				nRecAngleBins,    m_minRecAngleBin,    m_maxRecAngleBin,
+				nBeamEnergyBins,  m_minBeamEnergyBin,  m_maxBeamEnergyBin);
+			hMatrix->SetDirectory(0);
+			h_AngularMatrix_FCALExtraECutVec.push_back(hMatrix);
+		}
 	}
 	
 	return;
 }
+
+void EtaAna::ResetFCALHists()
+{
+	h_mgg_FCAL->Reset();
+	h_mgg_FCALECut->Reset();
+	h_mgg_FCALFidCut->Reset();
+	h_mgg_FCALCuts->Reset();
+	h_mgg_FCALGoodMult->Reset();
+	h_mgg_FCALMult->Reset();
+	for(int icut=0; icut<m_fcalFiducialCuts.size(); icut++) h_mgg_FCALFidCutVec[icut]->Reset();
+	for(int icut=0; icut<m_fcalEnergyCuts.size(); icut++) {
+		h_mgg_FCALECutVec[icut]->Reset();
+		h_mgg_FCALExtraECutVec[icut]->Reset();
+	}
+	
+	if(h_AngularMatrix_FCALECutVec.size()) {
+		for(int i=0; i<h_AngularMatrix_FCALECutVec.size(); i++) {
+			h_AngularMatrix_FCALECutVec[i]->Reset();
+		}
+	}
+	if(h_AngularMatrix_FCALExtraECutVec.size()) {
+		for(int i=0; i<h_AngularMatrix_FCALExtraECutVec.size(); i++) {
+			h_AngularMatrix_FCALExtraECutVec[i]->Reset();
+		}
+	}
+	if(h_AngularMatrix_FCALFidCutVec.size()) {
+		for(int i=0; i<h_AngularMatrix_FCALFidCutVec.size(); i++) {
+			h_AngularMatrix_FCALFidCutVec[i]->Reset();
+		}
+	}
+	return;
+}
+
+void EtaAna::WriteFCALHists()
+{
+	printf("\n  Writing FCAL histograms...\n");
+	
+	h_mgg_FCAL->Write();
+	h_mgg_FCALECut->Write();
+	h_mgg_FCALFidCut->Write();
+	h_mgg_FCALCuts->Write();
+	h_mgg_FCALGoodMult->Write();
+	h_mgg_FCALMult->Write();
+	
+	TDirectory *dirECut = new TDirectoryFile("ECut", "ECut");
+	dirECut->cd();
+	for(int icut=0; icut<m_fcalEnergyCuts.size(); icut++) {
+		h_mgg_FCALECutVec[icut]->Write();
+	}
+	if(h_AngularMatrix_FCALECutVec.size()) {
+		for(int i=0; i<h_AngularMatrix_FCALECutVec.size(); i++) {
+			h_AngularMatrix_FCALECutVec[i]->Write();
+		}
+	}
+	dirECut->cd("../");
+	
+	TDirectory *dirExtraECut = new TDirectoryFile("ExtraECut", "ExtraECut");
+	dirExtraECut->cd();
+	for(int icut=0; icut<m_fcalEnergyCuts.size(); icut++) {
+		h_mgg_FCALExtraECutVec[icut]->Write();
+	}
+	if(h_AngularMatrix_FCALExtraECutVec.size()) {
+		for(int i=0; i<h_AngularMatrix_FCALExtraECutVec.size(); i++) {
+			h_AngularMatrix_FCALExtraECutVec[i]->Write();
+		}
+	}
+	dirExtraECut->cd("../");
+	
+	TDirectory *dirFidCut = new TDirectoryFile("FidCut", "FidCut");
+	dirFidCut->cd();
+	for(int icut=0; icut<m_fcalFiducialCuts.size(); icut++) {
+		h_mgg_FCALFidCutVec[icut]->Write();
+	}
+	if(h_AngularMatrix_FCALFidCutVec.size()) {
+		for(int i=0; i<h_AngularMatrix_FCALFidCutVec.size(); i++) {
+			h_AngularMatrix_FCALFidCutVec[i]->Write();
+		}
+	}
+	dirFidCut->cd("../");
+	
+	printf("  Done.\n");
+	return;
+}
+
