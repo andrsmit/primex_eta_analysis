@@ -60,12 +60,13 @@ void EtaAna::EtaggAnalysis() {
 	// RF Timing distributions:
 	
 	// FCAL:
+	/*
 	for(int ishow = 0; ishow < m_nfcal; ishow++) {
 		TVector3 locPos = GetFCALPosition(ishow);
 		double locT = m_fcalT[ishow] - (locPos.Mag()/m_c) - m_rfTime;
 		h_fcalRFdt->Fill(locT);
 	}
-	
+	*/
 	// BCAL:
 	/*
 	for(int ishow = 0; ishow < m_nbcal; ishow++) {
@@ -176,7 +177,6 @@ void EtaAna::EtaggAnalysis() {
 			
 			// Check SC Matches:
 			
-			int locNSCHits = 0;
 			int locNSCHits_coplanar = 0;
 			for(int isc=0; isc<locGoodSCHits.size(); isc++) {
 				int hitIndex = locGoodSCHits[isc];
@@ -426,12 +426,30 @@ void EtaAna::EtaggAnalysis() {
 						}
 					}
 					
+					// plot FCAL-RF dt for accepted events:
+					
+					for(int ishow = 0; ishow < m_nfcal; ishow++) {
+						TVector3 locPos = GetFCALPosition(ishow);
+						double locT = m_fcalT[ishow] - (locPos.Mag()/m_c) - m_rfTime;
+						h_fcalRFdt->Fill(locT, fillWeight);
+					}
+					
 					// plot BCAL-RF dt for accepted events:
 					
 					for(int ishow = 0; ishow < m_nbcal; ishow++) {
 						TVector3 locPos = GetBCALPosition(ishow);
 						double locT = m_bcalT[ishow] - (locPos.Mag()/m_c) - m_rfTime;
 						h_bcalRFdt->Fill(locT, fillWeight);
+					}
+					
+					// plot number of SC hits:
+					
+					h_nSC->Fill(locNSCHits, fillWeight);
+					if(locNBCALShowers==0) h_nSC_nobcal->Fill(locNSCHits, fillWeight);
+					if(locNBCALShowers==1) h_nSC_onebcal->Fill(locNSCHits, fillWeight);
+					if(locVetoOptions[4]) {
+						h_nSC_bcalVeto->Fill(locNSCHits, fillWeight);
+						h_nSC_extra->Fill(locNSCHits-locNSCHits_coplanar, fillWeight);
 					}
 				}
 				
@@ -624,6 +642,14 @@ void EtaAna::InitializeDefaultHists()
 		"#phi_{BCAL} - #phi_{#gamma#gamma}; #theta_{#gamma#gamma} [#circ]; #Delta#phi [#circ]",
 		650, 0.0, 6.5, 2000, -360.0, 360.0);
 	
+	// SC Multiplicities:
+	
+	h_nSC          = new TH1F("nSC",          "Number of 'good' SC hits", 10, -0.5, 9.5);
+	h_nSC_nobcal   = new TH1F("nSC_nobcal",   "Number of 'good' SC hits", 10, -0.5, 9.5);
+	h_nSC_onebcal  = new TH1F("nSC_onebcal",  "Number of 'good' SC hits", 10, -0.5, 9.5);
+	h_nSC_bcalVeto = new TH1F("nSC_bcalVeto", "Number of 'good' SC hits", 10, -0.5, 9.5);
+	h_nSC_extra    = new TH1F("nSC_extra", "Number of non-coplanar SC hits after applying BCAL veto", 10, -0.5, 9.5);
+	
 	// Distribution of accepted events in FCAL:
 	
 	h_xy1 = new TH2F("xy1", "Position of Shower 1; x_{1} [cm]; y_{1} [cm]", 500, -100., 100., 500, -100., 100.);
@@ -683,6 +709,12 @@ void EtaAna::ResetDefaultHists()
 	h_bcalDeltaPhi->Reset();
 	h_bcalDeltaPhi_singleHit->Reset();
 	
+	h_nSC->Reset();
+	h_nSC_nobcal->Reset();
+	h_nSC_onebcal->Reset();
+	h_nSC_bcalVeto->Reset();
+	h_nSC_extra->Reset();
+	
 	h_xy1->Reset();
 	h_xy2->Reset();
 	
@@ -739,6 +771,12 @@ void EtaAna::WriteDefaultHists()
 	h_scDeltaPhi_singleHit->Write();
 	h_bcalDeltaPhi->Write();
 	h_bcalDeltaPhi_singleHit->Write();
+	
+	h_nSC->Write();
+	h_nSC_nobcal->Write();
+	h_nSC_onebcal->Write();
+	h_nSC_bcalVeto->Write();
+	h_nSC_extra->Write();
 	
 	h_xy1->Write();
 	h_xy2->Write();

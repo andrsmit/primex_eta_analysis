@@ -164,7 +164,6 @@ void EtaAna::EtaggAnalysis_TOF() {
 			
 			bool isHadronicVeto = true;
 			
-			int locNSCHits = 0;
 			int locNSCHits_coplanar = 0;
 			for(int isc=0; isc<locGoodSCHits.size(); isc++) {
 				int hitIndex = locGoodSCHits[isc];
