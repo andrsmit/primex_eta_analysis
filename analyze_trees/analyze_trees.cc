@@ -25,17 +25,17 @@ int main(int argc, char **argv) {
 				locSettings.minRunNumber = GetMinRunNumber(locSettings.primexPhase);
 				locSettings.maxRunNumber = GetMaxRunNumber(locSettings.primexPhase);
 				break;
-			case 'b':
-				locSettings.minRunNumber = atoi(++argptr);
-				break;
-			case 'e':
-				locSettings.maxRunNumber = atoi(++argptr);
-				break;
 			case 'c':
 				locSettings.configFileName = ++argptr;
 				break;
 			case 'a':
 				locSettings.analysisOption = atoi(++argptr);
+				break;
+			case 'b':
+				locSettings.minRunNumber = atoi(++argptr);
+				break;
+			case 'e':
+				locSettings.maxRunNumber = atoi(++argptr);
 				break;
 			case 'i':
 				locSettings.inputFileName = ++argptr;
@@ -155,7 +155,7 @@ int main(int argc, char **argv) {
 				
 				// skip this target+field setting if no run list exists:
 				if(gSystem->AccessPathName(runListFileName.Data())) continue;
-				cout << runListFileName.Data() << endl;
+				
 				// store runs in a vector of integers:
 				vector<int> runList; runList.clear();
 				
@@ -176,6 +176,7 @@ int main(int argc, char **argv) {
 				//----------------------------------------------------//
 				
 				printf("Processing %s target %s runs:\n", targetStrings[itarget].Data(), fieldStrings[ifield].Data());
+				printf("  run list: %s\n", runListFileName.Data());
 				
 				TString outputFileName = Form("%s/phase%d/%s_target_%s%s.root", rootFilePathName, locPhase, 
 					targetStrings[itarget].Data(), fieldStrings[ifield].Data(), analysisStr.Data());
@@ -231,10 +232,12 @@ void printUsage(anaSettings_t anaSettings, int goYes) {
 		fprintf(stderr,"\nSWITCHES:\n");
 		fprintf(stderr,"-h\tPrintthis message\n");
 		fprintf(stderr,"-p<arg>\tPrimEx-eta phase number (default=1, choose between 1,2,or3)\n");
-		fprintf(stderr,"-b<arg>\tMinimum run number to process\n");
-		fprintf(stderr,"-e<arg>\tMaximum run number to process\n");
 		fprintf(stderr,"-c<arg>\tConfiguration file name\n");
 		fprintf(stderr,"-a<arg>\tAnalysis Option (0: default, 1: invmass matrix, 2: FCAL cuts, 5: TOF cuts)\n");
+		fprintf(stderr,"\n");
+		fprintf(stderr,"For debug/testing:\n");
+		fprintf(stderr,"-b<arg>\tMinimum run number to process\n");
+		fprintf(stderr,"-e<arg>\tMaximum run number to process\n");
 		fprintf(stderr,"-r<arg>\tRun number for specified input file\n");
 		fprintf(stderr,"-i<arg>\tInput file name (default is none)\n");
 		fprintf(stderr,"-o<arg>\tOutput file name (default is compton_ana.root)\n\n\n");
