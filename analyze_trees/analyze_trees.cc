@@ -234,7 +234,7 @@ void printUsage(anaSettings_t anaSettings, int goYes) {
 		fprintf(stderr,"-b<arg>\tMinimum run number to process\n");
 		fprintf(stderr,"-e<arg>\tMaximum run number to process\n");
 		fprintf(stderr,"-c<arg>\tConfiguration file name\n");
-		fprintf(stderr,"-a<arg>\tAnalysis Option (0: default, 1: invmass matrix, 2: FCAL cuts, 3: BCAL cuts, 4: BEAM cuts, 5: TOF cuts)\n");
+		fprintf(stderr,"-a<arg>\tAnalysis Option (0: default, 1: invmass matrix, 2: FCAL cuts, 5: TOF cuts)\n");
 		fprintf(stderr,"-r<arg>\tRun number for specified input file\n");
 		fprintf(stderr,"-i<arg>\tInput file name (default is none)\n");
 		fprintf(stderr,"-o<arg>\tOutput file name (default is compton_ana.root)\n\n\n");

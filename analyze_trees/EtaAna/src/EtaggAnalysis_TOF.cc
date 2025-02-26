@@ -389,13 +389,13 @@ void EtaAna::InitializeTOFHists()
 void EtaAna::ResetTOFHists()
 {
 	h_mgg_noTOF->Reset();
-	if(h_AngularMatrix_noTOF!=NULL) h_AngularMatrix_noTOF->Reset();
+	if(h_AngularMatrix_noTOF!=nullptr) h_AngularMatrix_noTOF->Reset();
 	
 	h_mgg_TOF->Reset();
-	if(h_AngularMatrix_TOF!=NULL) h_AngularMatrix_TOF->Reset();
+	if(h_AngularMatrix_TOF!=nullptr) h_AngularMatrix_TOF->Reset();
 	
 	h_mgg_singleTOF->Reset();
-	if(h_AngularMatrix_singleTOF!=NULL) h_AngularMatrix_singleTOF->Reset();
+	if(h_AngularMatrix_singleTOF!=nullptr) h_AngularMatrix_singleTOF->Reset();
 	
 	for(int icut=0; icut<m_TOFTimingCuts.size(); icut++) {
 		h_mgg_TOFTimingCutVec[icut]->Reset();
@@ -421,13 +421,13 @@ void EtaAna::WriteTOFHists()
 	printf("\n  Writing TOF histograms...\n");
 	
 	h_mgg_noTOF->Write();
-	if(h_AngularMatrix_noTOF!=NULL) h_AngularMatrix_noTOF->Write();
+	if(h_AngularMatrix_noTOF!=nullptr) h_AngularMatrix_noTOF->Write();
 	
 	h_mgg_TOF->Write();
-	if(h_AngularMatrix_TOF!=NULL) h_AngularMatrix_TOF->Write();
+	if(h_AngularMatrix_TOF!=nullptr) h_AngularMatrix_TOF->Write();
 	
 	h_mgg_singleTOF->Write();
-	if(h_AngularMatrix_singleTOF!=NULL) h_AngularMatrix_singleTOF->Write();
+	if(h_AngularMatrix_singleTOF!=nullptr) h_AngularMatrix_singleTOF->Write();
 	
 	TDirectory *dirTOFTimingCut = new TDirectoryFile("TOFTimingCut", "TOFTimingCut");
 	dirTOFTimingCut->cd();

@@ -19,15 +19,15 @@ EtaAna::EtaAna() {
 	m_TOFRFCut  =  1.000;
 	
 	m_FCALEnergyCut      = 0.25; // threshold for photons to be used in this analysis
-	m_FCALExtraEnergyCut = 0.25; // threshold for 'extra' showers in the FCAL
+	m_FCALExtraEnergyCut = 0.05; // threshold for 'extra' showers in the FCAL
 		// There should only be two photons with energy > m_FCALExtraEnergyCut. However, we
 		// can vary m_FCALEnergyCut separately from m_FCALExtraEnergyCut in order to
 		// change the energy threshold of the showers which are used for reconstructing etas,
 		// without having to include "extra" higher energy showers.
 	
-	m_BCALEnergyCut      = 0.1;
+	m_BCALEnergyCut = 0.10;
 	
-	m_minBeamEnergyCut =  8.0;
+	m_minBeamEnergyCut =  9.0;
 	m_maxBeamEnergyCut = 10.9;
 	
 	m_FCALTOFCut      =  8.0; // [cm]
@@ -59,18 +59,22 @@ EtaAna::EtaAna() {
 	
 	m_event = 0;
 	
+	// for event-by-event acceptance correction:
+	
+	h_acceptance = nullptr;
+	
 	// initialize as NULL pointers:
 	
-	h_thrown = NULL;
+	h_thrown                  = nullptr;
 	
-	h_invmassMatrix        = NULL;
-	h_invmassMatrix_prompt = NULL;
-	h_invmassMatrix_acc    = NULL;
-	h_AngularMatrix        = NULL;
+	h_invmassMatrix           = nullptr;
+	h_invmassMatrix_prompt    = nullptr;
+	h_invmassMatrix_acc       = nullptr;
+	h_AngularMatrix           = nullptr;
 	
-	h_AngularMatrix_noTOF     = NULL;
-	h_AngularMatrix_TOF       = NULL;
-	h_AngularMatrix_singleTOF = NULL;
+	h_AngularMatrix_noTOF     = nullptr;
+	h_AngularMatrix_TOF       = nullptr;
+	h_AngularMatrix_singleTOF = nullptr;
 	
 }
 
@@ -310,7 +314,12 @@ void EtaAna::ReadEvent() {
 		m_tree->SetBranchAddress("mc_theta",           &m_mcTheta);
 		m_tree->SetBranchAddress("mc_phi",             &m_mcPhi);
 		
-		m_tree->SetBranchAddress("thrownBeamEnergy",   &m_thrownBeamEnergy);
+		if(m_tree->GetListOfBranches()->FindObject("thrownBeamEnergy")) {
+			m_tree->SetBranchAddress("thrownBeamEnergy",   &m_thrownBeamEnergy);
+		}
+		else {
+			m_thrownBeamEnergy = 0.0;
+		}
 	}
 	
 	m_tree->GetEvent(m_event);
@@ -321,7 +330,7 @@ void EtaAna::ReadEvent() {
 void EtaAna::PlotThrown(double energy, double angle) {
 	
 	if(m_nmc==0) return;
-	if(h_thrown==NULL) {
+	if(h_thrown==nullptr) {
 		
 		int nBeamEnergyBins  = (int)((m_maxBeamEnergyBin-m_minBeamEnergyBin)/m_beamEnergyBinSize);
 		int nThrownAngleBins = (int)((m_maxThrownAngleBin-m_minThrownAngleBin)/m_thrownAngleBinSize);
@@ -342,7 +351,7 @@ void EtaAna::FillAngularMatrix(double thrownEnergy, double thrownAngle,
 	if((m_minBeamEnergyBin>thrownEnergy) || (thrownEnergy>m_maxBeamEnergyBin)) return;
 	
 	// check if matrix has been initialized:
-	if(h_AngularMatrix==NULL) {
+	if(h_AngularMatrix==nullptr) {
 		return;
 	}
 	
@@ -787,6 +796,8 @@ void EtaAna::DumpCuts() {
 
 int EtaAna::GetAcceptanceHistogram() {
 	
+	if(h_acceptance!=nullptr) return 0;
+	
 	TString accFileName = "/work/halld/home/andrsmit/primex_eta_analysis/eta_gg_matrix/analyze_trees/rootFiles/grid_acceptance.root";
 	if(gSystem->AccessPathName(accFileName.Data())) return 1;
 	
@@ -806,7 +817,6 @@ void EtaAna::RunAnalysis(TString inputFileName, int analysisOption) {
 	// try to read in grid-acceptance:
 	if(GetAcceptanceHistogram()) {
 		std::cout << "Unable to get grid acceptance from ROOT file" << std::endl;
-		h_acceptance = NULL;
 	}
 	
 	while(m_event < nTotalEvents) {
@@ -925,7 +935,7 @@ void EtaAna::ResetHistograms(int analysisOption) {
 		}
 	}
 	
-	if(h_thrown!=NULL) h_thrown->Reset();
+	if(h_thrown!=nullptr) h_thrown->Reset();
 	
 	return;
 }
@@ -969,7 +979,7 @@ void EtaAna::WriteHistograms(int analysisOption) {
 		}
 	}
 	
-	if(h_thrown!=NULL) {
+	if(h_thrown!=nullptr) {
 		printf("\n  Writing thrown histogram...\n");
 		h_thrown->Write();
 		printf("  Done.\n");

@@ -271,10 +271,10 @@ void EtaAna::InitializeMatrixHists()
 
 void EtaAna::ResetMatrixHists()
 {
-	if(h_invmassMatrix!=NULL) h_invmassMatrix->Reset();
-	if(h_invmassMatrix_prompt!=NULL) h_invmassMatrix_prompt->Reset();
-	if(h_invmassMatrix_acc!=NULL) h_invmassMatrix_acc->Reset();
-	if(h_AngularMatrix!=NULL) h_AngularMatrix->Reset();
+	if(h_invmassMatrix!=nullptr) h_invmassMatrix->Reset();
+	if(h_invmassMatrix_prompt!=nullptr) h_invmassMatrix_prompt->Reset();
+	if(h_invmassMatrix_acc!=nullptr) h_invmassMatrix_acc->Reset();
+	if(h_AngularMatrix!=nullptr) h_AngularMatrix->Reset();
 	
 	return;
 }
@@ -283,10 +283,10 @@ void EtaAna::WriteMatrixHists()
 {
 	printf("\n  Writing angular and invariant mass matrices...\n");
 	
-	if(h_invmassMatrix!=NULL) h_invmassMatrix->Write();
-	if(h_invmassMatrix_prompt!=NULL) h_invmassMatrix_prompt->Write();
-	if(h_invmassMatrix_acc!=NULL) h_invmassMatrix_acc->Write();
-	if(h_AngularMatrix!=NULL) h_AngularMatrix->Write();
+	if(h_invmassMatrix!=nullptr) h_invmassMatrix->Write();
+	if(h_invmassMatrix_prompt!=nullptr) h_invmassMatrix_prompt->Write();
+	if(h_invmassMatrix_acc!=nullptr) h_invmassMatrix_acc->Write();
+	if(h_AngularMatrix!=nullptr) h_AngularMatrix->Write();
 	
 	printf("  Done.\n");
 	return;

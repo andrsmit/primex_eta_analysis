@@ -294,11 +294,13 @@ void EtaAna::EtaggAnalysis() {
 				double logt = log10(-t);
 				
 				// acceptance correction:
+				/*
 				double locAcc = 1.0;
-				if(h_acceptance != NULL) {
+				if(h_acceptance != nullptr) {
 					locAcc = h_acceptance->GetBinContent(h_acceptance->GetXaxis()->FindBin(eb), 
 						h_acceptance->GetYaxis()->FindBin(prodTheta));
 				}
+				*/
 				
 				//-----------------------------------------------------//
 				// Energy constraint
