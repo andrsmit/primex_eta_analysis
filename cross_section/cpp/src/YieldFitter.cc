@@ -21,9 +21,7 @@ int InitializeYieldFitter(YieldFitter &fitter, EtaAnalyzer anaObj)
 	
 	fitter.SetYield((TH1F*)anaObj.GetAngularYield(1));
 	
-	printf("Loading theory calculations...");
 	if(fitter.LoadTheoryHists()) return 1;
-	printf("Finished.\n");
 	
 	return 0;
 }
@@ -37,12 +35,14 @@ void YieldFitter::FitAngularYield(int drawOption)
 	f_yield->SetParLimits(2, 0.1, 5.0);
 	f_yield->SetParLimits(3, 0.1, 5.0);
 	f_yield->SetParLimits(4, -180.0, 180.0);
+	
 	/*
-	f_yield->FixParameter(1,  6.75607e-01);
-	f_yield->FixParameter(2,  4.82658e-01);
-	f_yield->FixParameter(3,  1.22440e+00);
-	f_yield->FixParameter(4, -2.15931e+01);
+	f_yield->FixParameter(1, 6.91342e-01);
+	f_yield->FixParameter(2, 5.41327e-01);
+	f_yield->FixParameter(3, 7.72414e-01);
+	f_yield->FixParameter(4, 3.11097e-03);
 	*/
+	
 	f_yield->SetRange(0.0, 4.0);
 	h_yield->Fit(f_yield, "R0");
 	
@@ -64,7 +64,7 @@ void YieldFitter::DrawFitResult()
 	InitializeDrawFunction(&fDraw, "f_Draw",             kBlack,   2, 3);
 	InitializeDrawFunction(&fPrim, "f_Primakoff",        kRed,     2, 2);
 	InitializeDrawFunction(&fCoh,  "f_Coherent",         kBlue,    2, 2);
-	InitializeDrawFunction(&fQFP,  "f_QuasifreeProton",  kGreen+2, 2, 2);
+	InitializeDrawFunction(&fQFP,  "f_QuasifreeProton",  kGreen,   2, 2);
 	InitializeDrawFunction(&fQFN,  "f_QuasifreeNeutron", kGreen-7, 2, 2);
 	InitializeInterFunction(&fInt, "f_Interference",     kMagenta, 2, 2);
 	
@@ -148,11 +148,15 @@ void YieldFitter::InitializeInterFunction(TF1 **f1, TString funcName, int lineCo
 
 int YieldFitter::LoadTheoryHists()
 {
+	printf("\nREADING THEORY CALCULATIONS...\n");
+	
 	TString theoryFileName = "/work/halld/home/ijaegle/afix_calculation/root-files/he4-eta-xs-theory-AFix-v5.root";
 	if(gSystem->AccessPathName(theoryFileName.Data())) {
 		printf("\nProblem accessing theory file name.\n");
 		return 1;
 	}
+	
+	printf("  theory file name: %s\n", theoryFileName.Data());
 	
 	TH2F *hTheory[4];
 	TFile *fTheory = new TFile(theoryFileName.Data(), "READ");

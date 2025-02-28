@@ -9,6 +9,8 @@ TString   bggenDirectory = "/work/halld/home/andrsmit/primex_eta_analysis/bggen_
 
 int EtaAnalyzer::LoadDataHistograms()
 {
+	printf("\nREADING DATA HISTGRAMS...\n");
+	
 	TString fieldString = "bfield";
 	if(m_phase==1) fieldString = "nobfield";
 	
@@ -42,6 +44,9 @@ int EtaAnalyzer::LoadDataHistograms()
 	
 	if(gSystem->AccessPathName(fullTargetFileName.Data()) || gSystem->AccessPathName(emptyTargetFileName.Data()))
 		return 1;
+	
+	printf("   Full Target: %s\n",  fullTargetFileName.Data());
+	printf("  Empty Target: %s\n", emptyTargetFileName.Data());
 	
 	//--------------------------------//
 	
@@ -119,11 +124,14 @@ int EtaAnalyzer::LoadDataHistograms()
 
 int EtaAnalyzer::LoadLineshapes()
 {
+	printf("\nREADING LINESHAPES...\n");
+	
 	if(m_fitOption_signal>=5) 
 	{
 		if(LoadEtaLineshape()) return 1;
 		if(m_fitOption_signal>5) {
 			if(LoadEtaPionLineshape()) return 1;
+			if(LoadEtaPionFraction()) return 1;
 		}
 	}
 	
@@ -141,12 +149,12 @@ int EtaAnalyzer::LoadLineshapes()
 }
 int EtaAnalyzer::LoadEtaLineshape()
 {
-	printf("READING ETA LINESHAPE...\n");
-	/*
 	if(m_fitOption_signal==7) {
-		TString mcFileName  = Form("%s/phase%d/Helium.root",  bggenDirectory.Data(), 1);
+		TString mcFileName  = Form("%s/phase%d/Helium.root",  bggenDirectory.Data(), m_phase);
 		
 		if(gSystem->AccessPathName(mcFileName.Data())) return 1;
+		
+		printf("  Eta lineshape from %s\n", mcFileName.Data());
 		
 		TFile *mcFile = new TFile(mcFileName.Data(), "READ");
 		
@@ -155,7 +163,7 @@ int EtaAnalyzer::LoadEtaLineshape()
 		mcFile->Close();
 		return 0;
 	}
-	*/
+	
 	TString anaString = "";
 	switch(m_analysisOption) {
 		case 1:
@@ -181,7 +189,7 @@ int EtaAnalyzer::LoadEtaLineshape()
 	TString mcFileName  = Form("%s/phase%d/phase%d%s.root",  etamcDirectory.Data(), 1, 1, anaString.Data());
 	
 	if(gSystem->AccessPathName(mcFileName.Data())) return 1;
-	printf("Reading eta lineshape from %s\n", mcFileName.Data());
+	printf("  Eta lineshape from %s\n", mcFileName.Data());
 	
 	//--------------------------------//
 	
@@ -228,14 +236,52 @@ int EtaAnalyzer::LoadEtaLineshape()
 
 int EtaAnalyzer::LoadEtaPionLineshape()
 {
-	TString mcFileName  = Form("%s/phase%d/Helium.root",  bggenDirectory.Data(), 1);
+	TString mcFileName  = Form("%s/phase%d/Helium.root",  bggenDirectory.Data(), m_phase);
 	
 	if(gSystem->AccessPathName(mcFileName.Data())) return 1;
+	
+	printf("  Eta+Pion lineshape from %s\n", mcFileName.Data());
 	
 	TFile *mcFile = new TFile(mcFileName.Data(), "READ");
 	
 	h_etaPionLineshape = (TH2F*)mcFile->Get("mgg_const_bggen_etapion")->Clone("etapionLineshape");
 	h_etaPionLineshape->SetDirectory(0);
+	
+	// add in contribution from eta+2pion background channels:
+	
+	TH2F *h_eta2PionLS = (TH2F*)mcFile->Get("mgg_const_bggen_eta2pion")->Clone("eta2pionLineshape");
+	h_etaPionLineshape->Add(h_eta2PionLS);
+	
+	mcFile->Close();
+	
+	return 0;
+}
+
+int EtaAnalyzer::LoadEtaPionFraction()
+{
+	TString mcFileName  = Form("%s/phase%d/Helium.root",  bggenDirectory.Data(), m_phase);
+	
+	if(gSystem->AccessPathName(mcFileName.Data())) return 1;
+	
+	printf("  Eta+Pion fraction from %s\n", mcFileName.Data());
+	
+	TFile *mcFile = new TFile(mcFileName.Data(), "READ");
+	
+	TH2F *h2_exclusive = (TH2F*)mcFile->Get("mgg_const_bggen_signal");
+	TH1F *h1_exclusive = (TH1F*)h2_exclusive->ProjectionX("h1_exclusive");
+	h1_exclusive->Rebin(m_rebinsTheta);
+	
+	TH2F *h2_etapion   = (TH2F*)mcFile->Get("mgg_const_bggen_etapion");
+	TH1F *h1_etapion   = (TH1F*)h2_etapion->ProjectionX("h1_etapion");
+	TH2F *h2_eta2pion  = (TH2F*)mcFile->Get("mgg_const_bggen_eta2pion");
+	TH1F *h1_eta2pion  = (TH1F*)h2_eta2pion->ProjectionX("h1_eta2pion");
+	h1_etapion->Add(h1_eta2pion);
+	h1_etapion->Rebin(m_rebinsTheta);
+	
+	h1_etapion->Divide(h1_exclusive);
+	
+	h_EtaPionFraction_bggen = (TH1F*)h1_etapion->Clone("etaPionFraction");
+	h_EtaPionFraction_bggen->SetDirectory(0);
 	mcFile->Close();
 	
 	return 0;
@@ -249,9 +295,11 @@ int EtaAnalyzer::LoadOmegaLineshape()
 	
 	if(gSystem->AccessPathName(mcFileName.Data())) return 1;
 	
+	printf("  Omega lineshape from %s\n", mcFileName.Data());
+	
 	TFile *mcFile = new TFile(mcFileName.Data(), "READ");
 	
-	h_omegaLineshape = (TH2F*)mcFile->Get("mgg_const_bggen_bkgd")->Clone("omegaLineshape");
+	h_omegaLineshape = (TH2F*)mcFile->Get("mgg_const_bggen_omega")->Clone("omegaLineshape");
 	h_omegaLineshape->SetDirectory(0);
 	mcFile->Close();
 	return 0;

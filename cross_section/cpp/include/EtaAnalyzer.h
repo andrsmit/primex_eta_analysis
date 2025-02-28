@@ -41,10 +41,15 @@ class EtaAnalyzer {
 			h_fluxWeights(nullptr), 
 			h_matrix(nullptr), 
 			h_matrixFine(nullptr), 
+			h_EtaPionFraction_bggen(nullptr), 
+			h_EtaPionFraction(nullptr), 
+			h_EmptyEtaRatio(nullptr), 
 			cFit(nullptr), 
 			cYield(nullptr), 
 			cCrossSection(nullptr), 
 			cAcceptance(nullptr), 
+			cEmptyRatio(nullptr), 
+			cEtaPionFraction(nullptr), 
 			l0(nullptr), 
 			lp(nullptr), 
 			lm(nullptr), 
@@ -54,16 +59,22 @@ class EtaAnalyzer {
 			// Run conditions:
 			
 			m_phase                =  1;
-			m_analysisOption       =  1;
+			
+			m_analysisOption       =  0;
+			m_vetoOption           =  5;
+			
 			m_mggHistName          = "mgg_const";
 			m_matrixHistName       = "AngularMatrix";
 			m_luminosity           =  0.0;
 			m_emptyTargetFluxRatio =  1.0;
 			
-			// Binning:
+			// Binning defaults:
 			
-			m_rebinsMgg          =  4;
-			m_mggBinSize         =  0.04;
+			m_rebinsMgg          =  2;
+			m_mggBinSize         =  0.002;
+			
+			m_rebinsEmptyMgg     =  5;
+			m_emptyMggBinSize    =  0.005;
 			
 			m_rebinsTheta        =  6;
 			m_reconAngleBinSize  =  0.06;
@@ -118,18 +129,23 @@ class EtaAnalyzer {
 		
 		void SetPhase(int);
 		void SetAnalysisOption(int);
+		void SetVetoOption(int);
 		void SetMggHistName(TString);
 		void SetMatrixHistName(TString);
 		
 		int GetPhase() { return m_phase; }
+		int GetAnalysisOption() { return m_analysisOption; }
+		int GetVetoOption() { return m_vetoOption; }
 		
 		// Binning:
 		
 		void SetRebinsMgg(int);
 		void SetRebinsTheta(int);
+		void SetRebinsEmptyMgg(int);
 		void SetBeamEnergy(double, double);
 		
 		double GetMggBinSize() { return m_mggBinSize; }
+		double GetEmptyMggBinSize() { return m_emptyMggBinSize; }
 		void  GetBeamEnergyBinning(double&, double&, double&);
 		void  GetReconAngleBinning(double&, double&, double&);
 		void GetThrownAngleBinning(double&, double&, double&);
@@ -165,6 +181,7 @@ class EtaAnalyzer {
 		// For consistency checking:
 		
 		TString GetFitOptionStr(int);
+		TString GetEmptyFitOptionStr();
 		void DumpSettings();
 		
 		// Load data (functions are defined in Data.cc):
@@ -176,6 +193,7 @@ class EtaAnalyzer {
 		int LoadEtaPionLineshape();
 		int LoadOmegaLineshape();
 		int LoadFDCOmegaLineshape();
+		int LoadEtaPionFraction();
 		
 		// Get photon flux (functinos are defined in Flux.cc):
 		
@@ -190,6 +208,7 @@ class EtaAnalyzer {
 		
 		int LoadAngularMatrix();
 		int CalcAcceptance();
+		TString GetMatrixFileName();
 		TH3F* GetAngularMatrix() { return h_matrix; }
 		TH3F* GetAngularMatrixFine() { return h_matrixFine; }
 		
@@ -199,9 +218,11 @@ class EtaAnalyzer {
 		void  FitInvariantMass(double minAngle=0.0, double maxAngle=5.0, int drawFitResult=0, int drawOmegaFit=0);
 		
 		void ExtractAngularYield(int drawOption=0);
-		void    PlotAngularYield();
 		
+		void PlotAngularYield();
 		void PlotCrossSection();
+		void PlotEmptyEtaRatio();
+		void PlotEtaPionFraction();
 		void WriteROOTFile(TString fileName="yield.root");
 		
 		TH1F* GetAngularYield(int opt=0) { 
@@ -223,10 +244,19 @@ class EtaAnalyzer {
 		// Angular Matrix:
 		TH3F *h_matrix, *h_matrixFine;
 		
+		// Eta+Pion Fraction from bggen:
+		TH1F *h_EtaPionFraction_bggen;
+		
+		// Eta+Pion Fraction from fit result:
+		TH1F *h_EtaPionFraction;
+		
+		// Ratio of etas from empty target runs to full target runs:
+		TH1F *h_EmptyEtaRatio;
+		
 		//-----------------------------------------------------------//
 		// Run-specific numbers:
 		
-		int m_phase, m_analysisOption;
+		int m_phase, m_analysisOption, m_vetoOption;
 		double m_luminosity, m_emptyTargetFluxRatio;
 		TString m_mggHistName, m_matrixHistName;
 		
@@ -239,6 +269,9 @@ class EtaAnalyzer {
 		int    m_rebinsTheta;
 		double m_reconAngleBinSize;
 		double m_minReconAngle,  m_maxReconAngle;
+		
+		int    m_rebinsEmptyMgg;
+		double m_emptyMggBinSize;
 		
 		double m_thrownAngleBinSize;
 		double m_minThrownAngle, m_maxThrownAngle;
@@ -273,6 +306,10 @@ class EtaAnalyzer {
 		vector<pair<double,double>> m_angularYield, m_angularYieldFit, m_angularYieldEmpty;
 		vector<pair<double,double>> m_angularSBR;
 		
+		vector<pair<double,double>> m_angularGasEtas;
+		vector<pair<double,double>> m_angularEmptyEtas;
+		vector<pair<double,double>> m_angularEtaPionFraction;
+		
 		// Histograms to store results:
 		
 		TH1F *h_Yield,        *h_YieldFit;
@@ -283,7 +320,7 @@ class EtaAnalyzer {
 		
 		// Objects needed for drawing:
 		
-		TCanvas *cFit, *cYield, *cCrossSection, *cAcceptance;
+		TCanvas *cFit, *cYield, *cCrossSection, *cAcceptance, *cEmptyRatio, *cEtaPionFraction;
 		TPad *pFit, *pRes;
 		void InitializeFitCanvas();
 		

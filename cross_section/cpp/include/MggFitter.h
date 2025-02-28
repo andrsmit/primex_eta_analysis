@@ -27,8 +27,8 @@ class MggFitter {
 			f_chebyshev = new TF1("chebyshev", "cheb5", 0.0, 1.0);
 		}
 		
-		double angle   = 0.0;
-		double binSize = 0.001;
+		double angle = 0.0;
+		double binSize = 0.001, emptyBinSize = 0.001;
 		
 		// Fitting options:
 		
@@ -99,62 +99,78 @@ class MggFitter {
 		}
 		void FitFDCOmegaLineshape(int drawOption=0);
 		
+		void SetEtaPionFraction(double frac, double fracErr) { 
+			m_etaPionFraction    = frac;
+			m_etaPionFractionErr = fracErr;
+			return;
+		}
+		
 		void FitData();
 		void FitEmpty();
 		void FitDataWithEmpty();
 		void DrawFitResults(TCanvas&);
 		
 		TF1* GetFitFunction() { 
-			//ZeroSignalPars(f_fit);
 			f_fit->SetLineColor(kGreen);
 			f_fit->SetNpx(1000);
 			return f_fit;
 		}
-		TF1* GetSignalFunction() {
-			TF1 *f1;
-			InitializeFitFunction(&f1,"signalFit");
-			f1->SetParameters(f_fit->GetParameters());
-			ZeroBkgdPars(f1);
-			f1->SetLineColor(kCyan+2);
-			f1->SetNpx(1000);
-			return f1;
+		void GetSignalFunction(TF1** f1, TString fname="signalFit") {
+			TF1 *locf1;
+			InitializeFitFunction(&locf1,"locf1");
+			locf1->SetParameters(f_fit->GetParameters());
+			ZeroBkgdPars(locf1);
+			locf1->SetLineColor(kCyan+2);
+			locf1->SetNpx(1000);
+			
+			*f1 = (TF1*)locf1->Clone(fname.Data());
+			delete locf1;
+			return;
 		}
-		TF1* GetBkgdFunction() {
-			TF1 *f1;
-			InitializeFitFunction(&f1,"bkgdFit");
-			f1->SetParameters(f_fit->GetParameters());
-			ZeroSignalPars(f1);
-			f1->SetParameter("N_{#omega}", 0.0);
-			f1->SetParameter("N_{empty}", 0.0);
-			f1->SetLineColor(kMagenta);
-			f1->SetLineStyle(4);
-			f1->SetNpx(1000);
-			return f1;
+		void GetBkgdFunction(TF1** f1, TString fname="bkgdFit") {
+			TF1 *locf1;
+			InitializeFitFunction(&locf1,"locf1");
+			locf1->SetParameters(f_fit->GetParameters());
+			ZeroSignalPars(locf1);
+			locf1->SetParameter("N_{#omega}", 0.0);
+			locf1->SetParameter("N_{empty}", 0.0);
+			locf1->SetLineColor(kMagenta);
+			locf1->SetLineStyle(4);
+			locf1->SetNpx(1000);
+			
+			*f1 = (TF1*)locf1->Clone(fname.Data());
+			delete locf1;
+			return;
 		}
-		TF1* GetEtaPionFunction() {
-			TF1 *f1;
-			InitializeFitFunction(&f1,"etaPionFit");
-			f1->SetParameters(f_fit->GetParameters());
-			f1->SetParameter("N_{#eta}", 0.0);
-			ZeroBkgdPars(f1);
-			f1->SetParameter("N_{#eta#pi}", f_fit->GetParameter("N_{#eta#pi}"));
-			f1->SetLineColor(kCyan);
-			f1->SetNpx(1000);
-			return f1;
+		void GetEtaPionFunction(TF1** f1, TString fname="etaPionFit") {
+			TF1 *locf1;
+			InitializeFitFunction(&locf1,"locf1");
+			locf1->SetParameters(f_fit->GetParameters());
+			locf1->SetParameter("frac_{#eta}", 0.0);
+			ZeroBkgdPars(locf1);
+			locf1->SetParameter("frac_{#eta#pi}", f_fit->GetParameter("frac_{#eta#pi}"));
+			locf1->SetLineColor(kCyan);
+			locf1->SetNpx(1000);
+			
+			*f1 = (TF1*)locf1->Clone(fname.Data());
+			delete locf1;
+			return;
 		}
-		TF1* GetEmptyFitFunction() {
-			TF1 *f1;
-			InitializeEmptyFitFunction(&f1,"emptyFitFunction");
-			f1->SetParameters(f_empty->GetParameters());
-			f1->SetLineColor(kRed);
-			f1->SetLineStyle(4);
-			f1->SetLineWidth(2);
-			f1->SetNpx(1000);
-			/*
-			f1->SetParameter("N_{#eta}",   0.0);//m_nEmptyEtaPar);
-			f1->SetParameter("N_{#omega}", 0.0);//m_nEmptyOmegaPar);
-			*/
-			return f1;
+		void GetEmptyFitFunction(TF1** f1, TString fname="emptyFit", double binWidth=0.0) {
+			TF1 *locf1;
+			InitializeEmptyFitFunction(&locf1,"locf1");
+			locf1->SetParameters(f_empty->GetParameters());
+			locf1->SetLineColor(kRed);
+			locf1->SetLineStyle(4);
+			locf1->SetLineWidth(2);
+			locf1->SetNpx(1000);
+			
+			if(binWidth==0.0) locf1->SetParameter(locf1->GetNpar()-1, binSize);
+			else              locf1->SetParameter(locf1->GetNpar()-1, binWidth);
+			
+			*f1 = (TF1*)locf1->Clone(fname.Data());
+			delete locf1;
+			return;
 		}
 		double GetEmptyEtaFitPar() { return m_nEmptyEtaPar; }
 		double GetEmptyOmegaFitPar() { return m_nEmptyOmegaPar; }
@@ -162,9 +178,12 @@ class MggFitter {
 		void FillPull(TH1F*);
 		void FillEmptyPull(TH1F*);
 		
-		void GetYield(double&,double&,int useSignalPars=0);
+		void GetYield(double&, double&, int useSignalPars=0, int subtractEtaPion=0);
+		void GetEmptyYield(double&,double&);
+		void GetEmptyEtaFraction(double&, double&);
+		void GetEtaPionFraction(double&, double&);
 		
-		double IntegrateGaussian(double A, double mu, double sigma, double x1, double x2);
+		double IntegrateGaussian(double mu, double sigma, double x1, double x2);
 		
 		void DumpFitParameters();
 		void DumpEmptyFitParameters();
@@ -187,6 +206,8 @@ class MggFitter {
 		TF1 *f_fit, *f_empty;
 		
 		double m_nEmptyEtaPar = 0.0, m_nEmptyOmegaPar = 0.0;
+		
+		double m_etaPionFraction = 0.0, m_etaPionFractionErr = 0.0;
 		
 		int m_nParameters = 0, m_nEmptyParameters = 0;
 		
@@ -211,7 +232,9 @@ class MggFitter {
 		
 		TF1  *f_chebyshev;
 		
-		void ZeroSignalPars(TF1*);
+		void CheckBinSize(TH1F *h1, TString histTitle="Hist");
+		
+		void ZeroSignalPars(TF1*, int subtractEtaPion=0);
 		void ZeroBkgdPars(TF1*);
 		
 		int InitializeFitFunction(TString funcName="");

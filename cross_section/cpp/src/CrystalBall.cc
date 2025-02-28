@@ -1,214 +1,167 @@
 #include "CrossSection.h"
 
-double CrystalBall(double *x, double *par) {
+double CrystalBallPDF(double *x, double *par)
+{
+	double mgg = x[0];
 	
-	double loc_mgg = x[0];
+	double    mu = par[0];
+	double sigma = par[1];
+	double alpha = par[2];
+	double     n = par[3];
 	
-	double     N_omega1 = par[0];
-	double    mu_omega1 = par[1];
-	double sigma_omega1 = par[2];
-	double     a_omega1 = par[3];
-	double     n_omega1 = par[4];
+	double binWidth = par[4];
 	
-	double Acb_omega1 = pow(n_omega1/fabs(a_omega1), n_omega1) * exp(-0.5*pow(fabs(a_omega1),2.0));
-	double Bcb_omega1 = (n_omega1/fabs(a_omega1)) - fabs(a_omega1);
-	
-	double loc_x_omega1 = (loc_mgg - mu_omega1)/sigma_omega1;
-	
-	double f_omega1;
-	if(loc_x_omega1 > -a_omega1) {
-		f_omega1 = N_omega1 * exp(-0.5*pow(loc_x_omega1,2.0));
-	} else {
-		f_omega1 = N_omega1 * Acb_omega1 * pow(Bcb_omega1 - loc_x_omega1, -n_omega1);
-	}
-	
-	return f_omega1;
-}
-
-double CrystalBall2(double *x, double *par) {
-	
-	double loc_mgg = x[0];
-	
-	double     N_omega1 = par[0];
-	double    mu_omega1 = par[1];
-	double sigma_omega1 = par[2];
-	double     a_omega1 = par[3];
-	double     n_omega1 = par[4];
-	
-	double Acb_omega1 = pow(n_omega1/fabs(a_omega1), n_omega1) * exp(-0.5*pow(fabs(a_omega1),2.0));
-	double Bcb_omega1 = (n_omega1/fabs(a_omega1)) - fabs(a_omega1);
-	
-	double loc_x_omega1 = (loc_mgg - mu_omega1)/sigma_omega1;
-	
-	double f_omega1;
-	if(loc_x_omega1 > -a_omega1) {
-		f_omega1 = N_omega1 * exp(-0.5*pow(loc_x_omega1,2.0));
-	} else {
-		f_omega1 = N_omega1 * Acb_omega1 * pow(Bcb_omega1 - loc_x_omega1, -n_omega1);
-	}
-	
-	double     N_omega2 = par[5];
-	double    mu_omega2 = par[6];
-	double sigma_omega2 = par[7];
-	double     a_omega2 = par[8];
-	double     n_omega2 = par[9];
-	
-	double Acb_omega2 = pow(n_omega2/fabs(a_omega2), n_omega2) * exp(-0.5*pow(fabs(a_omega2),2.0));
-	double Bcb_omega2 = (n_omega2/fabs(a_omega2)) - fabs(a_omega2);
-	
-	double loc_x_omega2 = (loc_mgg - mu_omega2)/sigma_omega2;
-	
-	double f_omega2;
-	if(loc_x_omega2 > -a_omega2) {
-		f_omega2 = N_omega2 * exp(-0.5*pow(loc_x_omega2,2.0));
-	} else {
-		f_omega2 = N_omega2 * Acb_omega2 * pow(Bcb_omega2 - loc_x_omega2, -n_omega2);
-	}
-	
-	return f_omega1+f_omega2;
-}
-
-
-double CrystalBall_flip(double *x, double *par) {
-	
-	double loc_mgg = x[0];
-	
-	double     N_omega1 = par[0];
-	double    mu_omega1 = par[1];
-	double sigma_omega1 = par[2];
-	double     a_omega1 = par[3];
-	double     n_omega1 = par[4];
-	
-	double Acb_omega1 = pow(n_omega1/fabs(a_omega1), n_omega1) * exp(-0.5*pow(fabs(a_omega1),2.0));
-	double Bcb_omega1 = (n_omega1/fabs(a_omega1)) - fabs(a_omega1);
-	
-	double loc_x_omega1 = (mu_omega1 - loc_mgg)/sigma_omega1;
-	
-	double f_omega1;
-	if(loc_x_omega1 > -a_omega1) {
-		f_omega1 = N_omega1 * exp(-0.5*pow(loc_x_omega1,2.0));
-	} else {
-		f_omega1 = N_omega1 * Acb_omega1 * pow(Bcb_omega1 - loc_x_omega1, -n_omega1);
-	}
-	
-	return f_omega1;
-}
-
-double CrystalBall2_flip(double *x, double *par) {
-	
-	double loc_mgg = x[0];
-	
-	double     N_omega1 = par[0];
-	double    mu_omega1 = par[1];
-	double sigma_omega1 = par[2];
-	double     a_omega1 = par[3];
-	double     n_omega1 = par[4];
-	
-	double Acb_omega1 = pow(n_omega1/fabs(a_omega1), n_omega1) * exp(-0.5*pow(fabs(a_omega1),2.0));
-	double Bcb_omega1 = (n_omega1/fabs(a_omega1)) - fabs(a_omega1);
-	
-	double loc_x_omega1 = (mu_omega1 - loc_mgg)/sigma_omega1;
-	
-	double f_omega1;
-	if(loc_x_omega1 > -a_omega1) {
-		f_omega1 = N_omega1 * exp(-0.5*pow(loc_x_omega1,2.0));
-	} else {
-		f_omega1 = N_omega1 * Acb_omega1 * pow(Bcb_omega1 - loc_x_omega1, -n_omega1);
-	}
-	
-	double     N_omega2 = par[5];
-	double    mu_omega2 = par[6];
-	double sigma_omega2 = par[7];
-	double     a_omega2 = par[8];
-	double     n_omega2 = par[9];
-	
-	double Acb_omega2 = pow(n_omega2/fabs(a_omega2), n_omega2) * exp(-0.5*pow(fabs(a_omega2),2.0));
-	double Bcb_omega2 = (n_omega2/fabs(a_omega2)) - fabs(a_omega2);
-	
-	double loc_x_omega2 = (mu_omega2 - loc_mgg)/sigma_omega2;
-	
-	double f_omega2;
-	if(loc_x_omega2 > -a_omega2) {
-		f_omega2 = N_omega2 * exp(-0.5*pow(loc_x_omega2,2.0));
-	} else {
-		f_omega2 = N_omega2 * Acb_omega2 * pow(Bcb_omega2 - loc_x_omega2, -n_omega2);
-	}
-	
-	return f_omega1+f_omega2;
-}
-
-double CrystalBall3_flip(double *x, double *par) {
-	
-	double loc_mgg = x[0];
-	
-	double     N_omega1 = par[0];
-	double    mu_omega1 = par[1];
-	double sigma_omega1 = par[2];
-	double     a_omega1 = par[3];
-	double     n_omega1 = par[4];
-	
-	double Acb_omega1 = pow(n_omega1/fabs(a_omega1), n_omega1) * exp(-0.5*pow(fabs(a_omega1),2.0));
-	double Bcb_omega1 = (n_omega1/fabs(a_omega1)) - fabs(a_omega1);
-	
-	double loc_x_omega1 = (mu_omega1 - loc_mgg)/sigma_omega1;
-	
-	double f_omega1;
-	if(loc_x_omega1 > -a_omega1) {
-		f_omega1 = N_omega1 * exp(-0.5*pow(loc_x_omega1,2.0));
-	} else {
-		f_omega1 = N_omega1 * Acb_omega1 * pow(Bcb_omega1 - loc_x_omega1, -n_omega1);
-	}
-	
-	double     N_omega2 = par[5];
-	double    mu_omega2 = par[6];
-	double sigma_omega2 = par[7];
-	double     a_omega2 = par[8];
-	double     n_omega2 = par[9];
-	
-	double Acb_omega2 = pow(n_omega2/fabs(a_omega2), n_omega2) * exp(-0.5*pow(fabs(a_omega2),2.0));
-	double Bcb_omega2 = (n_omega2/fabs(a_omega2)) - fabs(a_omega2);
-	
-	double loc_x_omega2 = (mu_omega2 - loc_mgg)/sigma_omega2;
-	
-	double f_omega2;
-	if(loc_x_omega2 > -a_omega2) {
-		f_omega2 = N_omega2 * exp(-0.5*pow(loc_x_omega2,2.0));
-	} else {
-		f_omega2 = N_omega2 * Acb_omega2 * pow(Bcb_omega2 - loc_x_omega2, -n_omega2);
-	}
-	
-	double     N_omega3 = par[10];
-	double    mu_omega3 = par[11];
-	double sigma_omega3 = par[12];
-	double     a_omega3 = par[13];
-	double     n_omega3 = par[14];
-	
-	double Acb_omega3 = pow(n_omega3/fabs(a_omega3), n_omega3) * exp(-0.5*pow(fabs(a_omega3),2.0));
-	double Bcb_omega3 = (n_omega3/fabs(a_omega3)) - fabs(a_omega3);
-	
-	double loc_x_omega3 = (mu_omega3 - loc_mgg)/sigma_omega3;
-	
-	double f_omega3;
-	if(loc_x_omega3 > -a_omega3) {
-		f_omega3 = N_omega3 * exp(-0.5*pow(loc_x_omega3,2.0));
-	} else {
-		f_omega3 = N_omega3 * Acb_omega3 * pow(Bcb_omega3 - loc_x_omega3, -n_omega3);
-	}
-	
-	return f_omega1+f_omega2+f_omega3;
-}
-
-double DoubleGaus(double *x, double *par) {
-	
-	double loc_mgg = x[0];
-	
-	double     A1 = par[0];
-	double    mu1 = par[1];
-	double sigma1 = par[2];
-	double     A2 = par[3];
-	double    mu2 = par[4];
-	double sigma2 = par[5];
-	
-	double f = A1*exp(-0.5*pow((loc_mgg-mu1)/sigma1,2.0)) + A2*exp(-0.5*pow((loc_mgg-mu2)/sigma2,2.0));
+	double f = binWidth * NormCrystalBall(mgg, mu, sigma, alpha, n);
 	return f;
+}
+
+double DoubleCrystalBallPDF(double *x, double *par)
+{
+	double mgg = x[0];
+	
+	//---------------------------------------------//
+	// First CrystalBall:
+	
+	double    mu1 = par[0];
+	double sigma1 = par[1];
+	double alpha1 = par[2];
+	double     n1 = par[3];
+	
+	double f1 = NormCrystalBall(mgg, mu1, sigma1, alpha1, n1);
+	
+	//---------------------------------------------//
+	// Second CrystalBall:
+	
+	double    mu2 = par[4] + mu1;
+	double sigma2 = par[5];
+	double alpha2 = par[6];
+	double     n2 = par[7];
+	
+	double f2 = NormCrystalBall(mgg, mu2, sigma2, alpha2, n2);
+	
+	//---------------------------------------------//
+	// Combine:
+	
+	double fraction = par[8];
+	double binWidth = par[9];
+	
+	double f = ((1.0-fraction)*f1 + fraction*f2) * binWidth;
+	return f;
+}
+
+double CrystalBallPDF_flip(double *x, double *par)
+{
+	double mgg = x[0];
+	
+	double    mu = par[0];
+	double sigma = par[1];
+	double alpha = par[2];
+	double     n = par[3];
+	
+	double binWidth = par[4];
+	
+	double f = binWidth * NormCrystalBall(mgg, mu, sigma, alpha, n, 1);
+	return f;
+}
+
+double DoubleCrystalBallPDF_flip(double *x, double *par)
+{
+	double mgg = x[0];
+	
+	//---------------------------------------------//
+	// First CrystalBall:
+	
+	double    mu1 = par[0];
+	double sigma1 = par[1];
+	double alpha1 = par[2];
+	double     n1 = par[3];
+	
+	double f1 = NormCrystalBall(mgg, mu1, sigma1, alpha1, n1, 1);
+	
+	//---------------------------------------------//
+	// Second CrystalBall:
+	
+	double    mu2 = par[4] + mu1;
+	double sigma2 = par[5];
+	double alpha2 = par[6];
+	double     n2 = par[7];
+	
+	double f2 = NormCrystalBall(mgg, mu2, sigma2, alpha2, n2, 1);
+	
+	//---------------------------------------------//
+	// Combine:
+	
+	double fraction = par[8];
+	double binWidth = par[9];
+	
+	double f = ((1.0-fraction)*f1 + fraction*f2) * binWidth;
+	return f;
+}
+
+double DoubleCrystalBallPDF_oneflip(double *x, double *par)
+{
+	double mgg = x[0];
+	
+	//---------------------------------------------//
+	// First CrystalBall:
+	
+	double    mu1 = par[0];
+	double sigma1 = par[1];
+	double alpha1 = par[2];
+	double     n1 = par[3];
+	
+	double f1 = NormCrystalBall(mgg, mu1, sigma1, alpha1, n1);
+	
+	//---------------------------------------------//
+	// Second CrystalBall:
+	
+	double    mu2 = par[4] + mu1;
+	double sigma2 = par[5];
+	double alpha2 = par[6];
+	double     n2 = par[7];
+	
+	double f2 = NormCrystalBall(mgg, mu2, sigma2, alpha2, n2, 1);
+	
+	//---------------------------------------------//
+	// Combine:
+	
+	double fraction = par[8];
+	double binWidth = par[9];
+	
+	double f = ((1.0-fraction)*f1 + fraction*f2) * binWidth;
+	return f;
+}
+
+double NormGaus(double x, double mu, double sigma)
+{
+	// Returns the evaluation of a normalized Gaussian PDF:
+	double A = 1.0 / (sqrt(2.0*TMath::Pi()) * sigma);
+	double f = A * exp(-0.5*pow((x-mu)/sigma,2.0));
+	return f;
+}
+
+double NormCrystalBall(double x, double mu, double sigma, double alpha, double n, int doFlip)
+{
+	// Returns the evaluation of a normalized Crystal Ball PDF:
+	
+	double alpha_abs = fabs(alpha);
+	
+	double A = pow(n/alpha_abs, n) * exp(-0.5*pow(alpha_abs,2.0));
+	double B = (n/alpha_abs) - alpha_abs;
+	
+	double locX = doFlip ? (mu - x)/sigma : (x - mu)/sigma;
+	
+	double f;
+	if(locX > -alpha) {
+		f = exp(-0.5*pow(locX,2.0));
+	} else {
+		f = A * pow(B-locX, -n);
+	}
+	
+	// Normalization:
+	
+	double C = (n/alpha_abs)*(1.0/(n-1.0)) * exp(-0.5*pow(alpha_abs,2.0));
+	double D = sqrt(TMath::Pi()/2.0) * (1.0 + erf(alpha_abs/sqrt(2.0)));
+	double N = 1.0 / (sigma * (C+D));
+	return (N * f);
 }

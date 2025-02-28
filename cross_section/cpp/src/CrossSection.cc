@@ -46,11 +46,6 @@ int main(int argc, char **argv)
 	
 	if(LoadConfigSettings(locEtaAna, configFileName, locConfig.primexPhase)) exit(1);
 	
-	if(locEtaAna.LoadLineshapes()) {
-		cout << "\n\nProblem loading MC lineshapes.\n\n" << endl;
-		exit(1);
-	}
-	
 	// Print to console:
 	
 	locEtaAna.DumpSettings();
@@ -60,8 +55,12 @@ int main(int argc, char **argv)
 	// needed for ROOT graphics:
 	TApplication theApp("App", &argc, argv);
 	gStyle->SetOptStat(0);
-	gStyle->SetOptFit(0);
+	gStyle->SetOptFit(1);
 	
+	if(locEtaAna.LoadLineshapes()) {
+		cout << "\n\nProblem loading MC lineshapes.\n\n" << endl;
+		exit(1);
+	}
 	if(locEtaAna.LoadLuminosity()) {
 		printf("\n\nProblem getting integrated luminosity.\n\n");
 		exit(1);
@@ -83,17 +82,24 @@ int main(int argc, char **argv)
 	YieldFitter locFitter;
 	InitializeYieldFitter(locFitter, locEtaAna);
 	
-	if(0) {
+	if(1) {
 		locEtaAna.ExtractAngularYield(locDrawOption);
 		if(locEtaAna.CalcAcceptance()) {
 			cout << "\n\nProblem getting acceptance.\n\n" << endl;
 		}
 		locEtaAna.PlotAngularYield();
 		locEtaAna.PlotCrossSection();
+		if(locEtaAna.GetEmptyFitOption(0) && locEtaAna.GetEmptyFitOption(1)) {
+			locEtaAna.PlotEmptyEtaRatio();
+		}
+		if(locEtaAna.GetFitOption(1)==7) {
+			locEtaAna.PlotEtaPionFraction();
+		}
 		locEtaAna.WriteROOTFile(Form("output/yield_phase%d.root",locEtaAna.GetPhase()));
+		locFitter.SetYield((TH1F*)locEtaAna.GetAngularYield(1));
 	}
 	else {
-		TFile *fIn = new TFile("output/yield_phase3.root", "READ");
+		TFile *fIn = new TFile("output/yield_phase3_fitEmpty.root", "READ");
 		TH1F *hYield = (TH1F*)fIn->Get("AngularYieldFit");
 		hYield->SetDirectory(0);
 		fIn->Close();
@@ -129,6 +135,15 @@ void printUsage(configSettings_t settings, int goYes)
 
 int LoadConfigSettings(EtaAnalyzer &anaObject, TString fileName, int phase)
 {
+	/*
+	Note: The order in which configuration options are read can be important.
+	For example, if 'analysisOption'=0, we then need to look for 'vetoOption'. 
+	But if 'analysisOption' is anything else, then 'vetoOption' is unimportant.
+	Similarly, the beam energy range should only be changed from the hard-coded defaults
+	if 'analysisOption'=1
+	*/
+	
+	
 	if(fileName=="") {
 		// check if a config file exists in current directory:
 		fileName = "eta_cs.config";
@@ -147,7 +162,9 @@ int LoadConfigSettings(EtaAnalyzer &anaObject, TString fileName, int phase)
 	
 	// Load Configuration Settings:
 	
+	//----------------------------------------//
 	// Primex phase:
+	
 	if(ReadFile->GetConfigName("primexPhase") != ""){
 		int configPhase = (int)ReadFile->GetConfig1Par("primexPhase")[0];
 		if((phase>0) && (phase != configPhase)) {
@@ -157,23 +174,70 @@ int LoadConfigSettings(EtaAnalyzer &anaObject, TString fileName, int phase)
 		}
 	}
 	
-	if(ReadFile->GetConfigName("analysisOption") != ""){
+	//----------------------------------------//
+	//
+	// Analysis and Veto Options:
+	//   (mgg histogram and angular matrix names are specified here as well)
+	//
+	
+	if(ReadFile->GetConfigName("analysisOption") != "")
+	{
 		anaObject.SetAnalysisOption((int)ReadFile->GetConfig1Par("analysisOption")[0]);
-	}
-	if(ReadFile->GetConfigName("histName") != ""){
-		anaObject.SetMggHistName(ReadFile->GetConfigName("histName"));
-	}
-	if(ReadFile->GetConfigName("matrixName") != ""){
-		anaObject.SetMatrixHistName(ReadFile->GetConfigName("matrixName"));
+		if(ReadFile->GetConfigName("vetoOption") != "")
+		{
+			anaObject.SetVetoOption((int)ReadFile->GetConfig1Par("vetoOption")[0]);
+		}
 	}
 	
-	// Beam Energy:
-	if(ReadFile->GetConfigName("beamEnergy") != "") {
-		anaObject.SetBeamEnergy((double)ReadFile->GetConfig2Par("beamEnergy")[0], 
+	switch(anaObject.GetAnalysisOption()) {
+		case 0:
+			anaObject.SetMggHistName(Form("VetoOption%d/mgg_const_veto_%d",
+				anaObject.GetVetoOption(), anaObject.GetVetoOption()));
+			anaObject.SetMatrixHistName(Form("AngularMatrix/AngularMatrix_veto_%d",
+				anaObject.GetVetoOption()));
+			break;
+		case 1:
+			anaObject.SetMatrixHistName("AngularMatrix");
+			break;
+		default:
+		{
+			if(ReadFile->GetConfigName("histName") != "")
+			{
+				anaObject.SetMggHistName(ReadFile->GetConfigName("histName"));
+			}
+			else {
+				printf("\nNo histogram name specified for analysis option: %d. Exiting.\n", 
+					anaObject.GetAnalysisOption());
+				exit(1);
+			}
+			
+			if(ReadFile->GetConfigName("matrixName") != "")
+			{
+				anaObject.SetMatrixHistName(ReadFile->GetConfigName("matrixName"));
+			}
+			else {
+				printf("\nNo matrix name specified for analysis option: %d. Exiting.\n", 
+					anaObject.GetAnalysisOption());
+				exit(1);
+			}
+		}
+	}
+	
+	//----------------------------------------//
+	// Beam Energy should only be taken from config file if analysisOption=1:
+	
+	if(anaObject.GetAnalysisOption()==1)
+	{
+		if(ReadFile->GetConfigName("beamEnergy") != "")
+		{
+			anaObject.SetBeamEnergy((double)ReadFile->GetConfig2Par("beamEnergy")[0], 
 				(double)ReadFile->GetConfig2Par("beamEnergy")[1]);
+		}
 	}
 	
+	//----------------------------------------//
 	// Bin sizing:
+	
 	if(ReadFile->GetConfigName("rebinsMgg") != "") {
 		anaObject.SetRebinsMgg(ReadFile->GetConfig1Par("rebinsMgg")[0]);
 	}
@@ -181,9 +245,11 @@ int LoadConfigSettings(EtaAnalyzer &anaObject, TString fileName, int phase)
 		anaObject.SetRebinsTheta(ReadFile->GetConfig1Par("rebinsTheta")[0]);
 	}
 	
+	//----------------------------------------//
 	//
-	// Function options:
+	// Fitting function options:
 	//
+	
 	if(ReadFile->GetConfigName("signalFitOption") != "") {
 		anaObject.SetFitOption_signal((int)ReadFile->GetConfig1Par("signalFitOption")[0]);
 	}
@@ -204,40 +270,46 @@ int LoadConfigSettings(EtaAnalyzer &anaObject, TString fileName, int phase)
 	// Fitting range:
 	if(ReadFile->GetConfigName("fittingRange") != "") {
 		anaObject.SetFitRange((double)ReadFile->GetConfig2Par("fittingRange")[0], 
-				(double)ReadFile->GetConfig2Par("fittingRange")[1]);
+			(double)ReadFile->GetConfig2Par("fittingRange")[1]);
 	}
 	
-	
+	//----------------------------------------//
 	//
 	// Empty target options:
 	//
+	
 	if(ReadFile->GetConfigName("subtractEmptyTarget") != "") {
 		anaObject.SetSubtractEmptyTarget((int)ReadFile->GetConfig1Par("subtractEmptyTarget")[0]);
 	}
-	if(ReadFile->GetConfigName("fitEmptyTarget") != "") {
-		anaObject.SetFitEmptyTarget((int)ReadFile->GetConfig1Par("fitEmptyTarget")[0]);
-	}
-	
-	if(ReadFile->GetConfigName("emptyFitOption_eta") != "") {
-		anaObject.SetEmptyFitOption_eta((int)ReadFile->GetConfig1Par("emptyFitOption_eta")[0]);
-	}
-	if(ReadFile->GetConfigName("emptyFitOption_omega") != "") {
-		anaObject.SetEmptyFitOption_omega((int)ReadFile->GetConfig1Par("emptyFitOption_omega")[0]);
-	}
-	if(ReadFile->GetConfigName("emptyFitOption_fdc") != "") {
-		anaObject.SetEmptyFitOption_fdc((int)ReadFile->GetConfig1Par("emptyFitOption_fdc")[0]);
-	}
-	if(ReadFile->GetConfigName("emptyFitOption_bkgd") != "") {
-		if(ReadFile->GetConfigName("emptyFitOption_poly") != "") {
-			anaObject.SetEmptyFitOption_bkgd((int)ReadFile->GetConfig1Par("emptyFitOption_bkgd")[0], 
-				(int)ReadFile->GetConfig1Par("emptyFitOption_poly")[0]);
+	if(!anaObject.GetEmptySubtractOption())
+	{
+		if(ReadFile->GetConfigName("fitEmptyTarget") != "") {
+			anaObject.SetFitEmptyTarget((int)ReadFile->GetConfig1Par("fitEmptyTarget")[0]);
 		}
-		anaObject.SetEmptyFitOption_bkgd((int)ReadFile->GetConfig1Par("emptyFitOption_bkgd")[0]);
-	}
-	
-	if(ReadFile->GetConfigName("emptyFittingRange") != "") {
-		anaObject.SetEmptyFitRange((double)ReadFile->GetConfig2Par("emptyFittingRange")[0], 
+		if(ReadFile->GetConfigName("emptyFitOption_eta") != "") {
+			anaObject.SetEmptyFitOption_eta((int)ReadFile->GetConfig1Par("emptyFitOption_eta")[0]);
+		}
+		if(ReadFile->GetConfigName("emptyFitOption_omega") != "") {
+			anaObject.SetEmptyFitOption_omega((int)ReadFile->GetConfig1Par("emptyFitOption_omega")[0]);
+		}
+		if(ReadFile->GetConfigName("emptyFitOption_fdc") != "") {
+			anaObject.SetEmptyFitOption_fdc((int)ReadFile->GetConfig1Par("emptyFitOption_fdc")[0]);
+		}
+		if(ReadFile->GetConfigName("emptyFitOption_bkgd") != "") {
+			if(ReadFile->GetConfigName("emptyFitOption_poly") != "") {
+				anaObject.SetEmptyFitOption_bkgd((int)ReadFile->GetConfig1Par("emptyFitOption_bkgd")[0], 
+					(int)ReadFile->GetConfig1Par("emptyFitOption_poly")[0]);
+			}
+			anaObject.SetEmptyFitOption_bkgd((int)ReadFile->GetConfig1Par("emptyFitOption_bkgd")[0]);
+		}
+		
+		if(ReadFile->GetConfigName("emptyFittingRange") != "") {
+			anaObject.SetEmptyFitRange((double)ReadFile->GetConfig2Par("emptyFittingRange")[0], 
 				(double)ReadFile->GetConfig2Par("emptyFittingRange")[1]);
+		}
+		if(ReadFile->GetConfigName("rebinsEmptyMgg") != "") {
+			anaObject.SetRebinsEmptyMgg(ReadFile->GetConfig1Par("rebinsEmptyMgg")[0]);
+		}
 	}
 	
 	return 0;

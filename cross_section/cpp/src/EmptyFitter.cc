@@ -4,6 +4,8 @@ void MggFitter::FitEmpty()
 {
 	InitializeEmptyFitFunction(&f_empty);
 	
+	emptyBinSize = h_empty->GetBinWidth(1);
+	
 	Option_t *locFitOption = "R0QL";
 	
 	m_nEmptyParameters = InitializeEmptyFitParameters();
@@ -116,13 +118,11 @@ void MggFitter::GuessEmptyBkgdParameters()
 			f_empty->SetParameter(p1Par, p1Guess);
 			f_empty->SetParameter(p2Par, p2Guess);
 			f_empty->SetParameter(p3Par, p3Guess);
-			f_empty->SetParameter(p4Par, p4Guess);
 			
-			f_empty->SetParLimits(p0Par,  0.00, 1.e4);
-			f_empty->SetParLimits(p1Par, -1.e3, 1.e3);
-			f_empty->SetParLimits(p2Par, -1.e3, 0.);
+			f_empty->SetParLimits(p0Par,  0.00, 1.e5);
+			f_empty->SetParLimits(p1Par,  0.00, 1.00);
+			f_empty->SetParLimits(p2Par, -1.e3, 1.e3);
 			f_empty->SetParLimits(p3Par, -1.e3, 1.e3);
-			f_empty->SetParLimits(p4Par,  0.00, 0.50);
 			break;
 		}
 		case 3:
@@ -156,8 +156,7 @@ void MggFitter::FixEmptyBkgdParameters() {
 		case 2:
 		{
 			// Exponential:
-			int p4_par = f_empty->GetParNumber("p4");
-			for(int ipar=0; ipar<5; ipar++) {
+			for(int ipar=0; ipar<4; ipar++) {
 				int locParIndex = f_empty->GetParNumber(Form("p%d",ipar));
 				f_empty->FixParameter(locParIndex, f_empty->GetParameter(locParIndex));
 			}
@@ -198,19 +197,16 @@ void MggFitter::ReleaseEmptyBkgdParameters() {
 			int p1Par = f_empty->GetParNumber("p1");
 			int p2Par = f_empty->GetParNumber("p2");
 			int p3Par = f_empty->GetParNumber("p3");
-			int p4Par = f_empty->GetParNumber("p4");
 			
 			f_empty->ReleaseParameter(p0Par);
 			f_empty->ReleaseParameter(p1Par);
 			f_empty->ReleaseParameter(p2Par);
 			f_empty->ReleaseParameter(p3Par);
-			f_empty->ReleaseParameter(p4Par);
 			
-			f_empty->SetParLimits(p0Par,  0.00, 1.e4);
-			f_empty->SetParLimits(p1Par, -1.e3, 1.e3);
-			f_empty->SetParLimits(p2Par, -1.e3, 0.);
+			f_empty->SetParLimits(p0Par,  0.00, 1.e5);
+			f_empty->SetParLimits(p1Par,  0.00, 1.00);
+			f_empty->SetParLimits(p2Par, -1.e3, 1.e3);
 			f_empty->SetParLimits(p3Par, -1.e3, 1.e3);
-			f_empty->SetParLimits(p4Par,  0.00, 0.50);
 			break;
 		}
 		case 3:
@@ -231,20 +227,12 @@ void MggFitter::GuessEmptyEtaParameters() {
 	
 	// guess number of eta' by integrating histogram and subtracting background:
 	
-	double minEtaFit = 0.50;
-	double maxEtaFit = 0.60;
+	double minEtaFit  = 0.50;
+	double maxEtaFit  = 0.60;
 	
-	double     nEtaGuess = h_empty->Integral(h_empty->FindBin(minEtaFit), h_empty->FindBin(maxEtaFit));
-	double    muEtaGuess = 0.530;
-	double sigmaEtaGuess = 0.015;
-	
-	double locEtaMax = 0.0;
-	for(int ibin=h_empty->FindBin(minEtaFit); ibin<=h_empty->FindBin(maxEtaFit); ibin++) {
-		if(h_empty->GetBinContent(ibin) > locEtaMax) {
-			locEtaMax  = h_empty->GetBinContent(ibin);
-			muEtaGuess = h_empty->GetBinCenter(ibin);
-		}
-	}
+	double     NGuess = h_empty->Integral(h_empty->FindBin(minEtaFit), h_empty->FindBin(maxEtaFit));
+	double    muGuess = 0.540;
+	double sigmaGuess = 0.015;
 	
 	switch(emptyFitOption_eta) {
 		case 0:
@@ -255,31 +243,31 @@ void MggFitter::GuessEmptyEtaParameters() {
 		{
 			// single Gaussian:
 			
-			int     nEtaPar = f_empty->GetParNumber("N_{#eta}");
-			int    muEtaPar = f_empty->GetParNumber("#mu_{#eta}");
-			int sigmaEtaPar = f_empty->GetParNumber("#sigma_{#eta}");
+			int     NPar = f_empty->GetParNumber("N_{#eta}");
+			int    muPar = f_empty->GetParNumber("#mu_{#eta}");
+			int sigmaPar = f_empty->GetParNumber("#sigma_{#eta}");
 			
-			f_empty->SetParameter(    nEtaPar,     nEtaGuess);
-			f_empty->SetParameter(   muEtaPar,    muEtaGuess);
-			f_empty->SetParameter(sigmaEtaPar, sigmaEtaGuess);
+			f_empty->SetParameter(    NPar,     NGuess);
+			f_empty->SetParameter(   muPar,    muGuess);
+			f_empty->SetParameter(sigmaPar, sigmaGuess);
 			
-			f_empty->SetParLimits(    nEtaPar, 0.00, 1.e5);
-			f_empty->SetParLimits(   muEtaPar, 0.52, 0.57);
-			f_empty->SetParLimits(sigmaEtaPar, 0.01, 0.03);
+			f_empty->SetParLimits(    NPar, 0.00, 1.e5);
+			f_empty->SetParLimits(   muPar, 0.52, 0.57);
+			f_empty->SetParLimits(sigmaPar, 0.01, 0.03);
 			break;
 		}
 		case 2:
 		{
 			// Lineshape fit:
 			
-			int   nEtaPar = f_empty->GetParNumber("N_{#eta}");
-			int dmuEtaPar = f_empty->GetParNumber("#Delta#mu_{#eta}");
+			int   NPar = f_empty->GetParNumber("N_{#eta}");
+			int dmuPar = f_empty->GetParNumber("#Delta#mu_{#eta}");
 			
-			f_empty->SetParameter(  nEtaPar, nEtaGuess);
-			f_empty->SetParameter(dmuEtaPar, 0.005);
+			f_empty->SetParameter(  NPar, NGuess);
+			f_empty->SetParameter(dmuPar, 0.005);
 			
-			f_empty->SetParLimits(  nEtaPar,  0.00, 1.e5);
-			f_empty->SetParLimits(dmuEtaPar, -0.05, 0.02);
+			f_empty->SetParLimits(  NPar,  0.00, 1.e5);
+			f_empty->SetParLimits(dmuPar, -0.05, 0.02);
 			break;
 		}
 	}
@@ -297,24 +285,24 @@ void MggFitter::FixEmptyEtaParameters() {
 		{
 			// single Gaussian:
 			
-			int     nEtaPar = f_empty->GetParNumber("N_{#eta}");
-			int    muEtaPar = f_empty->GetParNumber("#mu_{#eta}");
-			int sigmaEtaPar = f_empty->GetParNumber("#sigma_{#eta}");
+			int     NPar = f_empty->GetParNumber("N_{#eta}");
+			int    muPar = f_empty->GetParNumber("#mu_{#eta}");
+			int sigmaPar = f_empty->GetParNumber("#sigma_{#eta}");
 			
-			f_empty->FixParameter(    nEtaPar, f_empty->GetParameter(    nEtaPar));
-			f_empty->FixParameter(   muEtaPar, f_empty->GetParameter(   muEtaPar));
-			f_empty->FixParameter(sigmaEtaPar, f_empty->GetParameter(sigmaEtaPar));
+			f_empty->FixParameter(    NPar, f_empty->GetParameter(    NPar));
+			f_empty->FixParameter(   muPar, f_empty->GetParameter(   muPar));
+			f_empty->FixParameter(sigmaPar, f_empty->GetParameter(sigmaPar));
 			break;
 		}
 		case 2:
 		{
 			// Lineshape fit:
 			
-			int   nEtaPar = f_empty->GetParNumber("N_{#eta}");
-			int dmuEtaPar = f_empty->GetParNumber("#Delta#mu_{#eta}");
+			int   NPar = f_empty->GetParNumber("N_{#eta}");
+			int dmuPar = f_empty->GetParNumber("#Delta#mu_{#eta}");
 			
-			f_empty->FixParameter(  nEtaPar, f_empty->GetParameter(  nEtaPar));
-			f_empty->FixParameter(dmuEtaPar, f_empty->GetParameter(dmuEtaPar));
+			f_empty->FixParameter(  NPar, f_empty->GetParameter(  NPar));
+			f_empty->FixParameter(dmuPar, f_empty->GetParameter(dmuPar));
 			break;
 		}
 	}
@@ -332,37 +320,37 @@ void MggFitter::GuessEmptyOmegaParameters() {
 		{
 			// Crystal Ball function:
 			
-			int     nOmegaPar = f_empty->GetParNumber("N_{#omega}");
-			int    muOmegaPar = f_empty->GetParNumber("#mu_{#omega}");
-			int sigmaOmegaPar = f_empty->GetParNumber("#sigma_{#omega}");
-			int alphaOmegaPar = f_empty->GetParNumber("#alpha_{#omega}");
-			int    nnOmegaPar = f_empty->GetParNumber("n_{#omega}");
+			int     NPar = f_empty->GetParNumber("N_{#omega}");
+			int    muPar = f_empty->GetParNumber("#mu_{#omega}");
+			int sigmaPar = f_empty->GetParNumber("#sigma_{#omega}");
+			int alphaPar = f_empty->GetParNumber("#alpha_{#omega}");
+			int     nPar = f_empty->GetParNumber("n_{#omega}");
 			
-			f_empty->SetParameter(    nOmegaPar, 0.000);
-			f_empty->SetParameter(   muOmegaPar, 0.760);
-			f_empty->SetParameter(sigmaOmegaPar, 0.025);
-			f_empty->SetParameter(alphaOmegaPar, 1.000);
-			f_empty->SetParameter(   nnOmegaPar, 2.000);
+			f_empty->SetParameter(    NPar, 0.000);
+			f_empty->SetParameter(   muPar, 0.760);
+			f_empty->SetParameter(sigmaPar, 0.025);
+			f_empty->SetParameter(alphaPar, 1.000);
+			f_empty->SetParameter(    nPar, 2.000);
 			
-			f_empty->SetParLimits(    nOmegaPar, 0.000, 1.0e6);
-			f_empty->SetParLimits(   muOmegaPar, 0.740, 0.780);
-			f_empty->SetParLimits(sigmaOmegaPar, 0.015, 0.050);
-			f_empty->SetParLimits(alphaOmegaPar, 0.500, 9.999);
-			f_empty->SetParLimits(   nnOmegaPar, 0.500, 9.999);
+			f_empty->SetParLimits(    NPar, 0.000,  1.0e6);
+			f_empty->SetParLimits(   muPar, 0.740,  0.780);
+			f_empty->SetParLimits(sigmaPar, 0.015,  0.050);
+			f_empty->SetParLimits(alphaPar, 0.200,  9.999);
+			f_empty->SetParLimits(    nPar, 1.100, 49.999);
 			break;
 		}
 		case 2:
 		{
 			// Lineshape fit:
 			
-			int   nOmegaPar = f_empty->GetParNumber("N_{#omega}");
-			int dmuOmegaPar = f_empty->GetParNumber("#Delta#mu_{#omega}");
+			int   NPar = f_empty->GetParNumber("N_{#omega}");
+			int dmuPar = f_empty->GetParNumber("#Delta#mu_{#omega}");
 			
-			f_empty->SetParameter(  nOmegaPar,  0.00);
-			f_empty->SetParameter(dmuOmegaPar, -0.01);
+			f_empty->SetParameter(  NPar,  0.00);
+			f_empty->SetParameter(dmuPar, -0.01);
 			
-			f_empty->SetParLimits(  nOmegaPar,  0.00, 1.e5);
-			f_empty->SetParLimits(dmuOmegaPar, -0.04, 0.03);
+			f_empty->SetParLimits(  NPar,  0.00, 1.e5);
+			f_empty->SetParLimits(dmuPar, -0.04, 0.03);
 			break;
 		}
 	}
@@ -380,28 +368,28 @@ void MggFitter::FixEmptyOmegaParameters() {
 		{
 			// Crystal Ball:
 			
-			int     nOmegaPar = f_empty->GetParNumber("N_{#omega}");
-			int    muOmegaPar = f_empty->GetParNumber("#mu_{#omega}");
-			int sigmaOmegaPar = f_empty->GetParNumber("#sigma_{#omega}");
-			int alphaOmegaPar = f_empty->GetParNumber("#alpha_{#omega}");
-			int    nnOmegaPar = f_empty->GetParNumber("n_{#omega}");
+			int     NPar = f_empty->GetParNumber("N_{#omega}");
+			int    muPar = f_empty->GetParNumber("#mu_{#omega}");
+			int sigmaPar = f_empty->GetParNumber("#sigma_{#omega}");
+			int alphaPar = f_empty->GetParNumber("#alpha_{#omega}");
+			int     nPar = f_empty->GetParNumber("n_{#omega}");
 			
-			f_empty->FixParameter(    nOmegaPar, f_empty->GetParameter(    nOmegaPar));
-			f_empty->FixParameter(   muOmegaPar, f_empty->GetParameter(   muOmegaPar));
-			f_empty->FixParameter(sigmaOmegaPar, f_empty->GetParameter(sigmaOmegaPar));
-			f_empty->FixParameter(alphaOmegaPar, f_empty->GetParameter(alphaOmegaPar));
-			f_empty->FixParameter(   nnOmegaPar, f_empty->GetParameter(   nnOmegaPar));
+			f_empty->FixParameter(    NPar, f_empty->GetParameter(    NPar));
+			f_empty->FixParameter(   muPar, f_empty->GetParameter(   muPar));
+			f_empty->FixParameter(sigmaPar, f_empty->GetParameter(sigmaPar));
+			f_empty->FixParameter(alphaPar, f_empty->GetParameter(alphaPar));
+			f_empty->FixParameter(    nPar, f_empty->GetParameter(    nPar));
 			break;
 		}
 		case 2:
 		{
 			// Lineshape fit:
 			
-			int   nOmegaPar = f_empty->GetParNumber("N_{#omega}");
-			int dmuOmegaPar = f_empty->GetParNumber("#Delta#mu_{#omega}");
+			int   NPar = f_empty->GetParNumber("N_{#omega}");
+			int dmuPar = f_empty->GetParNumber("#Delta#mu_{#omega}");
 			
-			f_empty->FixParameter(  nOmegaPar, f_empty->GetParameter(  nOmegaPar));
-			f_empty->FixParameter(dmuOmegaPar, f_empty->GetParameter(dmuOmegaPar));
+			f_empty->FixParameter(  NPar, f_empty->GetParameter(  NPar));
+			f_empty->FixParameter(dmuPar, f_empty->GetParameter(dmuPar));
 			break;
 		}
 	}

@@ -4,6 +4,8 @@ TString fluxDirectory = "/work/halld/home/andrsmit/primex_eta_analysis/photon_fl
 
 int EtaAnalyzer::LoadLuminosity() {
 	
+	printf("\nREADING PHOTON FLUX...\n");
+	
 	double targetThickness = m_targetDensity * m_targetLength * (1.0/m_targetMass) * m_avogdroNum * (1.e-30); // atoms/ub
 	
 	TString fluxFileName = Form("%s/phase%d/full.root", fluxDirectory.Data(), m_phase);
@@ -50,7 +52,7 @@ int EtaAnalyzer::LoadLuminosity() {
 	
 	locFluxFile->Close();
 	
-	printf("Integrated Luminosity [%.2f GeV - %.2f GeV]: %f pb-1\n", m_minBeamEnergy, m_maxBeamEnergy, (1.e-6)*m_luminosity);
+	printf("  Integrated Luminosity [%.2f GeV - %.2f GeV]: %f pb-1\n", m_minBeamEnergy, m_maxBeamEnergy, (1.e-6)*m_luminosity);
 	
 	return 0;
 }
@@ -86,7 +88,7 @@ int EtaAnalyzer::LoadEmptyTargetFluxRatio() {
 	
 	m_emptyTargetFluxRatio = scaleFactor * (integratedFluxFull / integratedFluxEmpty);
 	
-	printf("Photon Flux Ratio (Full/Empty): %f\n", m_emptyTargetFluxRatio);
+	printf("  Photon Flux Ratio (Full/Empty): %f\n", m_emptyTargetFluxRatio);
 	
 	return 0;
 }

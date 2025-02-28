@@ -1,3 +1,4 @@
+#include "CrossSection.h"
 #include "MggFitter.h"
 #include "EtaAnalyzer.h"
 
@@ -15,8 +16,8 @@ int MggFitter::InitializeFitFunction(TF1 **f1, TString funcName)
 			break;
 		case 2:
 			nEtaPars = 6;
-			parNames.push_back("N_{#eta,1}");
-			parNames.push_back("N_{#eta,2}");
+			parNames.push_back("N_{#eta}");
+			parNames.push_back("fraction_{#eta}");
 			parNames.push_back("#mu_{#eta,1}");
 			parNames.push_back("#mu_{#eta,2}-#mu_{#eta,1}");
 			parNames.push_back("#sigma_{#eta,1}");
@@ -50,16 +51,17 @@ int MggFitter::InitializeFitFunction(TF1 **f1, TString funcName)
 			nEtaPars = 5;
 			parNames.push_back("N_{#eta}");
 			parNames.push_back("#Delta#mu_{#eta}");
-			parNames.push_back("N_{#eta,inc}");
-			parNames.push_back("#mu_{#eta,inc}");
-			parNames.push_back("#sigma_{#eta,inc}");
+			parNames.push_back("fraction_{#eta#pi}");
+			parNames.push_back("#mu_{#eta#pi}");
+			parNames.push_back("#sigma_{#eta#pi}");
 			break;
 		case 7:
-			nEtaPars = 4;
+			nEtaPars = 5;
 			parNames.push_back("N_{#eta}");
 			parNames.push_back("#Delta#mu_{#eta}");
-			parNames.push_back("N_{#eta#pi}");
 			parNames.push_back("#Delta#mu_{#eta#pi}");
+			parNames.push_back("frac_{#eta}");
+			parNames.push_back("frac_{#eta#pi}");
 			break;
 	}
 	
@@ -91,7 +93,7 @@ int MggFitter::InitializeFitFunction(TF1 **f1, TString funcName)
 			nBkgdPars = fitOption_poly + 1;
 			break;
 		case 2:
-			nBkgdPars = 5;
+			nBkgdPars = 4;
 			break;
 		case 3:
 			nBkgdPars = fitOption_poly + 1;
@@ -158,7 +160,7 @@ int MggFitter::InitializeFitParameters()
 			f_fit->FixParameter(1, EtaAnalyzer::m_massEta);
 			f_fit->FixParameter(2, 0.02);
 			f_fit->FixParameter(3, 1.0);
-			f_fit->FixParameter(4, 1.0);
+			f_fit->FixParameter(4, 2.0);
 			break;
 		case 4:
 			nParameters = 8;
@@ -166,7 +168,7 @@ int MggFitter::InitializeFitParameters()
 			f_fit->FixParameter(1, EtaAnalyzer::m_massEta);
 			f_fit->FixParameter(2, 0.02);
 			f_fit->FixParameter(3, 1.0);
-			f_fit->FixParameter(4, 1.0);
+			f_fit->FixParameter(4, 2.0);
 			f_fit->FixParameter(5, 0.0);
 			f_fit->FixParameter(6, EtaAnalyzer::m_massEta);
 			f_fit->FixParameter(7, 0.02);
@@ -185,11 +187,12 @@ int MggFitter::InitializeFitParameters()
 			f_fit->FixParameter(4, 0.02);
 			break;
 		case 7:
-			nParameters = 4;
+			nParameters = 5;
 			f_fit->FixParameter(0, 0.0);
 			f_fit->FixParameter(1, 0.0);
 			f_fit->FixParameter(2, 0.0);
-			f_fit->FixParameter(3, 0.0);
+			f_fit->FixParameter(3, 1.0);
+			f_fit->FixParameter(4, m_etaPionFraction);
 			break;
 	}
 	
@@ -221,8 +224,8 @@ int MggFitter::InitializeFitParameters()
 			nParameters += (fitOption_poly+1);
 			break;
 		case 2:
-			for(int ipar=0; ipar<5; ipar++) f_fit->FixParameter(nParameters+ipar, 0.0);
-			nParameters += 5;
+			for(int ipar=0; ipar<4; ipar++) f_fit->FixParameter(nParameters+ipar, 0.0);
+			nParameters += 4;
 			break;
 		case 3:
 			for(int ipar=0; ipar<=fitOption_poly; ipar++) f_fit->FixParameter(nParameters+ipar, 0.0001);
@@ -240,7 +243,14 @@ int MggFitter::InitializeFitParameters()
 	nParameters += 3;
 	
 	// A free parameter for the normalization of the empty target background:
-	if(fitOption_empty==1) f_fit->FixParameter(nParameters, 1.0);
+	if(fitOption_empty==1) {
+		f_fit->FixParameter(nParameters, 1.0);
+		
+		// Change the 'binWidth' parameter in the empty target fit function to 1, as the bin size correction
+		// will be applied separately in the full fit funciton.
+		// Just need to remember to re-set this parameter when plotting the empty target background.
+		f_empty->SetParameter(f_empty->GetNpar()-1, 1.0);
+	}
 	else f_fit->FixParameter(nParameters, 0.0);
 	nParameters += 1;
 	
@@ -273,13 +283,11 @@ double MggFitter::MggFitFunction(double *x, double *par)
 			// single Gaussian:
 			
 			nSignalPars = 3;
-			double     N_eta = par[0];
-			double    mu_eta = par[1];
-			double sigma_eta = par[2];
-			double     A_eta = N_eta * binSize / sqrt(2.0*TMath::Pi()) / sigma_eta;
+			double N     = par[0];
+			double mu    = par[1];
+			double sigma = par[2];
 			
-			double loc_x_eta = (locMgg - mu_eta)/sigma_eta;
-			fEta = A_eta * exp(-0.5*pow(loc_x_eta,2.0));
+			fEta = N * NormGaus(locMgg, mu, sigma);
 			break;
 		}
 		case 2:
@@ -287,18 +295,15 @@ double MggFitter::MggFitFunction(double *x, double *par)
 			// double Gaussian:
 			
 			nSignalPars = 6;
-			double     N1_eta = par[0];
-			double     N2_eta = par[1];
-			double    mu1_eta = par[2];
-			double    mu2_eta = par[3] + mu1_eta;
-			double sigma1_eta = par[4];
-			double sigma2_eta = par[5];
-			double     A1_eta = N1_eta * binSize / sqrt(2.0*TMath::Pi()) / sigma1_eta;
-			double     A2_eta = N2_eta * binSize / sqrt(2.0*TMath::Pi()) / sigma2_eta;
+			double N        = par[0];
+			double fraction = par[1];
+			double mu1      = par[2];
+			double mu2      = par[3] + mu1;
+			double sigma1   = par[4];
+			double sigma2   = par[5];
 			
-			double loc_x1_eta = (locMgg - mu1_eta)/sigma1_eta;
-			double loc_x2_eta = (locMgg - mu2_eta)/sigma2_eta;
-			fEta = A1_eta*exp(-0.5*pow(loc_x1_eta,2.0)) + A2_eta*exp(-0.5*pow(loc_x2_eta,2.0));
+			fEta = N * ((1.0-fraction)*NormGaus(locMgg, mu1, sigma1)
+				 + fraction * NormGaus(locMgg, mu2, sigma2));
 			break;
 		}
 		case 3:
@@ -307,21 +312,13 @@ double MggFitter::MggFitFunction(double *x, double *par)
 			
 			nSignalPars = 5;
 			
-			double     N_eta = par[0];
-			double    mu_eta = par[1];
-			double sigma_eta = par[2];
-			double     a_eta = par[3];
-			double     n_eta = par[4];
-			double     A_eta = N_eta * binSize / sqrt(2.0*TMath::Pi()) / sigma_eta;
+			double N     = par[0];
+			double mu    = par[1];
+			double sigma = par[2];
+			double alpha = par[3];
+			double n     = par[4];
 			
-			double   Acb_eta = pow(n_eta/fabs(a_eta), n_eta) * exp(-0.5*pow(fabs(a_eta),2.0));
-			double   Bcb_eta = (n_eta/fabs(a_eta)) - fabs(a_eta);
-			double loc_x_eta = (mu_eta - locMgg)/sigma_eta;
-			if(loc_x_eta > -a_eta) {
-				fEta = A_eta * exp(-0.5*pow(loc_x_eta,2.0));
-			} else {
-				fEta = A_eta * Acb_eta * pow(Bcb_eta - loc_x_eta, -n_eta);
-			}
+			fEta = N * NormCrystalBall(locMgg, mu, sigma, alpha, n, 1);
 			break;
 		}
 		case 4:
@@ -338,46 +335,46 @@ double MggFitter::MggFitFunction(double *x, double *par)
 			
 			nSignalPars = 2;
 			
-			double   N_eta = par[0];
-			double dmu_eta = par[1];
-			
-			fEta = N_eta * h_etaLineshape->GetBinContent(h_etaLineshape->FindBin(locMgg-dmu_eta));
+			double N   = par[0];
+			double dmu = par[1];
+			fEta = N * (h_etaLineshape->GetBinContent(h_etaLineshape->FindBin(locMgg-dmu))
+				/ h_etaLineshape->GetBinWidth(1));
 			break;
 		}
 		case 6:
 		{
-			// Line shape from simulation:
+			// Line shape from simulation + Gaussian for eta+pion background:
 			
 			nSignalPars = 5;
 			
-			double   N_eta = par[0];
-			double dmu_eta = par[1];
+			double N   = par[0];
+			double dmu = par[1];
 			
-			double     N_eta_inc = par[2];
-			double    mu_eta_inc = par[3];
-			double sigma_eta_inc = par[4];
+			double  frac_etapi = par[2];
+			double    mu_etapi = par[3];
+			double sigma_etapi = par[4];
 			
-			fEta = N_eta * h_etaLineshape->GetBinContent(h_etaLineshape->FindBin(locMgg-dmu_eta));
+			double f1 = h_etaLineshape->GetBinContent(h_etaLineshape->FindBin(locMgg-dmu)) 
+				/ h_etaLineshape->GetBinWidth(1);
+			double f2 = NormGaus(locMgg, mu_etapi, sigma_etapi);
 			
-			double A_eta_inc = N_eta_inc * binSize / sqrt(2.0*TMath::Pi()) / sigma_eta_inc;
-			double x_eta_inc = (locMgg - mu_eta_inc)/sigma_eta_inc;
-			fEta += (A_eta_inc * exp(-0.5*pow(x_eta_inc,2.0)));
+			fEta = N * (f1 + frac_etapi*f2);
 			break;
 		}
 		case 7:
 		{
 			// Line shape from simulation:
 			
-			nSignalPars = 4;
+			nSignalPars = 5;
 			
-			double     N_eta = par[0];
-			double   dmu_eta = par[1];
-			double   N_etapi = par[2];
-			double dmu_etapi = par[3];
+			double N          = par[0];
+			double dmu        = par[1];
+			double dmu_etapi  = par[2] + dmu;
+			double frac_eta   = par[3]; // only exists to remove signal contribution when drawing
+			double frac_etapi = par[4];
 			
-			//fEta = (N_eta * h_etaLineshape->GetBinContent(h_etaLineshape->FindBin(locMgg-dmu_eta))
-			//	+ N_etapi * f_etaPionLineshape->Eval(locMgg-dmu_eta));
-			fEta = (N_eta*f_etaLineshape->Eval(locMgg-dmu_eta) + N_etapi*f_etaPionLineshape->Eval(locMgg-dmu_eta));
+			fEta = N * (frac_eta * f_etaLineshape->Eval(locMgg-dmu) 
+				+ frac_etapi * f_etaPionLineshape->Eval(locMgg-dmu_etapi));
 			break;
 		}
 	}
@@ -395,40 +392,30 @@ double MggFitter::MggFitFunction(double *x, double *par)
 		case 1:
 		{
 			nOmegaPars = 5;
-			double     N_omega = par[nSignalPars + 0];
-			double    mu_omega = par[nSignalPars + 1];
-			double sigma_omega = par[nSignalPars + 2];
-			double     a_omega = par[nSignalPars + 3];
-			double     n_omega = par[nSignalPars + 4];
+			double N     = par[nSignalPars + 0];
+			double mu    = par[nSignalPars + 1];
+			double sigma = par[nSignalPars + 2];
+			double alpha = par[nSignalPars + 3];
+			double n     = par[nSignalPars + 4];
 			
-			double Acb_omega = pow(n_omega/fabs(a_omega), n_omega) * exp(-0.5*pow(fabs(a_omega),2.0));
-			double Bcb_omega = (n_omega/fabs(a_omega)) - fabs(a_omega);
-			
-			double loc_x_omega = (locMgg - mu_omega)/sigma_omega;
-			
-			if(loc_x_omega > -a_omega) {
-				fOmega = N_omega * exp(-0.5*pow(loc_x_omega,2.0));
-			} else {
-				fOmega = N_omega * Acb_omega * pow(Bcb_omega - loc_x_omega, -n_omega);
-			}
+			fOmega = N * NormCrystalBall(locMgg, mu, sigma, alpha, n);
 			break;
 		}
 		case 2:
 		{
 			nOmegaPars = 2;
-			double N_omega   = par[nSignalPars + 0];
-			double dmu_omega = par[nSignalPars + 1];
-			
-			fOmega = N_omega * f_omegaLineshape->Eval(locMgg-dmu_omega);
+			double N   = par[nSignalPars + 0];
+			double dmu = par[nSignalPars + 1];
+			fOmega = N * f_omegaLineshape->Eval(locMgg-dmu);
 			break;
 		}
 		case 3:
 		{
 			nOmegaPars = 2;
-			double   N_omega = par[nSignalPars + 0];
-			double dmu_omega = par[nSignalPars + 1];
-			
-			fOmega = N_omega * h_omegaLineshape->GetBinContent(h_omegaLineshape->FindBin(locMgg-dmu_omega));
+			double N   = par[nSignalPars + 0];
+			double dmu = par[nSignalPars + 1];
+			fOmega = N * h_omegaLineshape->GetBinContent(h_omegaLineshape->FindBin(locMgg-dmu))
+				/ h_omegaLineshape->GetBinWidth(1);
 			break;
 		}
 	}
@@ -454,15 +441,14 @@ double MggFitter::MggFitFunction(double *x, double *par)
 		case 2:
 		{
 			// exponential background:
-			nBkgdPars = 5;
+			nBkgdPars = 4;
 			
 			double p0 = par[nSignalPars + nOmegaPars + 0];
 			double p1 = par[nSignalPars + nOmegaPars + 1];
 			double p2 = par[nSignalPars + nOmegaPars + 2];
 			double p3 = par[nSignalPars + nOmegaPars + 3];
-			double p4 = par[nSignalPars + nOmegaPars + 4];
 			
-			fBkgd = p0 * exp(p2*(locMgg - p4) + p3*pow(locMgg - p4,2.0));
+			fBkgd = p0 * exp(p2*(locMgg - p1) + p3*pow(locMgg - p1,2.0));
 			break;
 		}
 		case 3:
@@ -490,13 +476,11 @@ double MggFitter::MggFitFunction(double *x, double *par)
 	
 	int nEtapPars = 0;
 	if(fitOption_etap==1) {
-		double     N_etap = par[nSignalPars + nOmegaPars + nBkgdPars + 0];
-		double    mu_etap = par[nSignalPars + nOmegaPars + nBkgdPars + 1];
-		double sigma_etap = par[nSignalPars + nOmegaPars + nBkgdPars + 2];
-		double     A_etap = N_etap * binSize / sqrt(2.0*TMath::Pi()) / sigma_etap;
-		
-		fEtaPrime = A_etap*exp(-0.5*pow((locMgg-mu_etap)/sigma_etap, 2.0));
 		nEtapPars = 3;
+		double N     = par[nSignalPars + nOmegaPars + nBkgdPars + 0];
+		double mu    = par[nSignalPars + nOmegaPars + nBkgdPars + 1];
+		double sigma = par[nSignalPars + nOmegaPars + nBkgdPars + 2];
+		fEtaPrime = N * NormGaus(locMgg, mu, sigma);
 	}
 	
 	//==================================================================================//
@@ -504,12 +488,12 @@ double MggFitter::MggFitFunction(double *x, double *par)
 	
 	double fEmpty = 0.0;
 	if(fitOption_empty==1) {
-		double N_empty = par[nSignalPars + nOmegaPars + nBkgdPars + nEtapPars];
-		fEmpty = N_empty * m_emptyRatio * f_empty->Eval(locMgg);
+		double N = par[nSignalPars + nOmegaPars + nBkgdPars + nEtapPars];
+		fEmpty = N * m_emptyRatio * f_empty->Eval(locMgg);
 	}
 	
 	//==================================================================================//
 	
-	double fMgg = fEta + fOmega + fBkgd + fEtaPrime + fEmpty;
+	double fMgg = (fEta + fOmega + fBkgd + fEtaPrime + fEmpty) * binSize;
 	return fMgg;
 }

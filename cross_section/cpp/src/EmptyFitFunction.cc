@@ -1,3 +1,4 @@
+#include "CrossSection.h"
 #include "MggFitter.h"
 
 int MggFitter::InitializeEmptyFitFunction(TF1 **f1, TString funcName)
@@ -75,7 +76,7 @@ int MggFitter::InitializeEmptyFitFunction(TF1 **f1, TString funcName)
 			nBkgdPars = emptyFitOption_poly + 1;
 			break;
 		case 2:
-			nBkgdPars = 5;
+			nBkgdPars = 4;
 			break;
 		case 3:
 			nBkgdPars = emptyFitOption_poly + 1;
@@ -87,6 +88,9 @@ int MggFitter::InitializeEmptyFitFunction(TF1 **f1, TString funcName)
 	for(int ipar=0; ipar<nBkgdPars; ipar++) parNames.push_back(Form("p%d",ipar));
 	
 	int nParameters = nEtaPars + nOmegaPars + nFDCPars + nBkgdPars;
+	
+	parNames.push_back("binWidth");
+	nParameters++;
 	
 	// initialize fit function for each angular bin:
 	
@@ -175,8 +179,8 @@ int MggFitter::InitializeEmptyFitParameters()
 			nParameters += (emptyFitOption_poly+1);
 			break;
 		case 2:
-			for(int ipar=0; ipar<5; ipar++) f_empty->FixParameter(nParameters+ipar, 0.0);
-			nParameters += 5;
+			for(int ipar=0; ipar<4; ipar++) f_empty->FixParameter(nParameters+ipar, 0.0);
+			nParameters += 4;
 			break;
 		case 3:
 			for(int ipar=0; ipar<=emptyFitOption_poly; ipar++) f_empty->FixParameter(nParameters+ipar, 0.0001);
@@ -186,6 +190,9 @@ int MggFitter::InitializeEmptyFitParameters()
 			nParameters += 0;
 			break;
 	}
+	
+	f_empty->FixParameter(nParameters, emptyBinSize);
+	nParameters++;
 	
 	return nParameters;
 }
@@ -217,13 +224,10 @@ double MggFitter::EmptyMggFitFunction(double *x, double *par)
 			// single Gaussian:
 			
 			nEtaParameters = 3;
-			double     N_eta = par[0];
-			double    mu_eta = par[1];
-			double sigma_eta = par[2];
-			double     A_eta = N_eta * binSize / sqrt(2.0*TMath::Pi()) / sigma_eta;
-			
-			double loc_x_eta = (locMgg - mu_eta)/sigma_eta;
-			fEta = A_eta * exp(-0.5*pow(loc_x_eta,2.0));
+			double N     = par[0];
+			double mu    = par[1];
+			double sigma = par[2];
+			fEta = N * NormGaus(locMgg, mu, sigma);
 			break;
 		}
 		case 2:
@@ -231,11 +235,9 @@ double MggFitter::EmptyMggFitFunction(double *x, double *par)
 			// Line shape from simulation:
 			
 			nEtaParameters = 2;
-			
-			double   N_eta = par[0];
-			double dmu_eta = par[1];
-			
-			fEta = N_eta * f_etaLineshape->Eval(locMgg-dmu_eta);
+			double N   = par[0];
+			double dmu = par[1];
+			fEta = N * f_etaLineshape->Eval(locMgg-dmu);
 			break;
 		}
 	}
@@ -254,22 +256,13 @@ double MggFitter::EmptyMggFitFunction(double *x, double *par)
 		case 1:
 		{
 			nOmegaParameters = 5;
-			double     N_omega = par[nEtaParameters + 0];
-			double    mu_omega = par[nEtaParameters + 1];
-			double sigma_omega = par[nEtaParameters + 2];
-			double     a_omega = par[nEtaParameters + 3];
-			double     n_omega = par[nEtaParameters + 4];
+			double N     = par[nEtaParameters + 0];
+			double mu    = par[nEtaParameters + 1];
+			double sigma = par[nEtaParameters + 2];
+			double alpha = par[nEtaParameters + 3];
+			double n     = par[nEtaParameters + 4];
 			
-			double Acb_omega = pow(n_omega/fabs(a_omega), n_omega) * exp(-0.5*pow(fabs(a_omega),2.0));
-			double Bcb_omega = (n_omega/fabs(a_omega)) - fabs(a_omega);
-			
-			double loc_x_omega = (locMgg - mu_omega)/sigma_omega;
-			
-			if(loc_x_omega > -a_omega) {
-				fOmega = N_omega * exp(-0.5*pow(loc_x_omega,2.0));
-			} else {
-				fOmega = N_omega * Acb_omega * pow(Bcb_omega - loc_x_omega, -n_omega);
-			}
+			fOmega = N * NormCrystalBall(locMgg, mu, sigma, alpha, n);
 			break;
 		}
 		case 2:
@@ -277,11 +270,9 @@ double MggFitter::EmptyMggFitFunction(double *x, double *par)
 			// Line shape from simulation:
 			
 			nOmegaParameters = 2;
-			
-			double   N_omega = par[nEtaParameters + 0];
-			double dmu_omega = par[nEtaParameters + 1];
-			
-			fOmega = N_omega * f_omegaLineshape->Eval(locMgg-dmu_omega);
+			double N   = par[nEtaParameters + 0];
+			double dmu = par[nEtaParameters + 1];
+			fOmega = N * f_omegaLineshape->Eval(locMgg-dmu);
 			break;
 		}
 	}
@@ -305,14 +296,10 @@ double MggFitter::EmptyMggFitFunction(double *x, double *par)
 			// Gaussian functions for each structure:
 			
 			for(int i=0; i<m_muFDC.size(); i++) {
-				double     N_fdc = par[nEtaParameters + nOmegaParameters + nFDCParameters + 0];
-				double    mu_fdc = par[nEtaParameters + nOmegaParameters + nFDCParameters + 1];
-				double sigma_fdc = par[nEtaParameters + nOmegaParameters + nFDCParameters + 2];
-				double     A_fdc = N_fdc * binSize / sqrt(2.0*TMath::Pi()) / sigma_fdc;
-				
-				double loc_x_fdc = (locMgg - mu_fdc)/sigma_fdc;
-				fFDC += A_fdc * exp(-0.5*pow(loc_x_fdc,2.0));
-				
+				double N     = par[nEtaParameters + nOmegaParameters + nFDCParameters + 0];
+				double mu    = par[nEtaParameters + nOmegaParameters + nFDCParameters + 1];
+				double sigma = par[nEtaParameters + nOmegaParameters + nFDCParameters + 2];
+				fFDC += (N * NormGaus(locMgg, mu, sigma));
 				nFDCParameters += 3;
 			}
 			break;
@@ -322,12 +309,12 @@ double MggFitter::EmptyMggFitFunction(double *x, double *par)
 			// Use lineshape from simulation of omegas from 1st FDC package:
 			// In this option, only one normalization parameter is used for all peaking structures
 			
-			double N_fdc = par[nEtaParameters + nOmegaParameters + nFDCParameters + 0];
+			double N = par[nEtaParameters + nOmegaParameters + nFDCParameters + 0];
 			nFDCParameters += 1;
 			
 			for(int i=0; i<m_muFDC.size(); i++) {
-				double dmu_fdc = par[nEtaParameters + nOmegaParameters + nFDCParameters];
-				fFDC += N_fdc * f_fdcOmegaLineshape->Eval(locMgg-dmu_fdc);
+				double dmu = par[nEtaParameters + nOmegaParameters + nFDCParameters];
+				fFDC += (N * f_fdcOmegaLineshape->Eval(locMgg-dmu));
 				nFDCParameters += 1;
 			}
 			break;
@@ -338,9 +325,9 @@ double MggFitter::EmptyMggFitFunction(double *x, double *par)
 			// In this option, separate normalization parameters are used for all peaking structures
 			
 			for(int i=0; i<m_muFDC.size(); i++) {
-				double   N_fdc = par[nEtaParameters + nOmegaParameters + nFDCParameters + 0];
-				double dmu_fdc = par[nEtaParameters + nOmegaParameters + nFDCParameters + 1];
-				fFDC += N_fdc * f_fdcOmegaLineshape->Eval(locMgg-dmu_fdc);
+				double N   = par[nEtaParameters + nOmegaParameters + nFDCParameters + 0];
+				double dmu = par[nEtaParameters + nOmegaParameters + nFDCParameters + 1];
+				fFDC += (N * f_fdcOmegaLineshape->Eval(locMgg-dmu));
 				nFDCParameters += 2;
 			}
 			break;
@@ -367,15 +354,14 @@ double MggFitter::EmptyMggFitFunction(double *x, double *par)
 		case 2:
 		{
 			// exponential background:
-			nBkgdPars = 5;
+			nBkgdPars = 4;
 			
 			double p0 = par[nEtaParameters + nOmegaParameters + nFDCParameters + 0];
 			double p1 = par[nEtaParameters + nOmegaParameters + nFDCParameters + 1];
 			double p2 = par[nEtaParameters + nOmegaParameters + nFDCParameters + 2];
 			double p3 = par[nEtaParameters + nOmegaParameters + nFDCParameters + 3];
-			double p4 = par[nEtaParameters + nOmegaParameters + nFDCParameters + 4];
 			
-			fBkgd = p0 * exp(p2*(locMgg - p4) + p3*pow(locMgg - p4,2.0));
+			fBkgd = p0 * exp(p2*(locMgg - p1) + p3*pow(locMgg - p1,2.0));
 			break;
 		}
 		case 3:
@@ -398,6 +384,7 @@ double MggFitter::EmptyMggFitFunction(double *x, double *par)
 	
 	//----------------------------------------------------------------------------------//
 	
-	double fMgg = fEta + fOmega + fFDC + fBkgd;
+	double binWidth = par[nEtaParameters + nOmegaParameters + nFDCParameters + nBkgdPars];
+	double fMgg = (fEta + fOmega + fFDC + fBkgd) * binWidth;
 	return fMgg;
 }

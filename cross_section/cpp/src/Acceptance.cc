@@ -3,35 +3,23 @@
 
 int EtaAnalyzer::LoadAngularMatrix()
 {
+	printf("\nREADING ANGULAR MATRICES...\n");
+	
 	int locPhase = m_phase;
 	
 	//------------------------------------------------------------//
 	// ROOT file where angular and acceptance matrix is stored:
 	
-	if(m_analysisOption==1 && m_matrixHistName!="AngularMatrix") {
-		m_matrixHistName = "AngularMatrix";
-	}
-	
-	TString matrixFileName = Form("phase%d_matrix.root", locPhase);
-	if(m_matrixHistName.Contains("FCAL"))
-	{
-		matrixFileName = Form("phase%d_FCAL.root", locPhase);
-	}
-	else if(m_matrixHistName.Contains("TOF"))
-	{
-		matrixFileName = Form("phase%d_TOF.root", locPhase);
-	}
-	
-	TString matrixFileNameFull = Form(
-		"/work/halld/home/andrsmit/primex_eta_analysis/eta_gg_matrix/analyze_trees/rootFiles/phase%d/%s", 
-		locPhase, matrixFileName.Data());
+	TString matrixFileName = GetMatrixFileName();
 	
 	// return if filename is not accessible:
-	if(gSystem->AccessPathName(matrixFileNameFull.Data())) return 1;
+	if(gSystem->AccessPathName(matrixFileName.Data())) return 1;
+	
+	printf("  matrix file: %s\n", matrixFileName.Data());
 	
 	//------------------------------------------------------------//
 	
-	TFile *fMatrix = new TFile(matrixFileNameFull.Data(), "READ");
+	TFile *fMatrix = new TFile(matrixFileName.Data(), "READ");
 	
 	h_matrix = (TH3F*)fMatrix->Get(m_matrixHistName.Data());
 	h_matrix->SetDirectory(0);
@@ -73,22 +61,20 @@ int EtaAnalyzer::LoadAngularMatrix()
 		printf("  Requested beam energy bin size: %.3f\n", m_beamEnergyBinSize);
 		printf("  Actual beam energy bin size: %.3f\n", testBinSize);
 	}
-	
+	/*
 	printf("RebinsThrown = %d\n", nRebinsThrown);
 	printf("RebinsRecon  = %d\n", nRebinsRecon);
 	printf("RebinsEnergy = %d\n", nRebinsEnergy);
 	
+	m_beamEnergyBinSize  = h_matrix->GetZaxis()->GetBinWidth(1);
+	m_thrownAngleBinSize = h_matrix->GetXaxis()->GetBinWidth(1);
+	m_reconAngleBinSize  = h_matrix->GetYaxis()->GetBinWidth(1);
+	*/
 	
 	h_matrix->RebinX(nRebinsThrown);
 	h_matrix->RebinY(nRebinsRecon);
 	h_matrix->RebinZ(nRebinsEnergy);
 	h_matrix->SetDirectory(0);
-	
-	/*
-	m_beamEnergyBinSize  = h_matrix->GetZaxis()->GetBinWidth(1);
-	m_thrownAngleBinSize = h_matrix->GetXaxis()->GetBinWidth(1);
-	m_reconAngleBinSize  = h_matrix->GetYaxis()->GetBinWidth(1);
-	*/
 	
 	//-----------------------------------------------------------//
 	
@@ -166,30 +152,14 @@ int EtaAnalyzer::CalcAcceptance()
 	//------------------------------------------------------------//
 	// ROOT file where angular and acceptance matrix is stored:
 	
-	if(m_analysisOption==1 && m_matrixHistName!="AngularMatrix") {
-		m_matrixHistName = "AngularMatrix";
-	}
-	
-	TString matrixFileName = Form("phase%d_matrix.root", m_phase);
-	if(m_matrixHistName.Contains("FCAL"))
-	{
-		matrixFileName = Form("phase%d_FCAL.root", m_phase);
-	}
-	else if(m_matrixHistName.Contains("TOF"))
-	{
-		matrixFileName = Form("phase%d_TOF.root", m_phase);
-	}
-	
-	TString matrixFileNameFull = Form(
-		"/work/halld/home/andrsmit/primex_eta_analysis/eta_gg_matrix/analyze_trees/rootFiles/phase%d/%s", 
-		m_phase, matrixFileName.Data());
+	TString matrixFileName = GetMatrixFileName();
 	
 	// return if filename is not accessible:
-	if(gSystem->AccessPathName(matrixFileNameFull.Data())) return 1;
+	if(gSystem->AccessPathName(matrixFileName.Data())) return 1;
 	
 	//------------------------------------------------------------//
 	
-	TFile *fMatrix = new TFile(matrixFileNameFull.Data(), "READ");
+	TFile *fMatrix = new TFile(matrixFileName.Data(), "READ");
 	
 	int nRebinsThrown = 1;
 	
@@ -295,4 +265,41 @@ int EtaAnalyzer::CalcAcceptance()
 	h_Acceptance->Draw("PE");
 	
 	return 0;
+}
+
+
+TString EtaAnalyzer::GetMatrixFileName()
+{
+	int locPhase = m_phase;
+	
+	TString matrixFileName;
+	switch(m_analysisOption) {
+		case 0:
+			matrixFileName = Form("phase%d.root", locPhase);
+			break;
+		case 1:
+			matrixFileName = Form("phase%d_matrix.root", locPhase);
+			break;
+		case 2:
+			matrixFileName = Form("phase%d_FCAL.root", locPhase);
+			break;
+		case 3:
+			matrixFileName = Form("phase%d_BCAL.root", locPhase);
+			break;
+		case 4:
+			matrixFileName = Form("phase%d_BEAM.root", locPhase);
+			break;
+		case 5:
+			matrixFileName = Form("phase%d_TOF.root", locPhase);
+			break;
+		default:
+			printf("\nInvalid analysisOption\n");
+			return 1;
+	}
+	
+	TString matrixFileNameFull = Form(
+		"/work/halld/home/andrsmit/primex_eta_analysis/eta_gg_matrix/analyze_trees/rootFiles/phase%d/%s", 
+		locPhase, matrixFileName.Data());
+	
+	return matrixFileNameFull;
 }

@@ -30,13 +30,16 @@ double Chebyshev4(double, double, double, double, double, double);
 double Chebyshev5(double, double, double, double, double, double, double);
 
 // Crystal Ball functions for Omega Lineshape fitting:
-double CrystalBall(double *x, double *par);
-double CrystalBall2(double *x, double *par);
-double CrystalBall_flip(double *x, double *par);
-double CrystalBall2_flip(double *x, double *par);
-double CrystalBall3_flip(double *x, double *par);
 
-double DoubleGaus(double *x, double *par);
+double CrystalBallPDF(double*,double*);
+double CrystalBallPDF_flip(double*,double*);
+
+double DoubleCrystalBallPDF(double*,double*);
+double DoubleCrystalBallPDF_flip(double*,double*);
+double DoubleCrystalBallPDF_oneflip(double*,double*);
+
+double NormGaus(double x, double mu, double sigma);
+double NormCrystalBall(double x, double mu, double sigma, double alpha, double n, int doFlip=0);
 
 // Function to mgg initialize fitter object:
 void InitializeMggFitter(MggFitter &fitter, EtaAnalyzer *anaObj, double angle);
