@@ -173,14 +173,14 @@ void EtaAna::EtaggAnalysis_TOF() {
 			
 			if(locNBCALShowers==0) 
 			{
-				isHadronicVeto = false;
+				if((locNSCHits<=1) && (locNSCHits_coplanar==locNSCHits)) {
+					isHadronicVeto = false;
+				}
 			}
 			else if(locNBCALShowers==1) {
 				if(IsCoplanarBCAL(prodPhi-locBCALPhi) && (locBCALRFDT>1.0)) {
-					if(locNSCHits_coplanar==locNSCHits) {
-						if(locNSCHits<=1) {
-							isHadronicVeto = false;
-						}
+					if((locNSCHits<=1) && (locNSCHits_coplanar==locNSCHits)) {
+						isHadronicVeto = false;
 					}
 				}
 			}

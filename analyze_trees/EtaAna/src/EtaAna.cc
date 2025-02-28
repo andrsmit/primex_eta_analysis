@@ -436,9 +436,6 @@ int EtaAna::GetSCHitList(vector<int> &goodHits) {
 	int nSCHits = 0;
 	for(int ihit=0; ihit<m_nsc; ihit++) {
 		
-		// only check hits between 1ns < (t_sc - t_RF) < 7ns 
-		//    and with dE > 0.0002 (from DNeutralShower_factory)
-		
 		double locT  = m_scT[ihit] - m_rfTime;
 		double locdE = m_scdE[ihit];
 		

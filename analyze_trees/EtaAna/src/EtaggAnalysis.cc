@@ -147,7 +147,13 @@ void EtaAna::EtaggAnalysis() {
 			bool isTOFVeto = false;
 			if((tof_dr1 < m_FCALTOFCut) && (tof_dr2 < m_FCALTOFCut)) isTOFVeto = true;
 			
-			if(isTOFVeto) continue;
+			/*
+			I'm moving the TOF veto to later on, because I want to check the events which
+			get removed by this veto for a signature of Compton scattering.
+			If it is Compton where the photon is converted to e+e- downstream, 
+			then one of the showers should follow the Klein-Nishina kinematics.
+			*/
+			//if(isTOFVeto) continue;
 			
 			//-----------------------------------------------------//
 			// Two-Photon kinematics:
@@ -209,8 +215,12 @@ void EtaAna::EtaggAnalysis() {
 			{
 				locVetoOptions[3] = 1;
 				locVetoOptions[4] = 1;
-				locVetoOptions[5] = 1;
-				locVetoOptions[6] = 1;
+				if(locNSCHits_coplanar==locNSCHits) {
+					locVetoOptions[5] = 1;
+					if(locNSCHits<=1) {
+						locVetoOptions[6] = 1;
+					}
+				}
 			}
 			else if(locNBCALShowers==1) 
 			{
@@ -282,6 +292,43 @@ void EtaAna::EtaggAnalysis() {
 				
 				// set a variable to indicate if the two-photon mass is consistent with an eta meson:
 				bool isEta = IsEtaCut(invmass);
+				
+				//----------------------------------------//
+				
+				if(isElastic && isTOFVeto)
+				{
+					double ecomp1 = eb / (1. + (eb/ParticleMass(Electron))*(1.-cos(pos1.Theta())));
+					double ecomp2 = eb / (1. + (eb/ParticleMass(Electron))*(1.-cos(pos2.Theta())));
+					
+					h_ecomp1->Fill(prodTheta, ecomp1/e1, fillWeight);
+					h_ecomp2->Fill(prodTheta, ecomp2/e2, fillWeight);
+					if(pos1.Theta() < pos2.Theta()) {
+						h_ecomp->Fill(prodTheta, ecomp1/e1, fillWeight);
+					}
+					else {
+						h_ecomp->Fill(prodTheta, ecomp2/e2, fillWeight);
+					}
+				}
+				else if(isElastic)
+				{
+					// baseline comparison
+					
+					double ecomp1 = eb / (1. + (eb/ParticleMass(Electron))*(1.-cos(pos1.Theta())));
+					double ecomp2 = eb / (1. + (eb/ParticleMass(Electron))*(1.-cos(pos2.Theta())));
+					
+					h_ecomp1_clean->Fill(prodTheta, ecomp1/e1, fillWeight);
+					h_ecomp2_clean->Fill(prodTheta, ecomp2/e2, fillWeight);
+					if(pos1.Theta() < pos2.Theta()) {
+						h_ecomp_clean->Fill(prodTheta, ecomp1/e1, fillWeight);
+					}
+					else {
+						h_ecomp_clean->Fill(prodTheta, ecomp2/e2, fillWeight);
+					}
+				}
+				
+				if(isTOFVeto) continue;
+				
+				//----------------------------------------//
 				
 				// Plot timing distribution of beam photons after elasticity cut to see the level of accidentals:
 				if(isElastic && locVetoOptions[6]) {
@@ -669,6 +716,22 @@ void EtaAna::InitializeDefaultHists()
 		}
 	}
 	
+	// Looking for Compton signature in events which get removed by TOF veto:
+	
+	h_ecomp1 = new TH2F("ecomp1", "; #theta_{#gamma#gamma} [#circ]; E_{Comp,1}#left(E_{#gamma},#theta_{1}#right) / E_{1}",
+		500, 0.0, 5.0, 500, 0.0, 2.0);
+	h_ecomp2 = new TH2F("ecomp2", "; #theta_{#gamma#gamma} [#circ]; E_{Comp,2}#left(E_{#gamma},#theta_{2}#right) / E_{2}",
+		500, 0.0, 5.0, 500, 0.0, 2.0);
+	h_ecomp  = new TH2F("ecomp",  "; #theta_{#gamma#gamma} [#circ]; E_{Comp}#left(E_{#gamma},#theta#right) / E",
+		500, 0.0, 5.0, 500, 0.0, 2.0);
+	
+	h_ecomp1_clean = new TH2F("ecomp1_clean", "; #theta_{#gamma#gamma} [#circ]; E_{Comp,1}#left(E_{#gamma},#theta_{1}#right) / E_{1}",
+		500, 0.0, 5.0, 500, 0.0, 2.0);
+	h_ecomp2_clean = new TH2F("ecomp2_clean", "; #theta_{#gamma#gamma} [#circ]; E_{Comp,2}#left(E_{#gamma},#theta_{2}#right) / E_{2}",
+		500, 0.0, 5.0, 500, 0.0, 2.0);
+	h_ecomp_clean  = new TH2F("ecomp_clean",  "; #theta_{#gamma#gamma} [#circ]; E_{Comp}#left(E_{#gamma},#theta#right) / E",
+		500, 0.0, 5.0, 500, 0.0, 2.0);
+	
 	return;
 }
 
@@ -723,6 +786,14 @@ void EtaAna::ResetDefaultHists()
 			h_AngularMatrix_vetos[i]->Reset();
 		}
 	}
+	
+	h_ecomp1->Reset();
+	h_ecomp2->Reset();
+	h_ecomp->Reset();
+	
+	h_ecomp1_clean->Reset();
+	h_ecomp2_clean->Reset();
+	h_ecomp_clean->Reset();
 	
 	return;
 }
@@ -789,6 +860,16 @@ void EtaAna::WriteDefaultHists()
 		}
 	}
 	dirMatrix->cd("../");
+	
+	TDirectory *dirCompton = new TDirectoryFile("Compton", "Compton");
+	dirCompton->cd();
+	h_ecomp1->Write();
+	h_ecomp2->Write();
+	h_ecomp->Write();
+	h_ecomp1_clean->Write();
+	h_ecomp2_clean->Write();
+	h_ecomp_clean->Write();
+	dirCompton->cd("../");
 	
 	printf("  Done.\n");
 	return;

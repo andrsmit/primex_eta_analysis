@@ -270,9 +270,14 @@ class EtaAna {
 		TH2F *h_scDeltaPhi,           *h_bcalDeltaPhi;
 		TH2F *h_scDeltaPhi_singleHit, *h_bcalDeltaPhi_singleHit;
 		
+		TH1F *h_nSC, *h_nSC_nobcal, *h_nSC_onebcal, *h_nSC_bcalVeto, *h_nSC_extra;
+		
 		TH2F *h_xy1, *h_xy2;
 		
 		vector<TH3F*> h_AngularMatrix_vetos;
+		
+		TH2F *h_ecomp1,       *h_ecomp2,       *h_ecomp;
+		TH2F *h_ecomp1_clean, *h_ecomp2_clean, *h_ecomp_clean;
 		
 		/////////////////////////////////////////
 		// Default Analysis with no cut on beam energy:
