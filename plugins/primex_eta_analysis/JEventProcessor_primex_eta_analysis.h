@@ -1,19 +1,20 @@
 // $Id$
 //
 //    File: JEventProcessor_primex_eta_analysis.h
-// Created: Fri Aug 11 14:26:44 EDT 2023
-// Creator: andrsmit (on Linux ifarm1802.jlab.org 3.10.0-1160.92.1.el7.x86_64 x86_64)
+// Created: Tue Mar  4 10:14:54 AM EST 2025
+// Creator: andrsmit (on Linux ifarm2401.jlab.org 5.14.0-503.19.1.el9_5.x86_64 x86_64)
 //
+
+/// For more information on the syntax changes between JANA1 and JANA2, visit: https://jeffersonlab.github.io/JANA2/#/jana1to2/jana1-to-jana2
 
 #ifndef _JEventProcessor_primex_eta_analysis_
 #define _JEventProcessor_primex_eta_analysis_
 
-// JANA headers:
-#include <JANA/JApplication.h>
-#include <JANA/JFactory.h>
 #include <JANA/JEventProcessor.h>
+#include <JANA/Services/JLockService.h> // Required for accessing services
 
 // Hall-D headers:
+#include "DANA/DEvent.h"
 #include "HDGEOMETRY/DGeometry.h"
 #include "TRACKING/DMCThrown.h"
 #include "TRIGGER/DTrigger.h"
@@ -34,45 +35,54 @@
 #include "TH1.h"
 #include "TH2.h"
 #include "TSystem.h"
+#include "TDirectory.h"
+#include "TDirectoryFile.h"
 
-using namespace jana;
-using namespace std;
+class JEventProcessor_primex_eta_analysis:public JEventProcessor{
+    public:
+        JEventProcessor_primex_eta_analysis() { 
+			SetTypeName(NAME_OF_THIS);
+		}
+        ~JEventProcessor_primex_eta_analysis() = default;
+		
+        const char* className(void){return "JEventProcessor_primex_eta_analysis";}
 
-class JEventProcessor_primex_eta_analysis:public jana::JEventProcessor{
-	public:
-		JEventProcessor_primex_eta_analysis();
-		~JEventProcessor_primex_eta_analysis(){};
-		const char* className(void){return "JEventProcessor_primex_eta_analysis";}
+    private:
+        void Init() override;
+        void BeginRun(const std::shared_ptr<const JEvent>& event) override;
+        void Process(const std::shared_ptr<const JEvent>& event) override;
+        void EndRun() override {};
+        void Finish() override {};
 
-	private:
-		jerror_t init(void);
-		jerror_t brun(jana::JEventLoop *eventLoop, int32_t runnumber);
-		jerror_t evnt(jana::JEventLoop *eventLoop, uint64_t eventnumber);
-		jerror_t erun(void){return NOERROR;};
-		jerror_t fini(void){return NOERROR;};
+    	std::shared_ptr<JLockService> lockService; //Used to access all the services, its value should be set inside Init()
 		
 		//---------------------------------------//
 		// Functions
 		
-		int fcal_fiducial_cut(DVector3 pos, double layer_cut);
+		void InitializeHistograms();
 		
-		double energy_after_recoil(double eb, double theta, double m0, double mp);
+		Particle_t GetTargetType(int32_t);
+		int GetPrimExPhase(int32_t);
 		
-		double fcal_energy_res(double e);
+		int FCALFiducialCut(DVector3, double);
 		
-		double get_acc_scaling_factor(double eb);
+		double GetEnergyAfterRecoil(double, double, double, double);
 		
-		void check_TOF_match(DVector3 pos, double rfTime, vector<const DTOFPoint*> tof_points, 
-			double &dx_min, double &dy_min, double &dt_min, double rf_time_cut);
+		double GetFCALEnergyRes(double);
 		
-		void eta_gg_analysis(
-			vector<const DFCALShower*> fcal_showers, 
-			vector<const DBeamPhoton*> beam_photons, 
-			vector<const DBCALShower*> bcal_showers, 
-			vector<const DTOFPoint*> tof_points, vector<const DSCHit*> sc_hits, 
-			int n_fcal_showers, int n_good_fcal_showers, 
-			double bcal_energy_sum, int n_bcal_showers, int n_bcal_showers_1ns, double bcal_phi, double bcal_rfdt,
-			double rfTime, bool is_mc, double thrown_beam_energy, double thrown_eta_angle
+		double GetAccScalingFactor(double);
+		
+		bool IsElasticCut(double, double, double);
+		bool IsEtaCut(double);
+		bool IsCoplanarBCAL(double);
+		bool IsCoplanarSC(double);
+		
+		void CheckTOFMatch(DVector3, double, vector<const DTOFPoint*>, double&, double&, double&, double);
+		
+		void EtaGGAnalysis(
+			vector<const DFCALShower*>, vector<const DBeamPhoton*>, 
+			vector<const DBCALShower*>, vector<const DTOFPoint*>, vector<const DSCHit*>, 
+			int, int, double, int, int, double, double, double, bool, double, double
 		);
 		
 		//---------------------------------------//
@@ -80,11 +90,11 @@ class JEventProcessor_primex_eta_analysis:public jana::JEventProcessor{
 		
 		DVector3 m_beamSpot;
 		DVector3 m_fcalFace, m_ccalFace;
-		DVector3 m_fcal_correction, m_ccal_correction;
+		DVector3 m_fcalCorrection, m_ccalCorrection;
 		
-		vector<vector<DVector3>> m_sc_pos, m_sc_norm;
+		vector<vector<DVector3>> m_scPos, m_scNorm;
 		
-		int m_phase_val = 0;
+		int m_phaseVal = 0;
 		
 		double m_HodoscopeHiFactor    = 1.0;
 		double m_HodoscopeHiFactorErr = 1.0;
@@ -96,101 +106,115 @@ class JEventProcessor_primex_eta_analysis:public jana::JEventProcessor{
 		double m_TAGMEnergyBoundLo    = 1.0;
 		
 		//---------------------------------------//
-		// Cuts (defaults set inside constructor)
+		// Cuts (defaults set inside Init)
 		
-		int m_USE_LOG_WEIGHT, m_BYPASS_TRIGGER;
+		double m_BeamRFCut, m_FCALRFCut, m_BCALRFCut, m_CCALRFCut, m_TOFRFCut;
 		
-		double m_FCAL_RF_CUT, m_CCAL_RF_CUT, m_BCAL_RF_CUT, m_TOF_RF_CUT, m_BEAM_RF_CUT;
+		double m_FCALEnergyCut, m_FCALExtraEnergyCut;
+		double m_BCALEnergyCut;
+		double m_minBeamEnergyCut, m_maxBeamEnergyCut;
 		
-		double m_MIN_BCAL_ENERGY;
-		double m_MIN_FCAL_ENERGY;
-		double m_MIN_CCAL_ENERGY;
-		double m_MIN_BEAM_ENERGY;
+		double m_FCALTOFCut;
+		double m_SCDeltaPhiCut;
+		double m_BCALDeltaPhiCut;
 		
-		double m_FCAL_TOF_CUT;
+		double m_ElasMean_p0;
+		double m_ElasMean_p1;
+		double m_ElasWidth;
+		double m_ElasSigmaCut;
 		
-		double m_ELAS_CUT_SIGMA, m_ELAS_CUT_WIDTH;
-		double m_ELAS_CUT_MU_P0, m_ELAS_CUT_MU_P1;
+		int m_UseLogWeight, m_BypassTrigger;
 		
 		//---------------------------------------//
 		// Constants 
 		
 		Particle_t m_Target;
 		
-		const double m_pi0      =  0.1349770;   // [GeV]
-		const double m_eta      =  0.547862;    // [GeV]
-		const double m_etap     =  0.95778;     // [GeV]
+		const double m_c = 29.9792458;   // [cm/ns]
 		
-		const double m_Proton   =  0.938272046; // [GeV]
-		const double m_Deuteron =  1.875612859; // [GeV]
-		const double m_He4      =  3.727379238; // [GeV]
-		const double m_Be9      =  8.39479;     // [GeV]
-		const double m_C12      = 11.17793;     // [GeV]
-		
-		const double m_c        = 29.9792458;   // [cm/ns]
+		double m_beamBunchesMain = 1.0;
+		double m_beamBunchesAcc  = 5.0;
 		
 		//---------------------------------------//
 		// Histograms
 		
-		static const int N_TRIGS = 4;
-		vector<string> trigger_names = {"FCAL+CCAL Trigger", 
+		double m_minInvmassBin      =  0.300;
+		double m_maxInvmassBin      =  1.100;
+		double m_invmassBinSize     =  0.001;
+		
+		double m_minRecAngleBin     =  0.000;
+		double m_maxRecAngleBin     =  5.500;
+		double m_recAngleBinSize    =  0.010;
+		
+		double m_minThrownAngleBin  =  0.000;
+		double m_maxThrownAngleBin  =  5.000;
+		double m_thrownAngleBinSize =  0.010;
+		
+		// Thrown angular distributions for different energy ranges:
+		
+		TH1F *h_ThrownAngle[13];
+		
+		// Timing and energy sum for different trigger types:
+		
+		static const int m_nTrigs = 4;
+		vector<string> m_triggerNames = {"FCAL+CCAL Trigger", 
 			"Low-energy FCAL Trigger", "PS Trigger", "CCAL Trigger"};
 		
-		TH1F *h_fcal_energy_sum[N_TRIGS];
+		TH1F *h_fcalRFdt[m_nTrigs];
+		TH1F *h_bcalRFdt[m_nTrigs];
+		TH1F *h_ccalRFdt[m_nTrigs];
+		TH1F *h_taghRFdt[m_nTrigs];
+		TH1F *h_tagmRFdt[m_nTrigs];
+		TH1F  *h_tofRFdt[m_nTrigs];
+		TH1F   *h_scRFdt[m_nTrigs];
 		
-		TH1F *h_theta_thrown[13];
+		TH1F *h_fcalEnergySum[m_nTrigs];
 		
-		TH1F *h_fcal_rf_dt[N_TRIGS];
-		TH1F *h_bcal_rf_dt[N_TRIGS];
-		TH1F *h_ccal_rf_dt[N_TRIGS];
-		TH1F *h_tagh_rf_dt[N_TRIGS];
-		TH1F *h_tagm_rf_dt[N_TRIGS];
-		TH1F  *h_tof_rf_dt[N_TRIGS];
-		TH1F   *h_sc_rf_dt[N_TRIGS];
+		// FCAL-TOF Matching:
 		
-		TH1F *h_fcal_tof_dx, *h_fcal_tof_dy, *h_fcal_tof_dr;
-		TH1F *h_fcal_tof_dt, *h_fcal_tof_dt_cut;
-		TH1F *h_fcal_tof_matches;
+		TH1F *h_fcalTOFdx, *h_fcalTOFdy, *h_fcalTOFdr;
+		TH1F *h_fcalTOFdt, *h_fcalTOFdt_cut;
+		TH1F *h_fcalTOFMatches;
 		
-		TH1F *h_beam_rf_dt_cut, *h_sc_rf_dt_cut;
+		// RF timing after cuts are applies:
 		
-		TH2F *h_elas_vs_mgg;
+		TH1F *h_beamRFdt_cut, *h_scRFdt_cut;
+		
+		// Elasticity:
+		
 		TH2F *h_elas;
-		TH2F *h_elas_corr, *h_elas_corr_main, *h_elas_corr_side;
+		TH2F *h_elasCorr, *h_elasCorrMain, *h_elasCorrSide;
+		TH2F *h_elasCorr_coh;
 		
-		TH2F *h_mgg,       *h_mgg_main,       *h_mgg_side;
-		TH2F *h_mgg_const, *h_mgg_const_main, *h_mgg_const_side;
-		TH2F *h_mgg_const_corr;
+		// Invariant mass:
 		
-		// plots 
-		static const int m_n_vetos = 8;
+		TH2F *h_mgg,       *h_mggMain,       *h_mggSide;
+		TH2F *h_mggConstr, *h_mggConstrMain, *h_mggConstrSide;
+		TH2F *h_mggConstr_coh;
 		
-		TH2F *h_elas_veto[m_n_vetos];
-		TH2F *h_mgg_veto[m_n_vetos];
-		TH2F *h_mgg_const_veto[m_n_vetos];
-		TH2F *h_mgg_const_coh_veto[m_n_vetos];
-		TH2F *h_mm_veto[m_n_vetos];
-		TH2F *h_mm_const_veto[m_n_vetos];
-		TH2F *h_mm_const_coh_veto[m_n_vetos];
+		// Missing mass:
 		
-		TH2F *h_rec_vs_thrown;
-		TH2F *h_mgg_thrown;
-		TH2F *h_mgg_const_thrown;
+		TH2F *h_mm,     *h_mm_etaCut,     *h_mm_elasEtaCut;
+		TH2F *h_mm_coh, *h_mm_coh_etaCut, *h_mm_coh_elasEtaCut;
 		
-		TH2F *h_hmass;
-		TH2F *h_hmass_eta_cut;
-		TH2F *h_hmass_eta_elas_cut;
+		// Misc:
 		
-		TH2F *h_mm_vs_theta, *h_mm_const_vs_theta;
-		TH2F *h_mm_const_coh_vs_theta;
-		
-		TH2F *h_mm_vs_theta_eta_cut, *h_mm_const_vs_theta_eta_cut;
-		TH2F *h_mm_const_coh_vs_theta_eta_cut;
-		
-		TH2F *h_mm_vs_theta_eta_elas_cut, *h_mm_const_vs_theta_eta_elas_cut;
-		TH2F *h_mm_const_coh_vs_theta_eta_elas_cut;
-		
+		TH2F *h_elasVSmgg;
 		TH2F *h_xy_1, *h_xy_2;
+		
+		// For MC:
+		
+		TH2F *h_recVSthrown;
+		TH2F *h_mggThrown, *h_mggConstrThrown;
+		
+		// Plots for different veto options:
+		 
+		static const int m_nVetos = 8;
+		
+		TH2F *h_elas_veto[m_nVetos];
+		TH2F *h_mgg_veto[m_nVetos], *h_mggConstr_veto[m_nVetos], *h_mggConstr_coh_veto[m_nVetos];
+		TH2F *h_mm_veto[m_nVetos],  *h_mm_coh_veto[m_nVetos];
 };
 
 #endif // _JEventProcessor_primex_eta_analysis_
+

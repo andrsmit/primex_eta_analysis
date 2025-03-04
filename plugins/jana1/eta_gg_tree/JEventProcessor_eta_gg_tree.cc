@@ -1,30 +1,25 @@
 // $Id$
 //
 //    File: JEventProcessor_eta_gg_tree.cc
-// Created: Tue Mar  4 10:14:42 AM EST 2025
-// Creator: andrsmit (on Linux ifarm2401.jlab.org 5.14.0-503.19.1.el9_5.x86_64 x86_64)
+// Created: Fri Aug 11 14:26:44 EDT 2023
+// Creator: andrsmit (on Linux ifarm1802.jlab.org 3.10.0-1160.92.1.el7.x86_64 x86_64)
 //
-
-/// For more information on the syntax changes between JANA1 and JANA2, visit: https://jeffersonlab.github.io/JANA2/#/jana1to2/jana1-to-jana2
 
 #include "JEventProcessor_eta_gg_tree.h"
 
-
-// Routine used to create our JEventProcessor
-#include <JANA/JApplication.h>
 extern "C"{
-void InitPlugin(JApplication *app){
-	InitJANAPlugin(app);
-	app->Add(new JEventProcessor_eta_gg_tree());
-}
+	void InitPlugin(JApplication *app){
+		InitJANAPlugin(app);
+		app->AddProcessor(new JEventProcessor_eta_gg_tree());
+	}
 } // "C"
 
 thread_local DTreeFillData JEventProcessor_eta_gg_tree::dTreeFillData;
 
 //------------------
-// Init
+// JEventProcessor_eta_gg_tree (Constructor)
 //------------------
-void JEventProcessor_eta_gg_tree::Init()
+JEventProcessor_eta_gg_tree::JEventProcessor_eta_gg_tree()
 {
 	/*
 	Basic criteria for selecting events to write out:
@@ -42,9 +37,8 @@ void JEventProcessor_eta_gg_tree::Init()
 	m_FCAL_RF_CUT =  2.004; // [ns]
 	m_BEAM_RF_CUT =  2.004; // [ns]
 	m_TOF_RF_CUT  =  2.004; // [ns]
-	m_BCAL_RF_CUT = 12.000; // [ns]
+	m_BCAL_RF_CUT = 12.0;   // [ns]
 	
-	// default values for energy cuts:
 	m_MIN_BEAM_ENERGY = 8.0; // energy of the tagged photon energy [GeV]
 	m_DELTA_E_CUT     = 3.0; // energy difference between FCAL showers and coherent eta meson [GeV]
 		
@@ -53,26 +47,23 @@ void JEventProcessor_eta_gg_tree::Init()
 	m_SAVE_MC_NOHITS = 1; // save MCThrown information even when an event doesn't pass the selection criteria
 	
 	//-------------------------------------------------------------------------------------//
+	// allow for command-line overriding of the default values:
 	
-	auto app = GetApplication();
-	
-	//-------------------------------------------------------------------------------------//
-	
-	app->SetDefaultParameter("eta_gg_tree:FCAL_RF_CUT",     m_FCAL_RF_CUT);
-	app->SetDefaultParameter("eta_gg_tree:BCAL_RF_CUT",     m_BCAL_RF_CUT);
-	app->SetDefaultParameter("eta_gg_tree:TOF_RF_CUT",      m_TOF_RF_CUT);
-	app->SetDefaultParameter("eta_gg_tree:BEAM_RF_CUT",     m_BEAM_RF_CUT);
-	app->SetDefaultParameter("eta_gg_tree:MIN_BEAM_ENERGY", m_MIN_BEAM_ENERGY);
-	app->SetDefaultParameter("eta_gg_tree:DELTA_E_CUT",     m_DELTA_E_CUT);
-	app->SetDefaultParameter("eta_gg_tree:USE_LOG_WEIGHT",  m_USE_LOG_WEIGHT);
-	app->SetDefaultParameter("eta_gg_tree:SAVE_MC_NOHITS",  m_SAVE_MC_NOHITS);
-	
-    // lockService should be initialized here like this
-    // lockService = app->GetService<JLockService>();
-	
-	//-------------------------------------------------------------------------------------//
-	// Set up tree and branches:
-	
+	gPARMS->SetDefaultParameter("eta_gg_tree:FCAL_RF_CUT",     m_FCAL_RF_CUT);
+	gPARMS->SetDefaultParameter("eta_gg_tree:BCAL_RF_CUT",     m_BCAL_RF_CUT);
+	gPARMS->SetDefaultParameter("eta_gg_tree:TOF_RF_CUT",      m_TOF_RF_CUT);
+	gPARMS->SetDefaultParameter("eta_gg_tree:BEAM_RF_CUT",     m_BEAM_RF_CUT);
+	gPARMS->SetDefaultParameter("eta_gg_tree:MIN_BEAM_ENERGY", m_MIN_BEAM_ENERGY);
+	gPARMS->SetDefaultParameter("eta_gg_tree:DELTA_E_CUT",     m_DELTA_E_CUT);
+	gPARMS->SetDefaultParameter("eta_gg_tree:USE_LOG_WEIGHT",  m_USE_LOG_WEIGHT);
+	gPARMS->SetDefaultParameter("eta_gg_tree:SAVE_MC_NOHITS",  m_SAVE_MC_NOHITS);
+}
+
+//------------------
+// init
+//------------------
+jerror_t JEventProcessor_eta_gg_tree::init(void)
+{
 	dTreeInterface = DTreeInterface::Create_DTreeInterface("eta_gg","eta_gg.root");
 	
 	DTreeBranchRegister locTreeBranchRegister;
@@ -141,174 +132,334 @@ void JEventProcessor_eta_gg_tree::Init()
 	locTreeBranchRegister.Register_Single<Double_t>("thrownBeamEnergy");
 	
 	dTreeInterface->Create_Branches(locTreeBranchRegister);
-    
+	
+	return NOERROR;
 }
 
 //------------------
-// BeginRun
+// brun
 //------------------
-void JEventProcessor_eta_gg_tree::BeginRun(const std::shared_ptr<const JEvent> &event)
+jerror_t JEventProcessor_eta_gg_tree::brun(JEventLoop *eventLoop, int32_t runnumber)
 {
 	//--------------------------------------------------------------//
 	// Get geometry information for each run from CCDB:
 	
-	DGeometry *locGeometry = DEvent::GetDGeometry(event);
+	DGeometry*   dgeom = NULL;
+	DApplication* dapp = dynamic_cast<DApplication*>(eventLoop->GetJApplication());
+	if(dapp)     dgeom = dapp->GetDGeometry(runnumber);
 	
-	double locTargetZ = 65.0;
-	double locX, locY, locZ;
+	double loc_targetZ = 65.0;
+	double loc_x, loc_y, loc_z;
 	
-	if(locGeometry==nullptr) {
+	if(dgeom==NULL) {
 		cerr << "No geometry accessbile to plugin." << endl;
-		exit(1);
+		return RESOURCE_UNAVAILABLE;
 	}
 	
 	// Get target position:
-	locGeometry->GetTargetZ(locTargetZ);
+	dgeom->GetTargetZ(loc_targetZ);
 	
 	// Get position of FCAL face:
-	locGeometry->GetFCALPosition(locX, locY, locZ);
-	m_fcalFace.SetXYZ(locX, locY, locZ);
+	dgeom->GetFCALPosition(loc_x, loc_y, loc_z);
+	m_fcalFace.SetXYZ(loc_x, loc_y, loc_z);
 	
 	// Get position of CCAL face:
-	locGeometry->GetCCALPosition(locX, locY, locZ);
-	m_ccalFace.SetXYZ(locX, locY, locZ);
+	dgeom->GetCCALPosition(loc_x, loc_y, loc_z);
+	m_ccalFace.SetXYZ(loc_x, loc_y, loc_z);
 	
 	// Get beam spot on center of target:
-	std::map<string, float> locBeamSpot;
-	DEvent::GetCalib(event, "PHOTON_BEAM/beam_spot", locBeamSpot);
-	m_beamSpot.SetXYZ(locBeamSpot.at("x"), locBeamSpot.at("y"), locTargetZ);
+	jana::JCalibration *jcalib = japp->GetJCalibration(runnumber);
+	std::map<string, float> beam_spot;
+	jcalib->Get("PHOTON_BEAM/beam_spot", beam_spot);
+	m_beamSpot.SetXYZ(beam_spot.at("x"), beam_spot.at("y"), loc_targetZ);
 	
 	// Get start counter geomety:
-	locGeometry->GetStartCounterGeom(m_scPos, m_scNorm);
-	
-	// Set the target according to the run number:
-	int32_t locRunNumber = event->GetRunNumber();
-	m_Target = GetTargetType(locRunNumber);
+	dgeom->GetStartCounterGeom(m_sc_pos, m_sc_norm);
 	
 	//--------------------------------------------------------------//
-	// Geometry corrections for PrimEx run periods:
+	// Set the target according to the run number:
 	
-	m_phaseVal = GetPrimExPhase(locRunNumber);
+	if(runnumber < 60000 || 
+		( 70000 <= runnumber && runnumber <=  79999) || 
+		(120000 <= runnumber && runnumber <= 129999)
+	) {
+		m_Target = Proton;
+	} else if(
+		( 60000 <= runnumber && runnumber <=  61354) || 
+		( 80000 <= runnumber && runnumber <=  81381) || 
+		(110000 <= runnumber && runnumber <= 110621)
+	) { 
+		m_Target = Be9;
+	} else if(
+		( 60000 <= runnumber && runnumber <=  69999) || 
+		( 80000 <= runnumber && runnumber <=  81716) || 
+		(110000 <= runnumber && runnumber <= 112001) || 
+		( 90034 <= runnumber && runnumber <=  90200) || 
+		( 90607 <= runnumber && runnumber <=  90660)) {
+		m_Target = Helium;
+	} else if(
+		( 90207 <= runnumber && runnumber <=  90249) || 
+		( 90558 <= runnumber && runnumber <=  90601)
+	) {
+		m_Target = Deuteron;
+	} else if(90263 <= runnumber && runnumber <= 90536) {
+		m_Target = C12;
+	} else {
+		m_Target = Proton;
+	}
 	
-	if(m_phaseVal==1) {
+	//--------------------------------------------------------------//
+	
+	if(runnumber>60000 && runnumber<69999) 
+	{
+		m_phase_val = 1;
 		
-		m_fcalCorrection.SetXYZ(0.455 - m_fcalFace.X(), -0.032 - m_fcalFace.Y(), 0.0);
-		m_fcalFace += m_fcalCorrection;
+		//--------------------------------------------------------------------//
+		// For phase 1, update the geometry from Compton alignment studies:
 		
-		m_ccalCorrection.SetXYZ(-0.082 - m_ccalFace.X(), 0.061 - m_ccalFace.Y(), 0.0);
-		if(locRunNumber>=61483) m_ccalCorrection.SetY(0.051 - m_ccalFace.Y());
-		m_ccalFace += m_ccalCorrection;
+		// (2/4/2024): Correction to alignment after Simon updated beam spot with new CDC alignment:
 		
-		if(locRunNumber<61483) 
+		m_fcal_correction.SetXYZ(0.455 - m_fcalFace.X(), -0.032 - m_fcalFace.Y(), 0.0);
+		m_fcalFace += m_fcal_correction;
+		
+		m_ccal_correction.SetXYZ(-0.082 - m_ccalFace.X(), 0.061 - m_ccalFace.Y(), 0.0);
+		if(runnumber>=61483) m_ccal_correction.SetY(0.051 - m_ccalFace.Y());
+		m_ccalFace += m_ccal_correction;
+		
+		if(runnumber<61483) 
 		{
 			m_beamSpot.SetX( 0.027);
 			m_beamSpot.SetY(-0.128);
-		}
-		else if(locRunNumber<61774) 
+		} else if(runnumber<61774) 
 		{
 			m_beamSpot.SetX( 0.001);
 			m_beamSpot.SetY(-0.077);
-		}
-		else 
+		} else 
 		{
 			m_beamSpot.SetX( 0.038);
 			m_beamSpot.SetY(-0.095);
 		}
 	}
-	else {
-		m_fcalCorrection.SetXYZ(0.0, 0.0, 0.0);
-		m_ccalCorrection.SetXYZ(0.0, 0.0, 0.0);
+	else if(runnumber>80000 && runnumber < 89999) 
+	{
+		m_phase_val = 2;
+		m_fcal_correction.SetXYZ(0.0, 0.0, 0.0);
+		m_ccal_correction.SetXYZ(0.0, 0.0, 0.0);
+	} 
+	else if(runnumber>110000 && runnumber < 119999) 
+	{
+		m_phase_val = 3;
+		m_fcal_correction.SetXYZ(0.0, 0.0, 0.0);
+		m_ccal_correction.SetXYZ(0.0, 0.0, 0.0);
+	}
+	else 
+	{
+		m_phase_val = 0;
+		m_fcal_correction.SetXYZ(0.0, 0.0, 0.0);
+		m_ccal_correction.SetXYZ(0.0, 0.0, 0.0);
 	}
 	
-	//--------------------------------------------------------------//
-	// Obtain the scaling factors for accidental beam bunches 
+	/*------------------------------------------------------------------------------------------------------*/
+	// Code to obtain the scaling factors for accidental beam bunches 
+	//     (copied from DAnalysisUtilities.cc in gluex_root_analysis)
 	
-	std::map<string, float> locScalingFactors;
-	if(DEvent::GetCalib(event, "ANALYSIS/accidental_scaling_factor", locScalingFactors)) {
-		m_HodoscopeHiFactor    = locScalingFactors.at("HODOSCOPE_HI_FACTOR");
-		m_HodoscopeHiFactorErr = locScalingFactors.at("HODOSCOPE_HI_FACTOR_ERR");
-		m_MicroscopeFactor     = locScalingFactors.at("MICROSCOPE_FACTOR");
-		m_MicroscopeFactorErr  = locScalingFactors.at("MICROSCOPE_FACTOR_ERR");
-		m_HodoscopeLoFactor    = locScalingFactors.at("HODOSCOPE_LO_FACTOR");
-		m_HodoscopeLoFactorErr = locScalingFactors.at("HODOSCOPE_LO_FACTOR_ERR");
-		m_TAGMEnergyBoundHi    = locScalingFactors.at("MICROSCOPE_ENERGY_HI");
-		m_TAGMEnergyBoundLo    = locScalingFactors.at("MICROSCOPE_ENERGY_LO");
-	}
-	else {
-		// Set up defaults if constants weren't available:
+	ostringstream locCommandStream;
+	locCommandStream << "ccdb dump ANALYSIS/accidental_scaling_factor -r " << runnumber;
+	FILE* locInputFile = gSystem->OpenPipe(locCommandStream.str().c_str(), "r");
+	if(locInputFile == NULL) {
+		
 		m_HodoscopeHiFactor    = 1.00;
 		m_HodoscopeHiFactorErr = 0.01;
-		m_MicroscopeFactor     = 1.00;
-		m_MicroscopeFactorErr  = 0.01;
 		m_HodoscopeLoFactor    = 1.00;
 		m_HodoscopeLoFactorErr = 0.01;
-		m_TAGMEnergyBoundHi    = 8.00;
-		m_TAGMEnergyBoundLo    = 9.00;
+		m_MicroscopeFactor     = 1.00;
+		m_MicroscopeFactorErr  = 0.01;
+		m_TAGMEnergyBoundHi    = 9.00;
+		m_TAGMEnergyBoundLo    = 8.00;
+		
+		return NOERROR;
+		/*
+		cerr << "Could not load ANALYSIS/accidental_scaling_factor from CCDB !" << endl;
+		gSystem->Exit(1);        // make sure we don't fail silently
+		return RESOURCE_UNAVAILABLE;    // sanity check, this shouldn't be executed!
+		*/
 	}
-	//--------------------------------------------------------------//
+	
+	//get the first line
+	char buff[1024]; // I HATE char buffers
+	if(fgets(buff, sizeof(buff), locInputFile) == NULL)
+	{
+		m_HodoscopeHiFactor    = 1.00;
+		m_HodoscopeHiFactorErr = 0.01;
+		m_HodoscopeLoFactor    = 1.00;
+		m_HodoscopeLoFactorErr = 0.01;
+		m_MicroscopeFactor     = 1.00;
+		m_MicroscopeFactorErr  = 0.01;
+		m_TAGMEnergyBoundHi    = 9.00;
+		m_TAGMEnergyBoundLo    = 8.00;
+		
+		gSystem->ClosePipe(locInputFile);
+		return NOERROR;
+		/*
+		//vector<double> locCachedValues = { -1., -1., -1., -1., -1., -1., -1., -1. };
+		//dAccidentalScalingFactor_Cache[runnumber] = locCachedValues;   // give up for this run
+		gSystem->ClosePipe(locInputFile);
+		cerr << "Could not parse ANALYSIS/accidental_scaling_factor from CCDB !" << endl;
+		gSystem->Exit(1);        // make sure we don't fail silently
+		return RESOURCE_UNAVAILABLE;    // sanity check, this shouldn't be executed!
+		*/
+	}
+	
+	//get the second line (where the # is)
+	if(fgets(buff, sizeof(buff), locInputFile) == NULL)
+	{
+		m_HodoscopeHiFactor    = 1.00;
+		m_HodoscopeHiFactorErr = 0.01;
+		m_HodoscopeLoFactor    = 1.00;
+		m_HodoscopeLoFactorErr = 0.01;
+		m_MicroscopeFactor     = 1.00;
+		m_MicroscopeFactorErr  = 0.01;
+		m_TAGMEnergyBoundHi    = 9.00;
+		m_TAGMEnergyBoundLo    = 8.00;
+		
+		gSystem->ClosePipe(locInputFile);
+		return NOERROR;
+		/*
+		//vector<double> locCachedValues = { -1., -1., -1., -1., -1., -1., -1., -1. };
+		//dAccidentalScalingFactor_Cache[runnumber] = locCachedValues;   // give up for this run
+		gSystem->ClosePipe(locInputFile);
+		cerr << "Could not parse ANALYSIS/accidental_scaling_factor from CCDB !" << endl;
+		gSystem->Exit(1);        // make sure we don't fail silently
+		return RESOURCE_UNAVAILABLE;    // sanity check, this shouldn't be executed!
+		*/
+	}
+	
+	// catch some CCDB error conditions
+	if(strncmp(buff, "Cannot", 6) == 0) 
+	{
+		m_HodoscopeHiFactor    = 1.00;
+		m_HodoscopeHiFactorErr = 0.01;
+		m_HodoscopeLoFactor    = 1.00;
+		m_HodoscopeLoFactorErr = 0.01;
+		m_MicroscopeFactor     = 1.00;
+		m_MicroscopeFactorErr  = 0.01;
+		m_TAGMEnergyBoundHi    = 9.00;
+		m_TAGMEnergyBoundLo    = 8.00;
+		
+		gSystem->ClosePipe(locInputFile);
+		return NOERROR;
+		/*
+		// no assignment for this run
+		//vector<double> locCachedValues = { -1., -1., -1., -1., -1., -1., -1., -1. };
+		//dAccidentalScalingFactor_Cache[runnumber] = locCachedValues;   // give up for this run
+		gSystem->ClosePipe(locInputFile);
+		cerr << "No data available for ANALYSIS/accidental_scaling_factor, run " << runnumber << " from CCDB !" << endl;
+		gSystem->Exit(1);        // make sure we don't fail silently
+		return RESOURCE_UNAVAILABLE;    // sanity check, this shouldn't be executed!
+		*/
+	}
+	
+	istringstream locStringStream(buff);
+	
+	double locHodoscopeHiFactor    = -1.0;
+	double locHodoscopeHiFactorErr = -1.0;
+	double locHodoscopeLoFactor    = -1.0;
+	double locHodoscopeLoFactorErr = -1.0;
+	double locMicroscopeFactor     = -1.0;
+	double locMicroscopeFactorErr  = -1.0;
+	double locTAGMEnergyBoundHi    = -1.0;
+	double locTAGMEnergyBoundLo    = -1.0;
+	
+	//extract it
+	locStringStream >> locHodoscopeHiFactor >> locHodoscopeHiFactorErr >> locHodoscopeLoFactor
+		>> locHodoscopeLoFactorErr >> locMicroscopeFactor >> locMicroscopeFactorErr
+		>> locTAGMEnergyBoundHi >> locTAGMEnergyBoundLo;
+	
+	//Close the pipe
+	gSystem->ClosePipe(locInputFile);
+	
+	m_HodoscopeHiFactor    = locHodoscopeHiFactor;
+	m_HodoscopeHiFactorErr = locHodoscopeHiFactorErr;
+	m_HodoscopeLoFactor    = locHodoscopeLoFactor;
+	m_HodoscopeLoFactorErr = locHodoscopeLoFactorErr;
+	m_MicroscopeFactor     = locMicroscopeFactor;
+	m_MicroscopeFactorErr  = locMicroscopeFactorErr;
+	m_TAGMEnergyBoundHi    = locTAGMEnergyBoundHi;
+	m_TAGMEnergyBoundLo    = locTAGMEnergyBoundLo;
+	
+	/*------------------------------------------------------------------------------------------------------*/
+	
+	return NOERROR;
 }
 
 //------------------
-// Process
+// evnt
 //------------------
-void JEventProcessor_eta_gg_tree::Process(const std::shared_ptr<const JEvent> &event)
+jerror_t JEventProcessor_eta_gg_tree::evnt(JEventLoop *eventLoop, uint64_t eventnumber)
 {
-	uint64_t locEventNumber = event->GetEventNumber();
+	vector<const DMCThrown*> locMCThrown;	
+	eventLoop->Get(locMCThrown, "Primary");
 	
-	auto locMCThrown = event->Get<DMCThrown>("Primary");
-	
-	// If DMCThrown objects exist for this event, assume it is simulation:
 	int locIsMC = 0;
 	if(locMCThrown.size()) locIsMC = 1;
 	
-	auto locMCReactionList = event->Get<DMCReaction>();
-	if(locMCReactionList.empty())
-	{
-		if(locIsMC) return;
+	const DMCReaction *locMCReaction = NULL;
+	try {
+		eventLoop->GetSingle(locMCReaction);
+	} catch(...) {
+		if(locIsMC) return NOERROR;
 	}
-	const DMCReaction* locMCReaction = locMCReactionList[0];
-	
-	//----------------------------------------------------//
-	// Get the event RF Time:
-	
-	auto locEventRFBunches = event->Get<DEventRFBunch>("CalorimeterOnly");
-	
-	// return if no RF bunch is available:
-	if(locEventRFBunches.empty()) {
-		if(locIsMC && m_SAVE_MC_NOHITS) {
-			WriteEvent(locEventNumber, 0.0, locMCThrown, locMCReaction);
-			dTreeInterface->Fill(dTreeFillData);
-		}
-		return;
-	}
-	
-	// skip events with less than 2 votes on RF bunch:
-	if(locEventRFBunches[0]->dNumParticleVotes < 2) {
-		if(locIsMC && m_SAVE_MC_NOHITS) {
-			WriteEvent(locEventNumber, 0.0, locMCThrown, locMCReaction);
-			dTreeInterface->Fill(dTreeFillData);
-		}
-		return;
-	}
-	
-	double locRFTime = locEventRFBunches[0]->dTime;
-	
-	//----------------------------------------------------//
-	// Get Data Objects:
-	
-	auto locBeamPhotons = event->Get<DBeamPhoton>();
-	auto locFCALShowers = event->Get<DFCALShower>();
-	auto locBCALShowers = event->Get<DBCALShower>();
-	auto locCCALShowers = event->Get<DCCALShower>();
-	auto locTOFPoints   = event->Get<DTOFPoint>();
-	auto locSCHits      = event->Get<DSCHit>();
 	
 	//-----------------------------------------------------//
-	// Look for pair of FCAL showers with mgg > 0.3 GeV/c^2:
+	// Get RF Time
 	
-	bool IsGoodEvent = false;
+	const DEventRFBunch *locRFBunch = NULL;
+	try {
+		eventLoop->GetSingle(locRFBunch, "CalorimeterOnly");
+	} catch(...) {
+		if(locIsMC && m_SAVE_MC_NOHITS) {
+			write_events(eventnumber, 0.0, locMCThrown, locMCReaction);
+			dTreeInterface->Fill(dTreeFillData);
+		}
+		return NOERROR;
+	}
+	double locRFTime = locRFBunch->dTime;
+	if(locRFBunch->dNumParticleVotes < 2) {
+		if(locIsMC && m_SAVE_MC_NOHITS) {
+			write_events(eventnumber, 0.0, locMCThrown, locMCReaction);
+			dTreeInterface->Fill(dTreeFillData);
+		}
+		return NOERROR;
+	}
+	
+	//-----------------------------------------------------//
+	// Data objects
+	
+	vector<const DBeamPhoton*> locBeamPhotons;
+	eventLoop->Get(locBeamPhotons);
+	
+	vector<const DFCALShower*> locFCALShowers;
+	eventLoop->Get(locFCALShowers);
+	
+	vector<const DCCALShower*> locCCALShowers;
+	eventLoop->Get(locCCALShowers);
+	
+	vector<const DBCALShower*> locBCALShowers;
+	eventLoop->Get(locBCALShowers);
+	
+	vector<const DTOFPoint*> locTOFPoints;
+	eventLoop->Get(locTOFPoints);
+	
+	vector<const DSCHit*> locSCHits;
+	eventLoop->Get(locSCHits);
+	
+	//-----------------------------------------------------//
+	// Look for pair of FCAL showers with invariant mass > 0.3 GeV/c^2:
 	
 	int locNFCALShowers = locFCALShowers.size();
+	
+	bool locEventSelector = false;
+	
 	for(int ishow=0; ishow<(locNFCALShowers-1); ishow++) {
 		
 		const DFCALShower *show1 = locFCALShowers[ishow];
@@ -318,7 +469,7 @@ void JEventProcessor_eta_gg_tree::Process(const std::shared_ptr<const JEvent> &e
 		} else {
 			pos1 = show1->getPosition();
 		}
-		pos1 = pos1 - m_beamSpot + m_fcalCorrection;
+		pos1 = pos1 - m_beamSpot + m_fcal_correction;
 		
 		double t1 = show1->getTime() - (pos1.Mag()/m_c) - locRFTime;
 		if(fabs(t1) > m_FCAL_RF_CUT) continue;
@@ -337,7 +488,7 @@ void JEventProcessor_eta_gg_tree::Process(const std::shared_ptr<const JEvent> &e
 			} else {
 				pos2 = show2->getPosition();
 			}
-			pos2 = pos2 - m_beamSpot + m_fcalCorrection;
+			pos2 = pos2 - m_beamSpot + m_fcal_correction;
 			
 			double t2 = show2->getTime() - (pos2.Mag()/m_c) - locRFTime;
 			if(fabs(t2) > m_FCAL_RF_CUT) continue;
@@ -385,13 +536,13 @@ void JEventProcessor_eta_gg_tree::Process(const std::shared_ptr<const JEvent> &e
 				// Energy constraint
 				
 				// Calculate the energy of the eta meson, assuming production on a free nucleon:
-				double eeta = GetEnergyAfterRecoil(eb, prod_th, ParticleMass(Eta), ParticleMass(Proton));
+				double eeta = energy_after_recoil(eb, prod_th, m_eta, m_Proton);
 				
 				// adjust the measured energies of the two-photons to exactly equal the energy of 
 				// a photo-produced eta meson:
 				
-				double sig1 = GetFCALEnergyRes(e1);
-				double sig2 = GetFCALEnergyRes(e2);
+				double sig1 = fcal_energy_res(e1);
+				double sig2 = fcal_energy_res(e2);
 				double sigr = pow(sig1/sig2,2.0);
 				
 				// Energy-constrained invariant mass assuming production on free nucleon:
@@ -407,49 +558,47 @@ void JEventProcessor_eta_gg_tree::Process(const std::shared_ptr<const JEvent> &e
 				// accidental subtraction that are used in these cuts.
 				
 				int bunch_val = 0;
-				if(brfdt < (m_beamBunchesMain*2.004)) bunch_val = 1;
+				if(brfdt < (m_beam_bunches_main*2.004)) bunch_val = 1;
 				else if(
-					((m_beamBunchesMain+5.5)*4.008 < brfdt) &&
-					(brfdt < (m_beamBunchesMain+5.5+m_beamBunchesAcc)*4.008)
+					((m_beam_bunches_main+5.5)*4.008 < brfdt) &&
+					(brfdt < (m_beam_bunches_main+5.5+m_beam_bunches_acc)*4.008)
 				) bunch_val = 2;
 				
 				if(bunch_val==0) continue;
 				
 				double locDeltaE = Egg - eeta;
 				if(fabs(locDeltaE) < 3.0 && invmass_const > 0.30) {
-					IsGoodEvent = true;
+					locEventSelector = true;
 				}
 			}
 		}
 	}
 	
-	if(IsGoodEvent) {
-		WriteEvent(locEventNumber, locRFTime, locBeamPhotons, locFCALShowers, locBCALShowers, locTOFPoints, locSCHits, 
+	if(locEventSelector) {
+		write_events(eventnumber, locRFTime, locBeamPhotons, locFCALShowers, locBCALShowers, locTOFPoints, locSCHits, 
 			locMCThrown, locMCReaction);
 		dTreeInterface->Fill(dTreeFillData);
 	}
 	else if(locIsMC && m_SAVE_MC_NOHITS) {
-		WriteEvent(locEventNumber, locRFTime, locMCThrown, locMCReaction);
+		write_events(eventnumber, locRFTime, locMCThrown, locMCReaction);
 		dTreeInterface->Fill(dTreeFillData);
 	}
+	
+	return NOERROR;
 }
 
 //------------------
-// EndRun
+// fini
 //------------------
-void JEventProcessor_eta_gg_tree::EndRun() {}
+jerror_t JEventProcessor_eta_gg_tree::fini(void)
+{
+	delete dTreeInterface;
+	return NOERROR;
+}
 
-//------------------
-// Finish
-//------------------
-void JEventProcessor_eta_gg_tree::Finish() { delete dTreeInterface; }
-
-//------------------------------------------//
-
-double JEventProcessor_eta_gg_tree::GetEnergyAfterRecoil(double eb, double theta, 
+double JEventProcessor_eta_gg_tree::energy_after_recoil(double eb, double theta, 
 	double m0, double mp) 
 {
-	// convert angle to radians:
 	theta *= (TMath::Pi()/180.);
   
 	double t1 = eb*cos(theta);
@@ -470,11 +619,9 @@ double JEventProcessor_eta_gg_tree::GetEnergyAfterRecoil(double eb, double theta
 	return energy;
 }
 
-//------------------------------------------//
-
-double JEventProcessor_eta_gg_tree::GetFCALEnergyRes(double e)
+double JEventProcessor_eta_gg_tree::fcal_energy_res(double e)
 {
-	// Hard-coded values for the FCAL energy resolution (taken from GlueX NIM paper)
+	// hard-coded values for the FCAL energy resolution (taken from GlueX NIM paper)
 	
 	double a = 0.062, b = 0.047;
 	double sig = (a*a)/e + (b*b);
@@ -482,9 +629,7 @@ double JEventProcessor_eta_gg_tree::GetFCALEnergyRes(double e)
 	return sig;
 }
 
-//------------------------------------------//
-
-double JEventProcessor_eta_gg_tree::GetAccScalingFactor(double eb)
+double JEventProcessor_eta_gg_tree::get_acc_scaling_factor(double eb)
 {
 	if(eb > m_TAGMEnergyBoundHi)
 		return m_HodoscopeHiFactor;
@@ -494,9 +639,7 @@ double JEventProcessor_eta_gg_tree::GetAccScalingFactor(double eb)
 		return m_HodoscopeLoFactor;
 }
 
-//------------------------------------------//
-
-void JEventProcessor_eta_gg_tree::WriteEvent(uint64_t eventnumber, double rfTime, 
+void JEventProcessor_eta_gg_tree::write_events(uint64_t eventnumber, double rfTime, 
 	vector<const DMCThrown*> mc_thrown, const DMCReaction *mc_reaction) {
 	
 	dTreeFillData.Fill_Single<Int_t>("eventNum", eventnumber);
@@ -530,9 +673,7 @@ void JEventProcessor_eta_gg_tree::WriteEvent(uint64_t eventnumber, double rfTime
 	return;
 }
 
-//------------------------------------------//
-
-void JEventProcessor_eta_gg_tree::WriteEvent(uint64_t eventnumber, double rfTime, 
+void JEventProcessor_eta_gg_tree::write_events(uint64_t eventnumber, double rfTime, 
 	vector<const DBeamPhoton*> beam_photons, 
 	vector<const DFCALShower*> fcal_showers,
 	vector<const DBCALShower*> bcal_showers,
@@ -556,10 +697,10 @@ void JEventProcessor_eta_gg_tree::WriteEvent(uint64_t eventnumber, double rfTime
 		double brfdt = fabs((*gam)->time() - rfTime);
 		
 		int bunch_val = 0;
-		if(brfdt < (m_beamBunchesMain*2.004)) bunch_val = 1;
+		if(brfdt < (m_beam_bunches_main*2.004)) bunch_val = 1;
 		else if(
-			((m_beamBunchesMain+5.5)*4.008 < brfdt) &&
-			(brfdt < (m_beamBunchesMain+5.5+m_beamBunchesAcc)*4.008)
+			((m_beam_bunches_main+5.5)*4.008 < brfdt) &&
+			(brfdt < (m_beam_bunches_main+5.5+m_beam_bunches_acc)*4.008)
 		) bunch_val = 2;
 		
 		if(bunch_val==0) continue;
@@ -574,7 +715,7 @@ void JEventProcessor_eta_gg_tree::WriteEvent(uint64_t eventnumber, double rfTime
 		dTreeFillData.Fill_Array<Int_t>("tag_sys",     loc_sys,        n_beam_photon);
 		dTreeFillData.Fill_Array<Double_t>("beam_e",   loc_eb,         n_beam_photon);
 		dTreeFillData.Fill_Array<Double_t>("beam_t",  (*gam)->time(),  n_beam_photon);
-		dTreeFillData.Fill_Array<Double_t>("acc_scale_factor", GetAccScalingFactor(loc_eb), n_beam_photon);
+		dTreeFillData.Fill_Array<Double_t>("acc_scale_factor", get_acc_scaling_factor(loc_eb), n_beam_photon);
 		
 		n_beam_photon++;
 	}
@@ -634,7 +775,7 @@ void JEventProcessor_eta_gg_tree::WriteEvent(uint64_t eventnumber, double rfTime
 	for(vector<const DSCHit*>::const_iterator sc = sc_hits.begin(); sc != sc_hits.end(); sc++) {
 		
 		int sector = (*sc)->sector;
-		double phi = m_scPos[sector-1][0].Phi() * (180./TMath::Pi());
+		double phi = m_sc_pos[sector-1][0].Phi() * (180./TMath::Pi());
 		
 		dTreeFillData.Fill_Array<Int_t>("sc_sector",          sector,              n_sc_hits);
 		dTreeFillData.Fill_Array<Double_t>("sc_phi",          phi,                 n_sc_hits);
@@ -669,77 +810,4 @@ void JEventProcessor_eta_gg_tree::WriteEvent(uint64_t eventnumber, double rfTime
 	}
 	
 	return;
-}
-
-Particle_t JEventProcessor_eta_gg_tree::GetTargetType(int32_t runNumber) {
-	
-	// Set Target type according to RunPeriod and RunNumber:
-	
-	if(runNumber<60000)
-	{
-		// GlueX
-		return Proton;
-	}
-	else if(runNumber<70000)
-	{
-		// PrimEx-eta Phase 1
-		if(runNumber<61355) return Be9;
-		else return Helium;
-	}
-	else if(runNumber<80000)
-	{
-		// GlueX
-		return Proton;
-	}
-	else if(runNumber<90000)
-	{
-		// PrimEx-eta Phase 2
-		if(runNumber<81382) return Be9;
-		else return Helium;
-	}
-	else if(runNumber<100000)
-	{
-		// SRC/CT
-		if((90034<=runNumber) && (runNumber<=90200)) {
-			return Helium;
-		}
-		else if((90207<=runNumber) && (runNumber<=90249)) {
-			return Deuteron;
-		}
-		else if((90263<=runNumber) && (runNumber<=90536)) {
-			return C12;
-		}
-		else if((90558<=runNumber) && (runNumber<=90601)) {
-			return Deuteron;
-		}
-		else if((90607<=runNumber) && (runNumber<=90660)) {
-			return Helium;
-		}
-		else {
-			return Proton;
-		}
-	}
-	else if(runNumber<110000)
-	{
-		// CPP/NPP
-		return Proton; // placeholder
-	}
-	else if(runNumber<120000)
-	{
-		// PrimEx-eta Phase 3
-		if(runNumber<110622) return Be9;
-		else return Helium;
-	}
-	else
-	{
-		return Proton;
-	}
-}
-
-int JEventProcessor_eta_gg_tree::GetPrimExPhase(int32_t runNumber)
-{
-	if(( 60000<=runNumber) && (runNumber<= 69999)) return 1;
-	if(( 80000<=runNumber) && (runNumber<= 89999)) return 2;
-	if((110000<=runNumber) && (runNumber<=119999)) return 3;
-	return 0;
 }

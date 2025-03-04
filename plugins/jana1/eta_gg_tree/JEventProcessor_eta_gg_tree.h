@@ -1,22 +1,23 @@
 // $Id$
 //
 //    File: JEventProcessor_eta_gg_tree.h
-// Created: Tue Mar  4 10:14:42 AM EST 2025
-// Creator: andrsmit (on Linux ifarm2401.jlab.org 5.14.0-503.19.1.el9_5.x86_64 x86_64)
+// Created: Fri Aug 11 14:26:44 EDT 2023
+// Creator: andrsmit (on Linux ifarm1802.jlab.org 3.10.0-1160.92.1.el7.x86_64 x86_64)
 //
-
-/// For more information on the syntax changes between JANA1 and JANA2, visit: https://jeffersonlab.github.io/JANA2/#/jana1to2/jana1-to-jana2
 
 #ifndef _JEventProcessor_eta_gg_tree_
 #define _JEventProcessor_eta_gg_tree_
 
+// JANA headers:
+#include <JANA/JApplication.h>
+#include <JANA/JFactory.h>
 #include <JANA/JEventProcessor.h>
-// #include <JANA/Services/JLockService.h> // Required for accessing services
 
 // Hall-D headers:
-#include "DANA/DEvent.h"
 #include "HDGEOMETRY/DGeometry.h"
 #include "TRACKING/DMCThrown.h"
+#include "TRIGGER/DTrigger.h"
+#include "TRIGGER/DL1Trigger.h"
 #include "FCAL/DFCALShower.h"
 #include "BCAL/DBCALShower.h"
 #include "CCAL/DCCALShower.h"
@@ -27,7 +28,7 @@
 #include "PID/DEventRFBunch.h"
 #include "DVector3.h"
 #include "DLorentzVector.h"
-#include "include/particleType.h"
+#include "particleType.h"
 #include "ANALYSIS/DTreeInterface.h"
 
 // ROOT headers:
@@ -36,37 +37,32 @@
 #include "TSystem.h"
 #include "TTree.h"
 
-class JEventProcessor_eta_gg_tree : public JEventProcessor {
-    public:
-        JEventProcessor_eta_gg_tree() {
-			SetTypeName(NAME_OF_THIS);
-		}
-        ~JEventProcessor_eta_gg_tree() = default;
-		
-        const char* className(void){return "JEventProcessor_eta_gg_tree";}
+using namespace jana;
+using namespace std;
 
-    private:
-        void Init() override;
-        void BeginRun(const std::shared_ptr<const JEvent>& event) override;
-        void Process(const std::shared_ptr<const JEvent>& event) override;
-        void EndRun() override;
-        void Finish() override;
+class JEventProcessor_eta_gg_tree:public jana::JEventProcessor{
+	public:
+		JEventProcessor_eta_gg_tree();
+		~JEventProcessor_eta_gg_tree(){};
+		const char* className(void){return "JEventProcessor_eta_gg_tree";}
 
-    	// std::shared_ptr<JLockService> lockService; //Used to access all the services, its value should be set inside Init()
+	private:
+		jerror_t init(void);
+		jerror_t brun(jana::JEventLoop *eventLoop, int32_t runnumber);
+		jerror_t evnt(jana::JEventLoop *eventLoop, uint64_t eventnumber);
+		jerror_t erun(void){return NOERROR;};
+		jerror_t fini(void);
 		
 		//---------------------------------------//
 		// Functions
 		
-		Particle_t GetTargetType(int32_t);
-		int GetPrimExPhase(int32_t);
+		double energy_after_recoil(double eb, double theta, double m0, double mp);
+		double fcal_energy_res(double e);
+		double get_acc_scaling_factor(double eb);
 		
-		double GetEnergyAfterRecoil(double, double, double, double);
-		double GetFCALEnergyRes(double);
-		double GetAccScalingFactor(double);
+		void write_events(uint64_t eventnumber, double rfTime, vector<const DMCThrown*> mc_thrown, const DMCReaction* mc_reaction);
 		
-		void WriteEvent(uint64_t eventnumber, double rfTime, vector<const DMCThrown*> mc_thrown, const DMCReaction* mc_reaction);
-		
-		void WriteEvent(uint64_t eventnumber, double rfTime,
+		void write_events(uint64_t eventnumber, double rfTime,
 			vector<const DBeamPhoton*> beam_photons, 
 			vector<const DFCALShower*> fcal_showers,
 			vector<const DBCALShower*> bcal_showers,
@@ -79,11 +75,11 @@ class JEventProcessor_eta_gg_tree : public JEventProcessor {
 		
 		DVector3 m_beamSpot;
 		DVector3 m_fcalFace, m_ccalFace;
-		DVector3 m_fcalCorrection, m_ccalCorrection;
+		DVector3 m_fcal_correction, m_ccal_correction;
 		
-		vector<vector<DVector3>> m_scPos, m_scNorm;
+		vector<vector<DVector3>> m_sc_pos, m_sc_norm;
 		
-		int m_phaseVal = 0;
+		int m_phase_val = 0;
 		
 		double m_HodoscopeHiFactor    = 1.0;
 		double m_HodoscopeHiFactorErr = 1.0;
@@ -95,7 +91,7 @@ class JEventProcessor_eta_gg_tree : public JEventProcessor {
 		double m_TAGMEnergyBoundLo    = 1.0;
 		
 		//---------------------------------------//
-		// Cuts (defaults set inside Init)
+		// Cuts (defaults set inside constructor)
 		
 		int m_USE_LOG_WEIGHT, m_SAVE_MC_NOHITS;
 		
@@ -109,10 +105,20 @@ class JEventProcessor_eta_gg_tree : public JEventProcessor {
 		
 		Particle_t m_Target;
 		
-		const double m_c = 29.9792458;   // [cm/ns]
+		const double m_pi0      =  0.1349770;   // [GeV]
+		const double m_eta      =  0.547862;    // [GeV]
+		const double m_etap     =  0.95778;     // [GeV]
 		
-		double m_beamBunchesMain = 1.0;
-		double m_beamBunchesAcc  = 5.0;
+		const double m_Proton   =  0.938272046; // [GeV]
+		const double m_Deuteron =  1.875612859; // [GeV]
+		const double m_He4      =  3.727379238; // [GeV]
+		const double m_Be9      =  8.39479;     // [GeV]
+		const double m_C12      = 11.17793;     // [GeV]
+		
+		const double m_c        = 29.9792458;   // [cm/ns]
+		
+		double m_beam_bunches_main = 1.0;
+		double m_beam_bunches_acc  = 5.0;
 		
 		//---------------------------------------//
 		// Tree
@@ -122,4 +128,3 @@ class JEventProcessor_eta_gg_tree : public JEventProcessor {
 };
 
 #endif // _JEventProcessor_eta_gg_tree_
-

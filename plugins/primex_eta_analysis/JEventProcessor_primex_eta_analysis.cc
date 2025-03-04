@@ -1,717 +1,265 @@
 // $Id$
 //
 //    File: JEventProcessor_primex_eta_analysis.cc
-// Created: Fri Aug 11 14:26:44 EDT 2023
-// Creator: andrsmit (on Linux ifarm1802.jlab.org 3.10.0-1160.92.1.el7.x86_64 x86_64)
+// Created: Tue Mar  4 10:14:54 AM EST 2025
+// Creator: andrsmit (on Linux ifarm2401.jlab.org 5.14.0-503.19.1.el9_5.x86_64 x86_64)
 //
+
+/// For more information on the syntax changes between JANA1 and JANA2, visit: https://jeffersonlab.github.io/JANA2/#/jana1to2/jana1-to-jana2
 
 #include "JEventProcessor_primex_eta_analysis.h"
 
+
+// Routine used to create our JEventProcessor
+#include <JANA/JApplication.h>
 extern "C"{
-	void InitPlugin(JApplication *app){
-		InitJANAPlugin(app);
-		app->AddProcessor(new JEventProcessor_primex_eta_analysis());
-	}
+void InitPlugin(JApplication *app){
+	InitJANAPlugin(app);
+	app->Add(new JEventProcessor_primex_eta_analysis());
+}
 } // "C"
 
 //------------------
-// JEventProcessor_primex_eta_analysis (Constructor)
+// Init
 //------------------
-JEventProcessor_primex_eta_analysis::JEventProcessor_primex_eta_analysis()
+void JEventProcessor_primex_eta_analysis::Init()
 {
 	// default values for the RF timing cuts for each sub-detector:
-	m_BEAM_RF_CUT =  2.004;
-	m_FCAL_RF_CUT =  2.0;
-	m_BCAL_RF_CUT = 12.0;
-	m_CCAL_RF_CUT =  2.0;
-	m_TOF_RF_CUT  =  1.0;
+	m_BeamRFCut =  2.004;
+	m_FCALRFCut =  2.004;
+	m_BCALRFCut = 12.028;
+	m_CCALRFCut =  2.004;
+	m_TOFRFCut  =  1.000;
 	
 	// default values for the minimum energy cuts:
-	m_MIN_FCAL_ENERGY = 0.5; // energy of each FCAL shower used in the analysis
-	m_MIN_BEAM_ENERGY = 8.0; // energy of the tagged photon energy
-	m_MIN_BCAL_ENERGY = 0.;  // energy sum of BCAL showers within timing cut
-	m_MIN_CCAL_ENERGY = 0.5; // energy sum of CCAL showers within timing cut
+	m_FCALEnergyCut      =  0.25; // minimum energy of each FCAL shower used in analysis
+	m_FCALExtraEnergyCut =  0.05; // maximum unused energy in FCAL
+	m_BCALEnergyCut      =  0.10; // currently un-implemented 
+	m_minBeamEnergyCut   =  9.00;
+	m_maxBeamEnergyCut   = 10.90;
 	
-	// default cut value for selecting a match between the FCAL and TOF:
-	m_FCAL_TOF_CUT = 8.0; // distance between fcal shower and closest DTOFPoint
+	// default values for spacial cuts:
+	m_FCALTOFCut      =  8.0; // distance between fcal shower and closest DTOFPoint [cm]
+	m_BCALDeltaPhiCut = 30.0; // [deg]
+	m_SCDeltaPhiCut   = 36.0; // [deg]
 	
 	// default value for elasticity cut:
-	m_ELAS_CUT_SIGMA = 0.031;
-	m_ELAS_CUT_WIDTH = 3.0;
-	m_ELAS_CUT_MU_P0 = 1.0; // mu = p0 + p1*E_gamma
-	m_ELAS_CUT_MU_P1 = 0.0;
+	m_ElasWidth    = 0.031;
+	m_ElasSigmaCut = 4.0;
+	m_ElasMean_p0  = 1.0; // mu = p0 + p1*E_gamma
+	m_ElasMean_p1  = 0.0;
 	
 	// miscellaneous:
-	m_USE_LOG_WEIGHT = 0; // force log-weighted FCAL position (should be automatically set in DFCALShower_factory)
-	m_BYPASS_TRIGGER = 0; // determines whether or not to check the trigger bits set for each event
+	m_UseLogWeight  = 0; // force log-weighted FCAL position (should be automatically set in DFCALShower_factory)
+	m_BypassTrigger = 0; // determines whether or not to check the trigger bits set for each event
+	
+	//-------------------------------------------------------------------------------------//
+	// get JApplication for setting default parameters:
+	
+	auto app = GetApplication();
 	
 	//-------------------------------------------------------------------------------------//
 	// allow for command-line overriding of the default values:
 	
-	gPARMS->SetDefaultParameter("primex_eta_analysis:FCAL_RF_CUT",     m_FCAL_RF_CUT);
-	gPARMS->SetDefaultParameter("primex_eta_analysis:BEAM_RF_CUT",     m_BEAM_RF_CUT);
-	gPARMS->SetDefaultParameter("primex_eta_analysis:BCAL_RF_CUT",     m_BCAL_RF_CUT);
-	gPARMS->SetDefaultParameter("primex_eta_analysis:CCAL_RF_CUT",     m_CCAL_RF_CUT);
-	gPARMS->SetDefaultParameter("primex_eta_analysis:TOF_RF_CUT",      m_TOF_RF_CUT);
-	gPARMS->SetDefaultParameter("primex_eta_analysis:MIN_FCAL_ENERGY", m_MIN_FCAL_ENERGY);
-	gPARMS->SetDefaultParameter("primex_eta_analysis:MIN_BEAM_ENERGY", m_MIN_BEAM_ENERGY);
-	gPARMS->SetDefaultParameter("primex_eta_analysis:MIN_BCAL_ENERGY", m_MIN_BCAL_ENERGY);
-	gPARMS->SetDefaultParameter("primex_eta_analysis:MIN_CCAL_ENERGY", m_MIN_CCAL_ENERGY);
-	gPARMS->SetDefaultParameter("primex_eta_analysis:FCAL_TOF_CUT",    m_FCAL_TOF_CUT);
-	gPARMS->SetDefaultParameter("primex_eta_analysis:ELAS_CUT_SIGMA",  m_ELAS_CUT_SIGMA);
-	gPARMS->SetDefaultParameter("primex_eta_analysis:ELAS_CUT_WIDTH",  m_ELAS_CUT_WIDTH);
-	gPARMS->SetDefaultParameter("primex_eta_analysis:ELAS_CUT_MU_P0",  m_ELAS_CUT_MU_P0);
-	gPARMS->SetDefaultParameter("primex_eta_analysis:ELAS_CUT_MU_P1",  m_ELAS_CUT_MU_P1);
-	gPARMS->SetDefaultParameter("primex_eta_analysis:USE_LOG_WEIGHT",  m_USE_LOG_WEIGHT);
-	gPARMS->SetDefaultParameter("primex_eta_analysis:BYPASS_TRIGGER",  m_BYPASS_TRIGGER);
+	app->SetDefaultParameter("primex_eta_analysis:BEAM_RF_CUT", m_BeamRFCut);
+	app->SetDefaultParameter("primex_eta_analysis:FCAL_RF_CUT", m_FCALRFCut);
+	app->SetDefaultParameter("primex_eta_analysis:BCAL_RF_CUT", m_BCALRFCut);
+	app->SetDefaultParameter("primex_eta_analysis:CCAL_RF_CUT", m_CCALRFCut);
+	app->SetDefaultParameter("primex_eta_analysis:TOF_RF_CUT",  m_TOFRFCut);
+	
+	app->SetDefaultParameter("primex_eta_analysis:MIN_FCAL_ENERGY",       m_FCALEnergyCut);
+	app->SetDefaultParameter("primex_eta_analysis:MAX_FCAL_EXTRA_ENERGY", m_FCALExtraEnergyCut);
+	app->SetDefaultParameter("primex_eta_analysis:MIN_BCAL_ENERGY",       m_BCALEnergyCut);
+	app->SetDefaultParameter("primex_eta_analysis:MIN_BEAM_ENERGY",       m_minBeamEnergyCut);
+	app->SetDefaultParameter("primex_eta_analysis:MAX_BEAM_ENERGY",       m_maxBeamEnergyCut);
+	
+	app->SetDefaultParameter("primex_eta_analysis:FCAL_TOF_CUT", m_FCALTOFCut);
+	
+	app->SetDefaultParameter("primex_eta_analysis:ELAS_CUT_WIDTH",  m_ElasWidth);
+	app->SetDefaultParameter("primex_eta_analysis:ELAS_CUT_SIGMA",  m_ElasSigmaCut);
+	app->SetDefaultParameter("primex_eta_analysis:ELAS_CUT_MU_P0",  m_ElasMean_p0);
+	app->SetDefaultParameter("primex_eta_analysis:ELAS_CUT_MU_P1",  m_ElasMean_p1);
+	
+	app->SetDefaultParameter("primex_eta_analysis:USE_LOG_WEIGHT",  m_UseLogWeight);
+	app->SetDefaultParameter("primex_eta_analysis:BYPASS_TRIGGER",  m_BypassTrigger);
+	
+	//-------------------------------------------------------------------------------------//
+	// initialize lock service:
+	
+	lockService = app->GetService<JLockService>();
+	
+	//-------------------------------------------------------------------------------------//
+	// Initialize all histograms:
+	
+	InitializeHistograms();
 }
 
 //------------------
-// init
+// BeginRun
 //------------------
-jerror_t JEventProcessor_primex_eta_analysis::init(void)
-{
-	TDirectory *dir_primex_eta = new TDirectoryFile("primex_eta_analysis", "primex_eta_analysis");
-	dir_primex_eta->cd();
-	
-	// Distribution of the FCAL energy sum for each different trigger type:
-	for(int itrig=0; itrig<N_TRIGS; itrig++) {
-		h_fcal_energy_sum[itrig] = new TH1F(Form("fcal_energy_sum_%d",itrig), 
-			Form("FCAL Shower Energy Sum (%s); E_{FCAL} [GeV]", trigger_names[itrig].c_str()), 
-			1200, 0., 12.);
-	}
-	
-	// Thrown angle distribution with different cuts on the beam photon energy:
-	TDirectory *dir_thrown = new TDirectoryFile("thrown", "thrown");
-	dir_thrown->cd();
-	for(int icut=0; icut<13; icut++) {
-		double eb_cut = 7.6 + 0.2*(double)(icut);
-		h_theta_thrown[icut] = new TH1F(Form("theta_thrown_%02d", icut), 
-			Form("Thrown Angle of #eta (E_{#gamma} > %.1f GeV)", eb_cut), 650, 0., 6.5);
-	}
-	dir_thrown->cd("../");
-	
-	//====================================================================================//
-	
-	TDirectory *dir_timing = new TDirectoryFile("rf_timing", "rf_timing");
-	dir_timing->cd();
-	// Timing distributions for each different trigger type:
-	for(int itrig=0; itrig<N_TRIGS; itrig++) {
-		h_fcal_rf_dt[itrig] = new TH1F(Form("fcal_rf_dt_%d",itrig), 
-			Form("FCAL - RF Time (%s); [ns]", trigger_names[itrig].c_str()), 
-			2000, -100., 100.);
-		h_bcal_rf_dt[itrig] = new TH1F(Form("bcal_rf_dt_%d",itrig), 
-			Form("BCAL - RF Time (%s); [ns]", trigger_names[itrig].c_str()), 
-			2000, -100., 100.);
-		h_ccal_rf_dt[itrig] = new TH1F(Form("ccal_rf_dt_%d",itrig), 
-			Form("CCAL - RF Time (%s); [ns]", trigger_names[itrig].c_str()), 
-			2000, -100., 100.);
-		h_tof_rf_dt[itrig] = new TH1F(Form("tof_rf_dt_%d",itrig), 
-			Form("TOF - RF Time (%s); [ns]", trigger_names[itrig].c_str()), 
-			2000, -100., 100.);
-		h_sc_rf_dt[itrig] = new TH1F(Form("sc_rf_dt_%d",itrig), 
-			Form("SC - RF Time (%s); [ns]", trigger_names[itrig].c_str()), 
-			2000, -100., 100.);
-		h_tagh_rf_dt[itrig] = new TH1F(Form("tagh_rf_dt_%d",itrig), 
-			Form("TAGH - RF Time (%s); [ns]", trigger_names[itrig].c_str()), 
-			2000, -100.0, 100.0);
-		h_tagm_rf_dt[itrig] = new TH1F(Form("tagm_rf_dt_%d",itrig), 
-			Form("TAGM - RF Time (%s); [ns]", trigger_names[itrig].c_str()), 
-			2000, -100.0, 100.0);
-	}
-	dir_timing->cd("../");
-	
-	//====================================================================================//
-	
-	TDirectory *dir_gg = new TDirectoryFile("eta_gg", "eta_gg");
-	dir_gg->cd();
-	
-	// FCAL-TOF matching distributions:
-	h_fcal_tof_dx = new TH1F("fcal_tof_dx", "x_{FCAL} - x_{TOF} (closest DTOFPoint); [cm]", 2000, -100., 100.);
-	h_fcal_tof_dy = new TH1F("fcal_tof_dy", "y_{FCAL} - y_{TOF} (closest DTOFPoint); [cm]", 2000, -100., 100.);
-	h_fcal_tof_dr = new TH1F("fcal_tof_dr", "Distance between FCAL Shower and closest DTOFPoint; [cm]", 1000, 0., 100.);
-	
-	h_fcal_tof_dt      = new TH1F("fcal_tof_dt",      "t_{FCAL} - t_{TOF}; [ns]", 2000, -100., 100.);
-	h_fcal_tof_dt_cut  = new TH1F("fcal_tof_dt_cut",  "t_{FCAL} - t_{TOF}; [ns]", 2000, -100., 100.);
-	h_fcal_tof_matches = new TH1F("fcal_tof_matches", "Number of TOF Matches per 2-#gamma Event", 3, -0.5, 2.5);
-	
-	// Plot the level of accidentals after elasticity cut:
-	h_beam_rf_dt_cut = new TH1F("beam_rf_dt_cut", "; t_{#gamma} - t_{RF} (ns); counts / 0.1 ns", 2000, -100., 100.);
-	
-	// Plot the level of accidentals in the start counter after elasticity cut:
-	h_sc_rf_dt_cut = new TH1F("sc_rf_dt_cut", "; t_{SC} - t_{RF} (ns); counts / 0.1 ns", 2000, -100., 100.);
-	
-	// Elasticity vs. mass ratio:
-	h_elas_vs_mgg = new TH2F("elas_vs_mgg", 
-		"; M_{#gamma#gamma}/M_{#eta}(PDG); #left(E_{1}+E_{2}#right)/E_{#eta}#left(E_{#gamma},#theta_{#gamma#gamma}#right)", 
-		1000, 0., 2., 1000, 0., 2.);
-	
-	//------------------------------------//
-	
-	// Elasticity with tagged photon:
-	h_elas = new TH2F("elas", "Elasticity", 650, 0., 6.5, 1000, 0., 2.);
-	h_elas->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
-	h_elas->GetYaxis()->SetTitle("E_{#gamma#gamma}/E_{#gamma}");
-	
-	// Elasticity with coherently-produced eta:
-	h_elas_corr = new TH2F("elas_corr", "Elasticity (corrected for recoil)", 650, 0., 6.5, 1000, 0., 2.);
-	h_elas_corr->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
-	h_elas_corr->GetYaxis()->SetTitle("E_{#gamma#gamma}/E_{#eta}#left(E_{#gamma},#theta_{#gamma#gamma}#right)");
-	
-	h_elas_corr_main = new TH2F("elas_corr_main", "Elasticity (corrected for recoil)", 650, 0., 6.5, 1000, 0., 2.);
-	h_elas_corr_main->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
-	h_elas_corr_main->GetYaxis()->SetTitle("E_{#gamma#gamma}/E_{#eta}#left(E_{#gamma},#theta_{#gamma#gamma}#right)");
-	
-	h_elas_corr_side = new TH2F("elas_corr_side", "Elasticity (corrected for recoil)", 650, 0., 6.5, 1000, 0., 2.);
-	h_elas_corr_side->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
-	h_elas_corr_side->GetYaxis()->SetTitle("E_{#gamma#gamma}/E_{#eta}#left(E_{#gamma},#theta_{#gamma#gamma}#right)");
-	
-	//------------------------------------//
-	
-	// 2-photon invariant mass vs. angle:
-	h_mgg = new TH2F("mgg", "Two-Photon Invariant Mass", 650, 0., 6.5, 600, 0., 1.2);
-	h_mgg->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
-	h_mgg->GetYaxis()->SetTitle("M_{#gamma#gamma} [GeV/c^{2}]");
-	h_mgg->Sumw2();
-	
-	// main RF bunch:
-	h_mgg_main = new TH2F("mgg_main", "Two-Photon Invariant Mass", 650, 0., 6.5, 600, 0., 1.2);
-	h_mgg_main->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
-	h_mgg_main->GetYaxis()->SetTitle("M_{#gamma#gamma} [GeV/c^{2}]");
-	h_mgg_main->Sumw2();
-	
-	// accidental sidebands:
-	h_mgg_side = new TH2F("mgg_side", "Two-Photon Invariant Mass", 650, 0., 6.5, 600, 0., 1.2);
-	h_mgg_side->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
-	h_mgg_side->GetYaxis()->SetTitle("M_{#gamma#gamma} [GeV/c^{2}]");
-	h_mgg_side->Sumw2();
-	
-	//------------------------------------//
-	
-	// Energy-constrained mass vs. angle:
-	h_mgg_const = new TH2F("mgg_const", "Energy-Constrained Inv Mass", 650, 0., 6.5, 600, 0., 1.2);
-	h_mgg_const->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
-	h_mgg_const->GetYaxis()->SetTitle("M_{#gamma#gamma}^{constr} [GeV/c^{2}]");
-	h_mgg_const->Sumw2();
-	
-	// main RF bunch:
-	h_mgg_const_main = new TH2F("mgg_const_main", "Energy-Constrained Inv Mass", 650, 0., 6.5, 600, 0., 1.2);
-	h_mgg_const_main->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
-	h_mgg_const_main->GetYaxis()->SetTitle("M_{#gamma#gamma}^{constr} [GeV/c^{2}]");
-	h_mgg_const_main->Sumw2();
-	
-	// Accidental side-bands:
-	h_mgg_const_side = new TH2F("mgg_const_side", "Energy-Constrained Inv Mass", 650, 0., 6.5, 600, 0., 1.2);
-	h_mgg_const_side->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
-	h_mgg_const_side->GetYaxis()->SetTitle("M_{#gamma#gamma}^{constr} [GeV/c^{2}]");
-	h_mgg_const_side->Sumw2();
-	
-	// Energy-constrained mass vs. energy-constrained angle:
-	h_mgg_const_corr = new TH2F("mgg_const_corr", "Energy-Constrained Inv Mass", 650, 0., 6.5, 600, 0., 1.2);
-	h_mgg_const_corr->GetXaxis()->SetTitle("#theta_{#gamma#gamma}^{constr} [#circ]");
-	h_mgg_const_corr->GetYaxis()->SetTitle("M_{#gamma#gamma}^{constr} [GeV/c^{2}]");
-	h_mgg_const_corr->Sumw2();
-	
-	//------------------------------------//
-	
-	// x-y position of FCAL showers that survive all cuts:
-	h_xy_1 = new TH2F("xy_1", "Postion of Shower 1; x_{1} [cm]; y_{1} [cm]", 500, -100., 100., 500, -100., 100.);
-	h_xy_2 = new TH2F("xy_2", "Postion of Shower 2; x_{2} [cm]; y_{2} [cm]", 500, -100., 100., 500, -100., 100.);
-	
-	//------------------------------------//
-	// Veto Plots:
-	
-	for(int ihist=0; ihist<m_n_vetos; ihist++) {
-		
-		h_elas_veto[ihist] = new TH2F(Form("elas_veto_%d",ihist), 
-			Form("Elasticity (Veto Option %d)", ihist+1), 650, 0., 6.5, 1000, 0., 2.0);
-		h_elas_veto[ihist]->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
-		h_elas_veto[ihist]->GetYaxis()->SetTitle(
-			"E_{#gamma#gamma}/E_{#eta}#left(E_{#gamma},#theta_{#gamma#gamma}#right)");
-		
-		h_mgg_veto[ihist] = new TH2F(Form("mgg_veto_%d",ihist), 
-			Form("Two-Photon Invariant Mass (Veto Option %d)", ihist+1), 650, 0., 6.5, 600, 0., 1.2);
-		h_mgg_veto[ihist]->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
-		h_mgg_veto[ihist]->GetYaxis()->SetTitle("M_{#gamma#gamma} [GeV/c^{2}]");
-		h_mgg_veto[ihist]->Sumw2();
-		
-		h_mgg_const_veto[ihist] = new TH2F(Form("mgg_const_veto_%d",ihist), 
-			Form("Energy-Constrained Invariant Mass (Veto Option %d)", ihist+1), 650, 0., 6.5, 600, 0., 1.2);
-		h_mgg_const_veto[ihist]->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
-		h_mgg_const_veto[ihist]->GetYaxis()->SetTitle("M_{#gamma#gamma}^{constr} [GeV/c^{2}]");
-		h_mgg_const_veto[ihist]->Sumw2();
-		
-		h_mgg_const_coh_veto[ihist] = new TH2F(Form("mgg_const_coh_veto_%d",ihist), 
-			Form("Energy-Constrained Invariant Mass (Veto Option %d)", ihist+1), 650, 0., 6.5, 600, 0., 1.2);
-		h_mgg_const_coh_veto[ihist]->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
-		h_mgg_const_coh_veto[ihist]->GetYaxis()->SetTitle("M_{#gamma#gamma}^{constr} [GeV/c^{2}]");
-		h_mgg_const_coh_veto[ihist]->Sumw2();
-		
-		h_mm_veto[ihist] = new TH2F(Form("mm_veto_%d",ihist),
-			Form("Missing Mass Squared (Veto Option %d)", ihist+1), 650, 0., 6.5, 1500, 0., 30.0);
-		h_mm_veto[ihist]->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
-		h_mm_veto[ihist]->GetYaxis()->SetTitle("M_{miss}^{2} [GeV^{2}/c^{4}]");
-		h_mm_veto[ihist]->Sumw2();
-		
-		h_mm_const_veto[ihist] = new TH2F(Form("mm_const_veto_%d",ihist),
-			Form("Missing Mass Squared (Energy-constrained) (Veto Option %d)", ihist+1), 650, 0., 6.5, 1500, 0., 30.0);
-		h_mm_const_veto[ihist]->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
-		h_mm_const_veto[ihist]->GetYaxis()->SetTitle("M_{miss}^{2} [GeV^{2}/c^{4}]");
-		h_mm_const_veto[ihist]->Sumw2();
-		
-		h_mm_const_coh_veto[ihist] = new TH2F(Form("mm_const_coh_veto_%d",ihist),
-			Form("Missing Mass Squared (Energy-constrained) (Veto Option %d)", ihist+1), 650, 0., 6.5, 1500, 0., 30.0);
-		h_mm_const_coh_veto[ihist]->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
-		h_mm_const_coh_veto[ihist]->GetYaxis()->SetTitle("M_{miss}^{2} [GeV^{2}/c^{4}]");
-		h_mm_const_coh_veto[ihist]->Sumw2();
-	}
-	
-	//------------------------------------//
-	
-	// Missing-mass vs. angle:
-	
-	h_mm_vs_theta = new TH2F("mm_vs_theta", 
-		"Squared Missing Mass", 650, 0., 6.5, 1500, 0., 30.);
-	h_mm_vs_theta->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
-	h_mm_vs_theta->GetYaxis()->SetTitle("#Deltam^{2} [GeV^{2}/c^{4}]");
-	h_mm_vs_theta->Sumw2();
-	
-	h_mm_const_vs_theta = new TH2F("mm_const_vs_theta", 
-		"Squared Missing Mass", 650, 0., 6.5, 1500, 0., 30.);
-	h_mm_const_vs_theta->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
-	h_mm_const_vs_theta->GetYaxis()->SetTitle("#Deltam^{2} [GeV^{2}/c^{4}]");
-	h_mm_const_vs_theta->Sumw2();
-	
-	h_mm_const_coh_vs_theta = new TH2F("mm_const_coh_vs_theta", 
-		"Squared Missing Mass", 650, 0., 6.5, 1500, 0., 30.);
-	h_mm_const_coh_vs_theta->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
-	h_mm_const_coh_vs_theta->GetYaxis()->SetTitle("#Deltam^{2} [GeV^{2}/c^{4}]");
-	h_mm_const_coh_vs_theta->Sumw2();
-	
-	// With cut on invariant mass of 2-photon pair:
-	
-	h_mm_vs_theta_eta_cut = new TH2F("mm_vs_theta_eta_cut", 
-		"Squared Missing Mass (m_{#gamma#gamma} cut)", 650, 0., 6.5, 1500, 0., 30.);
-	h_mm_vs_theta_eta_cut->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
-	h_mm_vs_theta_eta_cut->GetYaxis()->SetTitle("#Deltam^{2} [GeV^{2}/c^{4}]");
-	h_mm_vs_theta_eta_cut->Sumw2();
-	
-	h_mm_const_vs_theta_eta_cut = new TH2F("mm_const_vs_theta_eta_cut", 
-		"Squared Missing Mass (m_{#gamma#gamma} cut)", 650, 0., 6.5, 1500, 0., 30.);
-	h_mm_const_vs_theta_eta_cut->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
-	h_mm_const_vs_theta_eta_cut->GetYaxis()->SetTitle("#Deltam^{2} [GeV^{2}/c^{4}]");
-	h_mm_const_vs_theta_eta_cut->Sumw2();
-	
-	h_mm_const_coh_vs_theta_eta_cut = new TH2F("mm_const_coh_vs_theta_eta_cut", 
-		"Squared Missing Mass (m_{#gamma#gamma} cut)", 650, 0., 6.5, 1500, 0., 30.);
-	h_mm_const_coh_vs_theta_eta_cut->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
-	h_mm_const_coh_vs_theta_eta_cut->GetYaxis()->SetTitle("#Deltam^{2} [GeV^{2}/c^{4}]");
-	h_mm_const_coh_vs_theta_eta_cut->Sumw2();
-	
-	// apply elasticity cut to both:
-	
-	h_mm_vs_theta_eta_elas_cut = new TH2F("mm_vs_theta_eta_elas_cut", 
-		"Squared Missing Mass (m_{#gamma#gamma} + elasticity cut)", 650, 0., 6.5, 1500, 0., 30.);
-	h_mm_vs_theta_eta_elas_cut->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
-	h_mm_vs_theta_eta_elas_cut->GetYaxis()->SetTitle("#Deltam^{2} [GeV^{2}/c^{4}]");
-	h_mm_vs_theta_eta_elas_cut->Sumw2();
-	
-	h_mm_const_vs_theta_eta_elas_cut = new TH2F("mm_const_vs_theta_eta_elas_cut", 
-		"Squared Missing Mass (m_{#gamma#gamma} + elasticity cut)", 650, 0., 6.5, 1500, 0., 30.);
-	h_mm_const_vs_theta_eta_elas_cut->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
-	h_mm_const_vs_theta_eta_elas_cut->GetYaxis()->SetTitle("#Deltam^{2} [GeV^{2}/c^{4}]");
-	h_mm_const_vs_theta_eta_elas_cut->Sumw2();
-	
-	h_mm_const_coh_vs_theta_eta_elas_cut = new TH2F("mm_const_coh_vs_theta_eta_elas_cut", 
-		"Squared Missing Mass (m_{#gamma#gamma} + elasticity cut)", 650, 0., 6.5, 1500, 0., 30.);
-	h_mm_const_coh_vs_theta_eta_elas_cut->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
-	h_mm_const_coh_vs_theta_eta_elas_cut->GetYaxis()->SetTitle("#Deltam^{2} [GeV^{2}/c^{4}]");
-	h_mm_const_coh_vs_theta_eta_elas_cut->Sumw2();
-	
-	/*
-	// Hybrid (rotated) mass:
-	h_hmass = new TH2F("hmass", "Hybrid Mass", 
-		650, 0., 6.5, 1000, -1.0, 1.0);
-	h_hmass->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
-	h_hmass->GetYaxis()->SetTitle("Hybrid Mass");
-	h_hmass->Sumw2();
-	
-	// apply eta invariant mass cut:
-	
-	h_hmass_eta_cut = new TH2F("hmass_eta_cut", "Hybrid Mass (m_{#gamma#gamma} cut)", 
-		650, 0., 6.5, 1000, -1.0, 1.0);
-	h_hmass_eta_cut->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
-	h_hmass_eta_cut->GetYaxis()->SetTitle("Hybrid Mass");
-	h_hmass_eta_cut->Sumw2();
-	
-	// apply elasticity cut:
-	
-	h_hmass_eta_elas_cut = new TH2F("hmass_eta_elas_cut", "Hybrid Mass (m_{#gamma#gamma} + elasticity cut)", 
-		650, 0., 6.5, 1000, -1.0, 1.0);
-	h_hmass_eta_elas_cut->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
-	h_hmass_eta_elas_cut->GetYaxis()->SetTitle("Hybrid Mass");
-	h_hmass_eta_elas_cut->Sumw2();
-	*/
-	//------------------------------------//
-	
-	// reconstructed angle of two-photon pair vs. thrown angle (only filled for MC):
-	h_rec_vs_thrown = new TH2F("rec_vs_thrown", 
-		"Reconstructed Angle vs. Thrown Angle; #theta_{thrown} [#circ]; #theta_{rec} [#circ]", 
-		650, 0., 6.5, 650, 0., 6.5);
-	h_rec_vs_thrown->Sumw2();
-	
-	// invariant mass vs. thrown angle of eta (only filled for MC):
-	h_mgg_thrown = new TH2F("mgg_thrown", "Two-Photon Invariant Mass", 650, 0., 6.5, 600, 0., 1.2);
-	h_mgg_thrown->GetXaxis()->SetTitle("#theta_{thrown} [#circ]");
-	h_mgg_thrown->GetYaxis()->SetTitle("M_{#gamma#gamma} [GeV/c^{2}]");
-	h_mgg_thrown->Sumw2();
-	
-	// energy-constrained invariant mass vs. thrown angle of eta (only filled for MC):
-	h_mgg_const_thrown = new TH2F("mgg_const_thrown", "Energy-Constrained Inv Mass", 
-		650, 0., 6.5, 600, 0., 1.2);
-	h_mgg_const_thrown->GetXaxis()->SetTitle("#theta_{thrown} [#circ]");
-	h_mgg_const_thrown->GetYaxis()->SetTitle("M_{#gamma#gamma}^{constr} [GeV/c^{2}]");
-	h_mgg_const_thrown->Sumw2();
-	
-	dir_gg->cd("../");
-	
-	//====================================================================================//
-	
-	dir_primex_eta->cd("../");
-	
-	return NOERROR;
-}
-
-//------------------
-// brun
-//------------------
-jerror_t JEventProcessor_primex_eta_analysis::brun(JEventLoop *eventLoop, int32_t runnumber)
+void JEventProcessor_primex_eta_analysis::BeginRun(const std::shared_ptr<const JEvent> &event)
 {
 	//--------------------------------------------------------------//
 	// Get geometry information for each run from CCDB:
 	
-	DGeometry*   dgeom = NULL;
-	DApplication* dapp = dynamic_cast<DApplication*>(eventLoop->GetJApplication());
-	if(dapp)     dgeom = dapp->GetDGeometry(runnumber);
+	DGeometry *locGeometry = DEvent::GetDGeometry(event);
 	
-	double loc_targetZ = 65.0;
-	double loc_x, loc_y, loc_z;
+	double locTargetZ = 65.0;
+	double locX, locY, locZ;
 	
-	if(dgeom==NULL) {
+	if(locGeometry==nullptr) {
 		cerr << "No geometry accessbile to plugin." << endl;
-		return RESOURCE_UNAVAILABLE;
+		exit(1);
 	}
 	
 	// Get target position:
-	dgeom->GetTargetZ(loc_targetZ);
+	locGeometry->GetTargetZ(locTargetZ);
 	
 	// Get position of FCAL face:
-	dgeom->GetFCALPosition(loc_x, loc_y, loc_z);
-	m_fcalFace.SetXYZ(loc_x, loc_y, loc_z);
+	locGeometry->GetFCALPosition(locX, locY, locZ);
+	m_fcalFace.SetXYZ(locX, locY, locZ);
 	
 	// Get position of CCAL face:
-	dgeom->GetCCALPosition(loc_x, loc_y, loc_z);
-	m_ccalFace.SetXYZ(loc_x, loc_y, loc_z);
+	locGeometry->GetCCALPosition(locX, locY, locZ);
+	m_ccalFace.SetXYZ(locX, locY, locZ);
 	
 	// Get beam spot on center of target:
-	jana::JCalibration *jcalib = japp->GetJCalibration(runnumber);
-	std::map<string, float> beam_spot;
-	jcalib->Get("PHOTON_BEAM/beam_spot", beam_spot);
-	m_beamSpot.SetXYZ(beam_spot.at("x"), beam_spot.at("y"), loc_targetZ);
+	std::map<string, float> locBeamSpot;
+	DEvent::GetCalib(event, "PHOTON_BEAM/beam_spot", locBeamSpot);
+	m_beamSpot.SetXYZ(locBeamSpot.at("x"), locBeamSpot.at("y"), locTargetZ);
 	
 	// Get start counter geomety:
-	dgeom->GetStartCounterGeom(m_sc_pos, m_sc_norm);
+	locGeometry->GetStartCounterGeom(m_scPos, m_scNorm);
 	
-	//--------------------------------------------------------------//
 	// Set the target according to the run number:
-	
-	if(runnumber < 60000 || 
-		( 70000 <= runnumber && runnumber <=  79999) || 
-		(120000 <= runnumber && runnumber <= 129999)
-	) {
-		m_Target = Proton;
-	} else if(
-		( 60000 <= runnumber && runnumber <=  61354) || 
-		( 80000 <= runnumber && runnumber <=  81381) || 
-		(110000 <= runnumber && runnumber <= 110621)
-	) { 
-		m_Target = Be9;
-	} else if(
-		( 60000 <= runnumber && runnumber <=  69999) || 
-		( 80000 <= runnumber && runnumber <=  81716) || 
-		(110000 <= runnumber && runnumber <= 112001) || 
-		( 90034 <= runnumber && runnumber <=  90200) || 
-		( 90607 <= runnumber && runnumber <=  90660)) {
-		m_Target = Helium;
-	} else if(
-		( 90207 <= runnumber && runnumber <=  90249) || 
-		( 90558 <= runnumber && runnumber <=  90601)
-	) {
-		m_Target = Deuteron;
-	} else if(90263 <= runnumber && runnumber <= 90536) {
-		m_Target = C12;
-	} else {
-		m_Target = Proton;
-	}
+	int32_t locRunNumber = event->GetRunNumber();
+	m_Target = GetTargetType(locRunNumber);
 	
 	//--------------------------------------------------------------//
+	// Geometry corrections for PrimEx run periods:
 	
-	if(runnumber>60000 && runnumber<69999) 
-	{
-		m_phase_val = 1;
+	m_phaseVal = GetPrimExPhase(locRunNumber);
+	
+	if(m_phaseVal==1) {
 		
-		//--------------------------------------------------------------------//
-		// For phase 1, update the geometry from Compton alignment studies:
+		m_fcalCorrection.SetXYZ(0.455 - m_fcalFace.X(), -0.032 - m_fcalFace.Y(), 0.0);
+		m_fcalFace += m_fcalCorrection;
 		
-		// (2/4/2024): Correction to alignment after Simon updated beam spot with new CDC alignment:
+		m_ccalCorrection.SetXYZ(-0.082 - m_ccalFace.X(), 0.061 - m_ccalFace.Y(), 0.0);
+		if(locRunNumber>=61483) m_ccalCorrection.SetY(0.051 - m_ccalFace.Y());
+		m_ccalFace += m_ccalCorrection;
 		
-		m_fcal_correction.SetXYZ(0.455 - m_fcalFace.X(), -0.032 - m_fcalFace.Y(), 0.0);
-		m_fcalFace += m_fcal_correction;
-		
-		m_ccal_correction.SetXYZ(-0.082 - m_ccalFace.X(), 0.061 - m_ccalFace.Y(), 0.0);
-		if(runnumber>=61483) m_ccal_correction.SetY(0.051 - m_ccalFace.Y());
-		m_ccalFace += m_ccal_correction;
-		
-		if(runnumber<61483) 
+		if(locRunNumber<61483) 
 		{
 			m_beamSpot.SetX( 0.027);
 			m_beamSpot.SetY(-0.128);
-		} else if(runnumber<61774) 
+		}
+		else if(locRunNumber<61774) 
 		{
 			m_beamSpot.SetX( 0.001);
 			m_beamSpot.SetY(-0.077);
-		} else 
+		}
+		else 
 		{
 			m_beamSpot.SetX( 0.038);
 			m_beamSpot.SetY(-0.095);
 		}
 	}
-	else if(runnumber>80000 && runnumber < 89999) 
-	{
-		m_phase_val = 2;
-		m_fcal_correction.SetXYZ(0.0, 0.0, 0.0);
-		m_ccal_correction.SetXYZ(0.0, 0.0, 0.0);
-	} 
-	else if(runnumber>110000 && runnumber < 119999) 
-	{
-		m_phase_val = 3;
-		m_fcal_correction.SetXYZ(0.0, 0.0, 0.0);
-		m_ccal_correction.SetXYZ(0.0, 0.0, 0.0);
-	}
-	else 
-	{
-		m_phase_val = 0;
-		m_fcal_correction.SetXYZ(0.0, 0.0, 0.0);
-		m_ccal_correction.SetXYZ(0.0, 0.0, 0.0);
+	else {
+		m_fcalCorrection.SetXYZ(0.0, 0.0, 0.0);
+		m_ccalCorrection.SetXYZ(0.0, 0.0, 0.0);
 	}
 	
-	/*------------------------------------------------------------------------------------------------------*/
-	// Code to obtain the scaling factors for accidental beam bunches 
-	//     (copied from DAnalysisUtilities.cc in gluex_root_analysis)
+	//--------------------------------------------------------------//
+	// Obtain the scaling factors for accidental beam bunches 
 	
-	ostringstream locCommandStream;
-	locCommandStream << "ccdb dump ANALYSIS/accidental_scaling_factor -r " << runnumber;
-	FILE* locInputFile = gSystem->OpenPipe(locCommandStream.str().c_str(), "r");
-	if(locInputFile == NULL) {
-		
+	std::map<string, float> locScalingFactors;
+	if(DEvent::GetCalib(event, "ANALYSIS/accidental_scaling_factor", locScalingFactors)) {
+		m_HodoscopeHiFactor    = locScalingFactors.at("HODOSCOPE_HI_FACTOR");
+		m_HodoscopeHiFactorErr = locScalingFactors.at("HODOSCOPE_HI_FACTOR_ERR");
+		m_MicroscopeFactor     = locScalingFactors.at("MICROSCOPE_FACTOR");
+		m_MicroscopeFactorErr  = locScalingFactors.at("MICROSCOPE_FACTOR_ERR");
+		m_HodoscopeLoFactor    = locScalingFactors.at("HODOSCOPE_LO_FACTOR");
+		m_HodoscopeLoFactorErr = locScalingFactors.at("HODOSCOPE_LO_FACTOR_ERR");
+		m_TAGMEnergyBoundHi    = locScalingFactors.at("MICROSCOPE_ENERGY_HI");
+		m_TAGMEnergyBoundLo    = locScalingFactors.at("MICROSCOPE_ENERGY_LO");
+	}
+	else {
+		// Set up defaults if constants weren't available:
 		m_HodoscopeHiFactor    = 1.00;
 		m_HodoscopeHiFactorErr = 0.01;
-		m_HodoscopeLoFactor    = 1.00;
-		m_HodoscopeLoFactorErr = 0.01;
 		m_MicroscopeFactor     = 1.00;
 		m_MicroscopeFactorErr  = 0.01;
-		m_TAGMEnergyBoundHi    = 9.00;
-		m_TAGMEnergyBoundLo    = 8.00;
-		
-		return NOERROR;
-		/*
-		cerr << "Could not load ANALYSIS/accidental_scaling_factor from CCDB !" << endl;
-		gSystem->Exit(1);        // make sure we don't fail silently
-		return RESOURCE_UNAVAILABLE;    // sanity check, this shouldn't be executed!
-		*/
-	}
-	
-	//get the first line
-	char buff[1024]; // I HATE char buffers
-	if(fgets(buff, sizeof(buff), locInputFile) == NULL)
-	{
-		m_HodoscopeHiFactor    = 1.00;
-		m_HodoscopeHiFactorErr = 0.01;
 		m_HodoscopeLoFactor    = 1.00;
 		m_HodoscopeLoFactorErr = 0.01;
-		m_MicroscopeFactor     = 1.00;
-		m_MicroscopeFactorErr  = 0.01;
-		m_TAGMEnergyBoundHi    = 9.00;
-		m_TAGMEnergyBoundLo    = 8.00;
-		
-		gSystem->ClosePipe(locInputFile);
-		return NOERROR;
-		/*
-		//vector<double> locCachedValues = { -1., -1., -1., -1., -1., -1., -1., -1. };
-		//dAccidentalScalingFactor_Cache[runnumber] = locCachedValues;   // give up for this run
-		gSystem->ClosePipe(locInputFile);
-		cerr << "Could not parse ANALYSIS/accidental_scaling_factor from CCDB !" << endl;
-		gSystem->Exit(1);        // make sure we don't fail silently
-		return RESOURCE_UNAVAILABLE;    // sanity check, this shouldn't be executed!
-		*/
+		m_TAGMEnergyBoundHi    = 8.00;
+		m_TAGMEnergyBoundLo    = 9.00;
 	}
-	
-	//get the second line (where the # is)
-	if(fgets(buff, sizeof(buff), locInputFile) == NULL)
-	{
-		m_HodoscopeHiFactor    = 1.00;
-		m_HodoscopeHiFactorErr = 0.01;
-		m_HodoscopeLoFactor    = 1.00;
-		m_HodoscopeLoFactorErr = 0.01;
-		m_MicroscopeFactor     = 1.00;
-		m_MicroscopeFactorErr  = 0.01;
-		m_TAGMEnergyBoundHi    = 9.00;
-		m_TAGMEnergyBoundLo    = 8.00;
-		
-		gSystem->ClosePipe(locInputFile);
-		return NOERROR;
-		/*
-		//vector<double> locCachedValues = { -1., -1., -1., -1., -1., -1., -1., -1. };
-		//dAccidentalScalingFactor_Cache[runnumber] = locCachedValues;   // give up for this run
-		gSystem->ClosePipe(locInputFile);
-		cerr << "Could not parse ANALYSIS/accidental_scaling_factor from CCDB !" << endl;
-		gSystem->Exit(1);        // make sure we don't fail silently
-		return RESOURCE_UNAVAILABLE;    // sanity check, this shouldn't be executed!
-		*/
-	}
-	
-	// catch some CCDB error conditions
-	if(strncmp(buff, "Cannot", 6) == 0) 
-	{
-		m_HodoscopeHiFactor    = 1.00;
-		m_HodoscopeHiFactorErr = 0.01;
-		m_HodoscopeLoFactor    = 1.00;
-		m_HodoscopeLoFactorErr = 0.01;
-		m_MicroscopeFactor     = 1.00;
-		m_MicroscopeFactorErr  = 0.01;
-		m_TAGMEnergyBoundHi    = 9.00;
-		m_TAGMEnergyBoundLo    = 8.00;
-		
-		gSystem->ClosePipe(locInputFile);
-		return NOERROR;
-		/*
-		// no assignment for this run
-		//vector<double> locCachedValues = { -1., -1., -1., -1., -1., -1., -1., -1. };
-		//dAccidentalScalingFactor_Cache[runnumber] = locCachedValues;   // give up for this run
-		gSystem->ClosePipe(locInputFile);
-		cerr << "No data available for ANALYSIS/accidental_scaling_factor, run " << runnumber << " from CCDB !" << endl;
-		gSystem->Exit(1);        // make sure we don't fail silently
-		return RESOURCE_UNAVAILABLE;    // sanity check, this shouldn't be executed!
-		*/
-	}
-	
-	istringstream locStringStream(buff);
-	
-	double locHodoscopeHiFactor    = -1.0;
-	double locHodoscopeHiFactorErr = -1.0;
-	double locHodoscopeLoFactor    = -1.0;
-	double locHodoscopeLoFactorErr = -1.0;
-	double locMicroscopeFactor     = -1.0;
-	double locMicroscopeFactorErr  = -1.0;
-	double locTAGMEnergyBoundHi    = -1.0;
-	double locTAGMEnergyBoundLo    = -1.0;
-	
-	//extract it
-	locStringStream >> locHodoscopeHiFactor >> locHodoscopeHiFactorErr >> locHodoscopeLoFactor
-		>> locHodoscopeLoFactorErr >> locMicroscopeFactor >> locMicroscopeFactorErr
-		>> locTAGMEnergyBoundHi >> locTAGMEnergyBoundLo;
-	
-	//Close the pipe
-	gSystem->ClosePipe(locInputFile);
-	
-	m_HodoscopeHiFactor    = locHodoscopeHiFactor;
-	m_HodoscopeHiFactorErr = locHodoscopeHiFactorErr;
-	m_HodoscopeLoFactor    = locHodoscopeLoFactor;
-	m_HodoscopeLoFactorErr = locHodoscopeLoFactorErr;
-	m_MicroscopeFactor     = locMicroscopeFactor;
-	m_MicroscopeFactorErr  = locMicroscopeFactorErr;
-	m_TAGMEnergyBoundHi    = locTAGMEnergyBoundHi;
-	m_TAGMEnergyBoundLo    = locTAGMEnergyBoundLo;
-	
-	/*------------------------------------------------------------------------------------------------------*/
-	
-	return NOERROR;
+	//--------------------------------------------------------------//
 }
 
 //------------------
-// evnt
+// Process
 //------------------
-jerror_t JEventProcessor_primex_eta_analysis::evnt(JEventLoop *eventLoop, uint64_t eventnumber)
+void JEventProcessor_primex_eta_analysis::Process(const std::shared_ptr<const JEvent> &event)
 {
-	//-----------------------------------------------------//
-	// Get RF Time
+	//----------------------------------------------------//
+	// Get the event RF Time:
 	
-	const DEventRFBunch *locRFBunch = NULL;
-	try {
-		eventLoop->GetSingle(locRFBunch, "CalorimeterOnly");
-	} catch(...) {return NOERROR;}
-	double locRFTime = locRFBunch->dTime;
+	auto locEventRFBunches = event->Get<DEventRFBunch>("CalorimeterOnly");
 	
-	//-----------------------------------------------------//
-	// Data objects
+	// return if no RF bunch is available:
+	if(locEventRFBunches.empty()) return;
 	
-	vector<const DBeamPhoton*> locDBeamPhotons;
-	eventLoop->Get(locDBeamPhotons);
+	// skip events with less than 2 votes on RF bunch:
+	if(locEventRFBunches[0]->dNumParticleVotes < 2) return;
 	
-	vector<const DFCALShower*> locDFCALShowers;
-	eventLoop->Get(locDFCALShowers);
+	double locRFTime = locEventRFBunches[0]->dTime;
 	
-	vector<const DCCALShower*> locDCCALShowers;
-	eventLoop->Get(locDCCALShowers);
+	//----------------------------------------------------//
+	// Get Data Objects:
 	
-	vector<const DBCALShower*> locDBCALShowers;
-	eventLoop->Get(locDBCALShowers);
+	auto locBeamPhotons = event->Get<DBeamPhoton>();
+	auto locFCALShowers = event->Get<DFCALShower>();
+	auto locBCALShowers = event->Get<DBCALShower>();
+	auto locCCALShowers = event->Get<DCCALShower>();
+	auto locTOFPoints   = event->Get<DTOFPoint>();
+	auto locSCHits      = event->Get<DSCHit>();
+	auto locMCThrown    = event->Get<DMCThrown>();
 	
-	vector<const DTOFPoint*> locDTOFPoints;
-	eventLoop->Get(locDTOFPoints);
+	//----------------------------------------------------//
+	// Get Trigger Information:
 	
-	vector<const DSCHit*> locDSCHits;
-	eventLoop->Get(locDSCHits);
+	bool locTrigConditions[m_nTrigs];
+	for(int itrig=0; itrig<m_nTrigs; itrig++) { locTrigConditions[itrig] = false; }
 	
-	vector<const DMCThrown*> locDMCThrown;	
-	eventLoop->Get(locDMCThrown);
-	
-	//-----------------------------------------------------//
-	// Trigger information
-	
-	bool trig_conditions[N_TRIGS];
-	for(int itrig=0; itrig<N_TRIGS; itrig++) { trig_conditions[itrig] = false; }
-	
-	if(locDMCThrown.size() > 0) 
+	if(locMCThrown.size() > 0) 
 	{
-		trig_conditions[0] = true;
-		trig_conditions[1] = true;
-	} else if(m_BYPASS_TRIGGER) {
-		trig_conditions[0] = true;
-		trig_conditions[1] = true;
+		locTrigConditions[0] = true;
+		locTrigConditions[1] = true;
+	} else if(m_BypassTrigger) {
+		locTrigConditions[0] = true;
+		locTrigConditions[1] = true;
 	} else {
-		const DL1Trigger *trig = NULL;
-		try {
-			eventLoop->GetSingle(trig);
-		} catch (...) {}
-		if (trig == NULL) { return NOERROR; }
+		const DL1Trigger* trig = event->GetSingle<DL1Trigger>();
+		if(trig == nullptr) { return; }
 		
 		uint32_t trigmask    = trig->trig_mask;	
 		uint32_t fp_trigmask = trig->fp_trig_mask;
 		
-		if(!trigmask)   return NOERROR;
-		if(fp_trigmask) return NOERROR;
+		if(!trigmask)   return;
+		if(fp_trigmask) return;
 		
-		if(trigmask & (1 <<  1)) trig_conditions[0] = true; // FCAL Energy Sum
-		if(trigmask & (1 <<  2)) trig_conditions[1] = true; // FCAL Energy Sum (low-threshold, phase 3 only)
-		if(trigmask & (1 <<  3)) trig_conditions[2] = true; // PS
-		if(trigmask & (1 << 10)) trig_conditions[3] = true; // CCAL Energy Sum
+		if(trigmask & (1 <<  1)) locTrigConditions[0] = true; // FCAL Energy Sum
+		if(trigmask & (1 <<  2)) locTrigConditions[1] = true; // FCAL Energy Sum (low-threshold, phase 3 only)
+		if(trigmask & (1 <<  3)) locTrigConditions[2] = true; // PS
+		if(trigmask & (1 << 10)) locTrigConditions[3] = true; // CCAL Energy Sum
 	}
 	
 	//-----------------------------------------------------//
 	// Apply fill lock for multi-threaded running:
 	
-	japp->RootFillLock(this);
+	lockService->RootFillLock(this);
 	
 	//-----------------------------------------------------//
 	// Plot thrown distributions (if MC)
@@ -720,9 +268,8 @@ jerror_t JEventProcessor_primex_eta_analysis::evnt(JEventLoop *eventLoop, uint64
 	double locThrownEnergy = 0.;
 	double locThrownAngle  = 0.;
 	
-	if(locDMCThrown.size() > 0) {
-		const DMCReaction* locDMCReactions = NULL;
-		eventLoop->GetSingle(locDMCReactions);
+	if(locMCThrown.size()) {
+		const DMCReaction* locDMCReaction = event->GetSingle<DMCReaction>();
 		
 		TLorentzVector locEtaMCP4(0, 0, 0, 0);
 		vector<TLorentzVector> locPhotonsMCList; locPhotonsMCList.clear();
@@ -731,8 +278,8 @@ jerror_t JEventProcessor_primex_eta_analysis::evnt(JEventLoop *eventLoop, uint64
 		//vector<TLorentzVector> locPsMCList; locPsMCList.clear();
 		//vector<TLorentzVector> locNsMCList; locNsMCList.clear();
 		
-		for(unsigned int i = 0; i < locDMCThrown.size(); i++) {
-			const DMCThrown *mcthrown = locDMCThrown[i];
+		for(unsigned int i = 0; i < locMCThrown.size(); i++) {
+			const DMCThrown *mcthrown = locMCThrown[i];
 			double p     = mcthrown->momentum().Mag();
 			double theta = mcthrown->momentum().Theta();
 			double phi   = mcthrown->momentum().Phi();
@@ -758,181 +305,183 @@ jerror_t JEventProcessor_primex_eta_analysis::evnt(JEventLoop *eventLoop, uint64
 		}
 		
 		locIsMC         = true;
-		locThrownEnergy = locDMCReactions->beam.energy();
+		locThrownEnergy = locDMCReaction->beam.energy();
 		locThrownAngle  = locEtaMCP4.Theta() * TMath::RadToDeg();
 		
 		for(int icut=0; icut<13; icut++) {
-			double eb_cut = 7.6 + 0.2*(double)(icut);
-			if(locThrownEnergy>=eb_cut) {
-				h_theta_thrown[icut]->Fill(locThrownAngle);
+			double beamEnergyCut = 7.6 + 0.2*(double)(icut);
+			if(locThrownEnergy>=beamEnergyCut) {
+				h_ThrownAngle[icut]->Fill(locThrownAngle);
 			}
 		}
-		if(locThrownEnergy<m_MIN_BEAM_ENERGY) {
-			japp->RootFillUnLock(this);
-			return NOERROR;
+		if((locThrownEnergy<m_minBeamEnergyCut) || (locThrownEnergy>m_maxBeamEnergyCut)) {
+			lockService->RootFillUnLock(this);
+			return;
 		}
 	}
 	
 	//-----------------------------------------------------//
 	// RF Timing Histograms:
 	
-	for(vector<const DBeamPhoton*>::const_iterator gam = locDBeamPhotons.begin(); 
-		gam != locDBeamPhotons.end(); gam++) {
-		double loc_t = (*gam)->time() - locRFTime;
+	// Beam:
+	for(vector<const DBeamPhoton*>::const_iterator gam = locBeamPhotons.begin(); 
+		gam != locBeamPhotons.end(); gam++) {
+		double locT = (*gam)->time() - locRFTime;
 		if((*gam)->dSystem==SYS_TAGH) {
-			for(int itrig=0; itrig<N_TRIGS; itrig++) {
-				if(trig_conditions[itrig]) h_tagh_rf_dt[itrig]->Fill(loc_t);
+			for(int itrig=0; itrig<m_nTrigs; itrig++) {
+				if(locTrigConditions[itrig]) h_taghRFdt[itrig]->Fill(locT);
 			}
 		} else {
-			for(int itrig=0; itrig<N_TRIGS; itrig++) {
-				if(trig_conditions[itrig]) h_tagm_rf_dt[itrig]->Fill(loc_t);
+			for(int itrig=0; itrig<m_nTrigs; itrig++) {
+				if(locTrigConditions[itrig]) h_tagmRFdt[itrig]->Fill(locT);
 			}
 		}
 	}
 	
+	// FCAL:
 	int    locNFCALShowers  = 0, locNGoodFCALShowers = 0;
 	double locFCALEnergySum = 0.;
-	for(vector<const DFCALShower*>::const_iterator show = locDFCALShowers.begin(); 
-		show != locDFCALShowers.end(); show++) {
+	for(vector<const DFCALShower*>::const_iterator show = locFCALShowers.begin(); 
+		show != locFCALShowers.end(); show++) {
 		
-		DVector3 loc_pos;
-		if(m_USE_LOG_WEIGHT) {
-			loc_pos = (*show)->getPosition_log();
+		DVector3 locPos;
+		if(m_UseLogWeight) {
+			locPos = (*show)->getPosition_log();
 		} else {
-			loc_pos = (*show)->getPosition();
+			locPos = (*show)->getPosition();
 		}
-		loc_pos = loc_pos - m_beamSpot + m_fcal_correction;
-		double loc_t = (*show)->getTime() - (loc_pos.Mag()/m_c) - locRFTime;
-		for(int itrig=0; itrig<N_TRIGS; itrig++) {
-			if(trig_conditions[itrig]) h_fcal_rf_dt[itrig]->Fill(loc_t);
+		locPos = locPos - m_beamSpot + m_fcalCorrection;
+		double locT = (*show)->getTime() - (locPos.Mag()/m_c) - locRFTime;
+		for(int itrig=0; itrig<m_nTrigs; itrig++) {
+			if(locTrigConditions[itrig]) h_fcalRFdt[itrig]->Fill(locT);
 		}
-		if(fabs(loc_t) < m_FCAL_RF_CUT) {
+		if(fabs(locT) < m_FCALRFCut) {
 			locFCALEnergySum += (*show)->getEnergy();
 			locNFCALShowers++;
-			if(!fcal_fiducial_cut(loc_pos, 2.0) && (*show)->getEnergy() > m_MIN_FCAL_ENERGY) {
+			if(!FCALFiducialCut(locPos, 2.0) && (*show)->getEnergy() > m_FCALEnergyCut) {
 				locNGoodFCALShowers++;
 			}
 		}
 	}
-	for(int itrig=0; itrig<N_TRIGS; itrig++) {
-		if(trig_conditions[itrig]) h_fcal_energy_sum[itrig]->Fill(locFCALEnergySum);
+	for(int itrig=0; itrig<m_nTrigs; itrig++) {
+		if(locTrigConditions[itrig]) h_fcalEnergySum[itrig]->Fill(locFCALEnergySum);
 	}
 	
+	// BCAL:
 	int    locNBCALShowers  = 0, locNBCALShowers_1ns = 0;
 	double locBCALEnergySum = 0.;
 	double locBCALRFDT = 0., locBCALPhi = 0.; // only useful when there's exactly 1 BCAL shower within timing cut
-	for(vector<const DBCALShower*>::const_iterator show = locDBCALShowers.begin(); 
-		show != locDBCALShowers.end(); show++) {
-		DVector3 loc_pos((*show)->x, (*show)->y, (*show)->z);
-		loc_pos -= m_beamSpot;
-		double loc_t = (*show)->t - (loc_pos.Mag()/m_c) - locRFTime;
-		for(int itrig=0; itrig<N_TRIGS; itrig++) {
-			if(trig_conditions[itrig]) h_bcal_rf_dt[itrig]->Fill(loc_t);
+	for(vector<const DBCALShower*>::const_iterator show = locBCALShowers.begin(); 
+		show != locBCALShowers.end(); show++) {
+		DVector3 locPos((*show)->x, (*show)->y, (*show)->z);
+		locPos -= m_beamSpot;
+		double locT = (*show)->t - (locPos.Mag()/m_c) - locRFTime;
+		for(int itrig=0; itrig<m_nTrigs; itrig++) {
+			if(locTrigConditions[itrig]) h_bcalRFdt[itrig]->Fill(locT);
 		}
-		if(fabs(loc_t) < m_BCAL_RF_CUT) {
+		if(fabs(locT) < m_BCALRFCut) {
 			locBCALEnergySum += (*show)->E;
 			locNBCALShowers++;
-			locBCALRFDT = loc_t;
-			locBCALPhi  = loc_pos.Phi() * (180./TMath::Pi());
-			if(fabs(loc_t) < 1.0) {
+			locBCALRFDT = locT;
+			locBCALPhi  = locPos.Phi() * (180./TMath::Pi());
+			if(fabs(locT) < 1.0) {
 				locNBCALShowers_1ns++;
 			}
 		}
 	}
 	
+	// CCAL:
 	int    locNCCALShowers  = 0;
 	double locCCALEnergySum = 0.;
-	for(vector<const DCCALShower*>::const_iterator show = locDCCALShowers.begin(); 
-		show != locDCCALShowers.end(); show++) {
-		DVector3 loc_pos((*show)->x1, (*show)->y1, (*show)->z);
-		loc_pos = loc_pos - m_beamSpot + m_ccal_correction;
-		double loc_t = (*show)->time - (loc_pos.Mag()/m_c) - locRFTime;
-		for(int itrig=0; itrig<N_TRIGS; itrig++) {
-			if(trig_conditions[itrig]) h_ccal_rf_dt[itrig]->Fill(loc_t);
+	for(vector<const DCCALShower*>::const_iterator show = locCCALShowers.begin(); 
+		show != locCCALShowers.end(); show++) {
+		DVector3 locPos((*show)->x1, (*show)->y1, (*show)->z);
+		locPos = locPos - m_beamSpot + m_ccalCorrection;
+		double locT = (*show)->time - (locPos.Mag()/m_c) - locRFTime;
+		for(int itrig=0; itrig<m_nTrigs; itrig++) {
+			if(locTrigConditions[itrig]) h_ccalRFdt[itrig]->Fill(locT);
 		}
-		if(fabs(loc_t) < m_CCAL_RF_CUT) {
+		if(fabs(locT) < m_CCALRFCut) {
 			locCCALEnergySum += (*show)->E;
 			locNCCALShowers++;
 		}
 	}
 	
-	for(vector<const DTOFPoint*>::const_iterator tof = locDTOFPoints.begin(); 
-		tof != locDTOFPoints.end(); tof++) {
-		DVector3 loc_pos = (*tof)->pos - m_beamSpot;
-		double loc_t = (*tof)->t - (loc_pos.Mag()/m_c) - locRFTime;
-		for(int itrig=0; itrig<N_TRIGS; itrig++) {
-			if(trig_conditions[itrig]) h_tof_rf_dt[itrig]->Fill(loc_t);
+	// TOF:
+	for(vector<const DTOFPoint*>::const_iterator tof = locTOFPoints.begin(); 
+		tof != locTOFPoints.end(); tof++) {
+		DVector3 locPos = (*tof)->pos - m_beamSpot;
+		double locT = (*tof)->t - (locPos.Mag()/m_c) - locRFTime;
+		for(int itrig=0; itrig<m_nTrigs; itrig++) {
+			if(locTrigConditions[itrig]) h_tofRFdt[itrig]->Fill(locT);
 		}
 	}
 	
-	for(vector<const DSCHit*>::const_iterator sc = locDSCHits.begin(); 
-		sc != locDSCHits.end(); sc++) {
-		double loc_t = (*sc)->t - locRFTime;
-		for(int itrig=0; itrig<N_TRIGS; itrig++) {
-			if(trig_conditions[itrig]) h_sc_rf_dt[itrig]->Fill(loc_t);
+	// SC:
+	for(vector<const DSCHit*>::const_iterator sc = locSCHits.begin(); 
+		sc != locSCHits.end(); sc++) {
+		double locT = (*sc)->t - locRFTime;
+		for(int itrig=0; itrig<m_nTrigs; itrig++) {
+			if(locTrigConditions[itrig]) h_scRFdt[itrig]->Fill(locT);
 		}
 	}
 	
 	//-----------------------------------------------------//
-	// eta->2gamma analysis:
+	// eta->2gamma Analysis with cuts:
 	
 	if(locNFCALShowers>1) {
-		eta_gg_analysis(
-			locDFCALShowers, locDBeamPhotons,     locDBCALShowers,  locDTOFPoints, locDSCHits,
-			locNFCALShowers, locNGoodFCALShowers, 
-			locBCALEnergySum, locNBCALShowers, locNBCALShowers_1ns, locBCALPhi, locBCALRFDT,
+		EtaGGAnalysis(
+			locFCALShowers, locBeamPhotons, locBCALShowers, locTOFPoints, locSCHits,
+			locNFCALShowers, locNGoodFCALShowers, locBCALEnergySum, locNBCALShowers, locNBCALShowers_1ns, locBCALPhi, locBCALRFDT,
 			locRFTime, locIsMC, locThrownEnergy, locThrownAngle
 		);
 	}
 	
-	//-----------------------------------------------------//
+	// Release fill lock and we're done:
+	lockService->RootFillUnLock(this);
 	
-	japp->RootFillUnLock(this);
-	
-	return NOERROR;
 }
 
-void JEventProcessor_primex_eta_analysis::eta_gg_analysis(
-	vector<const DFCALShower*> fcal_showers, 
-	vector<const DBeamPhoton*> beam_photons, 
-	vector<const DBCALShower*> bcal_showers, 
-	vector<const DTOFPoint*> tof_points, 
-	vector<const DSCHit*> sc_hits, 
-	int n_fcal_showers, int n_good_fcal_showers, 
-	double bcal_energy_sum, int n_bcal_showers, int n_bcal_showers_1ns, double bcal_phi, double bcal_rfdt,
-	double rfTime, bool is_mc, double thrown_beam_energy, double thrown_eta_angle
-)
-{
-	// Reject events with more than 1 shower in the BCAL:
-	//if(n_bcal_showers>1) return;
+
+void JEventProcessor_primex_eta_analysis::EtaGGAnalysis(
+	vector<const DFCALShower*> fcalShowers, 
+	vector<const DBeamPhoton*> beamPhotons, 
+	vector<const DBCALShower*> bcalShowers, 
+	vector<const DTOFPoint*> tofPoints, 
+	vector<const DSCHit*> scHits, 
+	int nFCALShowers, int nGoodFCALShowers, 
+	double bcalEnergySum, int nBCALShowers, int nBCALShowers_1ns, double bcalPhi, double bcalRFdt,
+	double rfTime, bool isMC, double thrownBeamEnergy, double thrownEtaAngle
+) {
 	
 	// Apply multiplicity cut on the number of FCAL showers:
-	if(!(n_fcal_showers==2 && n_good_fcal_showers==2)) return;
+	if((nFCALShowers!=2) || (nGoodFCALShowers!=2)) return;
 	
-	int n_fcal_showers_total = static_cast<int>(fcal_showers.size());
+	int nFCALShowersTotal = static_cast<int>(fcalShowers.size());
 	
 	//----------------------------------------------------------------------------------//
 	// Loop over all possible combinations of pairs of FCAL showers that pass the cuts:
+	//  (there should only be 1 pair at most, per event)
 	
-	for(int ishow=0; ishow<n_fcal_showers_total; ishow++) {
+	for(int ishow=0; ishow<nFCALShowersTotal; ishow++) {
 		
-		const DFCALShower *show1 = fcal_showers[ishow];
+		const DFCALShower *show1 = fcalShowers[ishow];
 		DVector3 pos1;
-		if(m_USE_LOG_WEIGHT) {
+		if(m_UseLogWeight) {
 			pos1 = show1->getPosition_log();
 		} else {
 			pos1 = show1->getPosition();
 		}
-		pos1 = pos1 - m_beamSpot + m_fcal_correction;
+		pos1 = pos1 - m_beamSpot + m_fcalCorrection;
 		
 		double t1  = show1->getTime() - (pos1.Mag()/m_c) - rfTime;
 		double e1  = show1->getEnergy();
 		
 		// apply minimum energy and RF timing cuts:
-		if(e1 < m_MIN_FCAL_ENERGY || fabs(t1) >= m_FCAL_RF_CUT) continue;
+		if(e1 < m_FCALEnergyCut || fabs(t1) >= m_FCALRFCut) continue;
 		
 		// apply fiducial cut to remove the innermost two FCAL layers:
-		if(fcal_fiducial_cut(pos1, 2.0)) continue;
+		if(FCALFiducialCut(pos1, 2.0)) continue;
 		
 		double px1 = e1*pos1.X()/pos1.Mag();
 		double py1 = e1*pos1.Y()/pos1.Mag();
@@ -940,41 +489,39 @@ void JEventProcessor_primex_eta_analysis::eta_gg_analysis(
 		
 		// check the distance between this shower and the closest (if any) tof hit:
 		double tof_dx1, tof_dy1, tof_dt1;
-		check_TOF_match(pos1, rfTime, tof_points, tof_dx1, tof_dy1, tof_dt1, m_TOF_RF_CUT);
+		CheckTOFMatch(pos1, rfTime, tofPoints, tof_dx1, tof_dy1, tof_dt1, m_TOFRFCut);
 		double tof_dr1 = sqrt(pow(tof_dx1,2.0)+pow(tof_dy1,2.0));
 		
 		// plot FCAL-TOF matching distributions for monitoring:
-		if(n_fcal_showers==2) {
-			h_fcal_tof_dx->Fill(tof_dx1);
-			h_fcal_tof_dy->Fill(tof_dy1);
-			h_fcal_tof_dr->Fill(tof_dr1);
-			h_fcal_tof_dt->Fill(t1-tof_dt1);
-			if(tof_dr1 < m_FCAL_TOF_CUT) {
-				h_fcal_tof_dt_cut->Fill(t1-tof_dt1);
+		if(nFCALShowers==2) {
+			h_fcalTOFdx->Fill(tof_dx1);
+			h_fcalTOFdy->Fill(tof_dy1);
+			h_fcalTOFdr->Fill(tof_dr1);
+			h_fcalTOFdt->Fill(t1-tof_dt1);
+			if(tof_dr1 < m_FCALTOFCut) {
+				h_fcalTOFdt_cut->Fill(t1-tof_dt1);
 			}
 		}
 		
-		//-----------------------------------------------------//
-		
-		for(int jshow=ishow+1; jshow<n_fcal_showers_total; jshow++) {
+		for(int jshow=ishow+1; jshow<nFCALShowersTotal; jshow++) {
 			
-			const DFCALShower *show2 = fcal_showers[jshow];
+			const DFCALShower *show2 = fcalShowers[jshow];
 			DVector3 pos2;
-			if(m_USE_LOG_WEIGHT) {
+			if(m_UseLogWeight) {
 				pos2 = show2->getPosition_log();
 			} else {
 				pos2 = show2->getPosition();
 			}
-			pos2 = pos2 - m_beamSpot + m_fcal_correction;
+			pos2 = pos2 - m_beamSpot + m_fcalCorrection;
 			
 			double t2  = show2->getTime() - (pos2.Mag()/m_c) - rfTime;
 			double e2  = show2->getEnergy();
 			
 			// apply minimum energy and RF timing cuts:
-			if(e2 < m_MIN_FCAL_ENERGY || fabs(t2) >= m_FCAL_RF_CUT) continue;
+			if(e2 < m_FCALEnergyCut || fabs(t2) >= m_FCALRFCut) continue;
 			
 			// apply fiducial cut to remove the innermost two FCAL layers:
-			if(fcal_fiducial_cut(pos2, 2.0)) continue;
+			if(FCALFiducialCut(pos2, 2.0)) continue;
 			
 			double px2 = e2*pos2.X()/pos2.Mag();
 			double py2 = e2*pos2.Y()/pos2.Mag();
@@ -982,23 +529,23 @@ void JEventProcessor_primex_eta_analysis::eta_gg_analysis(
 			
 			// check the distance between this shower and the closest (if any) tof hit:
 			double tof_dx2, tof_dy2, tof_dt2;
-			check_TOF_match(pos2, rfTime, tof_points, tof_dx2, tof_dy2, tof_dt2, m_TOF_RF_CUT);
+			CheckTOFMatch(pos2, rfTime, tofPoints, tof_dx2, tof_dy2, tof_dt2, m_TOFRFCut);
 			double tof_dr2 = sqrt(pow(tof_dx2,2.0)+pow(tof_dy2,2.0));
 			
 			//-----------------------------------------------------//
 			// TOF Veto
 			
 			// reject combinations of FCAL showers where both showers are near a TOF hit:
-			bool tof_veto = false;
-			if((tof_dr1 < m_FCAL_TOF_CUT) && (tof_dr2 < m_FCAL_TOF_CUT)) tof_veto = true;
+			bool isTOFVeto = false;
+			if((tof_dr1 < m_FCALTOFCut) && (tof_dr2 < m_FCALTOFCut)) isTOFVeto = true;
 			
 			// count the number of FCAL-TOF matches for monitoring:
-			int n_tof_matches = 0;
-			if(tof_dr1 < m_FCAL_TOF_CUT) n_tof_matches++;
-			if(tof_dr2 < m_FCAL_TOF_CUT) n_tof_matches++;
-			h_fcal_tof_matches->Fill(n_tof_matches);
+			int nTOFMatches = 0;
+			if(tof_dr1 < m_FCALTOFCut) nTOFMatches++;
+			if(tof_dr2 < m_FCALTOFCut) nTOFMatches++;
+			h_fcalTOFMatches->Fill(nTOFMatches);
 			
-			if(tof_veto) continue;
+			if(isTOFVeto) continue;
 			
 			//-----------------------------------------------------//
 			// Two-Photon kinematics:
@@ -1012,10 +559,10 @@ void JEventProcessor_primex_eta_analysis::eta_gg_analysis(
 			double pggt = sqrt(pow(pggx,2.0) + pow(pggy,2.0));
 			
 			// polar angle:
-			double prod_th = (180./TMath::Pi()) * atan2(pggt,pggz);
+			double prodTheta = (180./TMath::Pi()) * atan2(pggt,pggz);
 			
 			// azimuthal angle:
-			double prod_phi = (180./TMath::Pi()) * atan2(pggy,pggx);
+			double prodPhi = (180./TMath::Pi()) * atan2(pggy,pggx);
 			
 			// opening angle:
 			double cos12   = (pos1.X()*pos2.X() + pos1.Y()*pos2.Y() + pos1.Z()*pos2.Z()) / (pos1.Mag()*pos2.Mag());
@@ -1024,78 +571,91 @@ void JEventProcessor_primex_eta_analysis::eta_gg_analysis(
 			double invmass = sqrt(2.0*e1*e2*(1.-cos12));
 			
 			//-----------------------------------------------------//
-			// check different veto options:
+			// Different options for applying BCAL+SC Veto:
 			
-			//----------------------------------------------------//
 			// Check SC Matches:
 			
-			int loc_n_sc_hits = 0;
-			int loc_n_sc_hits_coplanar = 0;
-			for(vector<const DSCHit*>::const_iterator sc = sc_hits.begin(); sc != sc_hits.end(); sc++) {
+			int nSCHits = 0;
+			int nSCHits_coplanar = 0;
+			for(vector<const DSCHit*>::const_iterator sc = scHits.begin(); sc != scHits.end(); sc++) {
 				
 				// only check hits between 1ns < (t_sc - t_RF) < 7ns 
 				//    and with dE > 0.0002 (from DNeutralShower_factory)
 				
-				double loc_t  = (*sc)->t - rfTime;
-				double loc_dE = (*sc)->dE;
+				double locT  = (*sc)->t - rfTime;
+				double locdE = (*sc)->dE;
 				
-				if((0.5<invmass) && (invmass<0.60)) h_sc_rf_dt_cut->Fill(loc_t);
+				if((0.5<invmass) && (invmass<0.60)) h_scRFdt_cut->Fill(locT);
 				
-				if((1.0 < loc_t) && (loc_t < 7.0) && (loc_dE > 0.0002)) {
+				if((1.0 < locT) && (locT < 9.0) && (locdE > 0.0002)) {
+					nSCHits++;
 					int sector = (*sc)->sector;
-					double phi = m_sc_pos[sector-1][0].Phi() * (180./TMath::Pi());
-					loc_n_sc_hits++;
-					if(fabs(fabs(phi-prod_phi)-180.0) < 36.0) loc_n_sc_hits_coplanar++;
+					double locDeltaPhi = prodPhi - (m_scPos[sector-1][0].Phi() * TMath::RadToDeg());
+					if(IsCoplanarSC(locDeltaPhi)) nSCHits_coplanar++;
 				}
 			}
-			//----------------------------------------------------//
 			
-			vector<int> loc_veto_options;
-			for(int iveto=0; iveto<m_n_vetos; iveto++) loc_veto_options.push_back(0);
+			vector<int> vetoOptions;
+			for(int iveto=0; iveto<m_nVetos; iveto++) vetoOptions.push_back(0);
 			
 			// Option 0 (no veto): No Veto is applied:
-			loc_veto_options[0] = 1;
+			vetoOptions[0] = 1;
 			
 			// Option 1 (strict): Remove events with any BCAL shower within +/-12ns:
-			if(n_bcal_showers==0) loc_veto_options[1] = 1;
+			if(nBCALShowers==0) vetoOptions[1] = 1;
 			
 			// Option 2 (loose): Remove events with any BCAL shower within +/-1ns:
-			if(n_bcal_showers_1ns==0) loc_veto_options[2] = 1;
+			if(nBCALShowers_1ns==0) vetoOptions[2] = 1;
 			
-			// Option 3 (looser): Keep events where there is EITHER (i) no BCAL shower within +/-12ns, 
-			//        OR (ii) 1 BCAL shower that has opposite phi angle to two-photon pair in FCAL:
-			if((n_bcal_showers==0) ||
-				(n_bcal_showers==1 && fabs(fabs(bcal_phi-prod_phi)-180.0) < 30.0)) loc_veto_options[3] = 1;
+			// Options 3-6:
+			//   If there are no showers within +/-12ns in the BCAL, accept event.
+			//   If there is exactly 1 such shower, then:
+			//     Require coplanarity cut (option 3)
+			//     Require coplanarity cut + timing > 1ns (option 4)
+			//     Require coplanarity cut + timing > 1ns + all SC hits should also be coplanar (option 5)
+			//     Require coplanarity cut + timing > 1ns + all SC hits should also be coplanar + no more than 1 SC hit (option 6)
 			
-			// Option 4 (improvement on option 3): Keep events where there is EITHER (i) no BCAL shower within +/-12ns, 
-			//        OR (ii) 1 BCAL shower that has opposite phi angle to two-photon pair in FCAL 
-			//        and is more than 1ns removed from RF time:
-			if((n_bcal_showers==0) || 
-				(n_bcal_showers==1 && fabs(fabs(bcal_phi-prod_phi)-180.0) < 30.0 && bcal_rfdt>1.0)) {
-				loc_veto_options[4] = 1;
-				
-				// Option 5 (add in SC Veto): Remove events where there is a hit in the SC outside of the range:
-				//          150 < |phi_SC - phi_FCAL| < 210:
-				if(loc_n_sc_hits_coplanar==loc_n_sc_hits) loc_veto_options[5] = 1;
+			if(nBCALShowers==0)
+			{
+				vetoOptions[3] = 1;
+				vetoOptions[4] = 1;
+				if(nSCHits==nSCHits_coplanar) {
+					vetoOptions[5] = 1;
+					if(nSCHits<=1) {
+						vetoOptions[6] = 1;
+					}
+				}
+			}
+			else if(nBCALShowers==1)
+			{
+				if(IsCoplanarBCAL(prodPhi-bcalPhi)) {
+					vetoOptions[3] = 1;
+					if(bcalRFdt>1.0) {
+						vetoOptions[4] = 1;
+						if(nSCHits==nSCHits_coplanar) {
+							vetoOptions[5] = 1;
+							if(nSCHits<=1) {
+								vetoOptions[6] = 1;
+							}
+						}
+					}
+				}
 			}
 			
-			// Option 6: Use tight veto on SC only:
-			if(loc_n_sc_hits==0) loc_veto_options[6] = 1;
-			
-			// Option 7: tight SC + tight BCAL vetos:
-			if(loc_n_sc_hits==0 && n_bcal_showers==0) loc_veto_options[7] = 1;
+			// Option 7: strict SC + strict BCAL vetos:
+			if(nSCHits==0 && nBCALShowers==0) vetoOptions[7] = 1;
 			
 			//-----------------------------------------------------//
-			// Loop over Beam photons
+			// Loop over beam photons:
 			
-			for(vector<const DBeamPhoton*>::const_iterator gam = beam_photons.begin(); 
-				gam != beam_photons.end(); gam++) {
+			for(vector<const DBeamPhoton*>::const_iterator gam = beamPhotons.begin(); 
+				gam != beamPhotons.end(); gam++) {
 				
 				double eb    = (*gam)->lorentzMomentum().E(); // energy of beam photon
 				double brfdt = (*gam)->time() - rfTime;
 				
 				// remove beam photons below the minimum energy cut:
-				if(eb < m_MIN_BEAM_ENERGY) continue;
+				if((eb < m_minBeamEnergyCut) || (eb > m_maxBeamEnergyCut)) continue;
 				
 				// Accidental subtraction procedure:
 				//   - Fill histograms with a weight of 1.0 for beam photons within main RF bunch
@@ -1106,42 +666,37 @@ void JEventProcessor_primex_eta_analysis::eta_gg_analysis(
 				//      - This scaling factor comes from the /ANALYSIS/accidental_scaling_factor tabls in the CCDB.
 				//      - reference: GlueX-doc-4122 (B. Zihlmann)
 				
-				double fill_weight = 0.0;
-				if(fabs(brfdt) < m_BEAM_RF_CUT) 
+				double fillWeight = 0.0;
+				if(fabs(brfdt) < m_BeamRFCut) 
 				{
-					fill_weight = 1.0;
+					fillWeight = 1.0;
 				}
 				else if((-30.060<=brfdt && brfdt<=-22.044) || (22.044<=brfdt && brfdt<= 30.060)) 
 				{
-					fill_weight = -0.25*get_acc_scaling_factor(eb);
+					fillWeight = -0.25*GetAccScalingFactor(eb);
 				}
 				//else { continue; }
 				
 				// Calculate the energy of the eta meson, assuming a coherent production process:
-				double eeta_coh = energy_after_recoil(eb, prod_th, m_eta, ParticleMass(m_Target));
+				double etaEnergy_coh = GetEnergyAfterRecoil(eb, prodTheta, ParticleMass(Eta), ParticleMass(m_Target));
 				
 				// Calculate the energy of the eta meson, assuming production on a free nucleon:
-				double eeta = energy_after_recoil(eb, prod_th, m_eta, m_Proton);
+				double etaEnergy = GetEnergyAfterRecoil(eb, prodTheta, ParticleMass(Eta), ParticleMass(Proton));
 				
 				// Apply a cut on the elasticity
 				//  (ratio of measured energy of 2-photons, to the calculated energy above):
-				
-				bool elas_cut = false;
-				double loc_elas_mean  = m_ELAS_CUT_MU_P0 + m_ELAS_CUT_MU_P1*prod_th;
-				double loc_elas_width = m_ELAS_CUT_WIDTH * m_ELAS_CUT_SIGMA;
-				if(fabs((Egg/eeta)-loc_elas_mean)<loc_elas_width) elas_cut = true;
+				bool isElastic = IsElasticCut(Egg, etaEnergy, prodTheta);
 				
 				// set a variable to indicate if the two-photon mass is consistent with an eta meson:
-				bool eta_cut = false;
-				if(0.497862<invmass && invmass<0.597862) eta_cut = true;
+				bool isEta = IsEtaCut(invmass);
 				
 				// Plot timing distribution of beam photons after elasticity cut to see the level of accidentals:
-				if(elas_cut && loc_veto_options[5]) {
-					h_beam_rf_dt_cut->Fill(brfdt);
+				if(isElastic && isEta && vetoOptions[6]) {
+					h_beamRFdt_cut->Fill(brfdt);
 				}
 				
 				// If the beam photon wasn't in the main RF bunch or selected sidebands, skip it:
-				if(fill_weight==0.0) continue;
+				if(fillWeight==0.0) continue;
 				
 				//-----------------------------------------------------//
 				// Energy constraint
@@ -1149,21 +704,22 @@ void JEventProcessor_primex_eta_analysis::eta_gg_analysis(
 				// adjust the measured energies of the two-photons to exactly equal the energy of 
 				// a coherently-produced eta meson:
 				
-				double sig1 = fcal_energy_res(e1);
-				double sig2 = fcal_energy_res(e2);
+				double sig1 = GetFCALEnergyRes(e1);
+				double sig2 = GetFCALEnergyRes(e2);
 				double sigr = pow(sig1/sig2,2.0);
 				
 				// Energy-constrained invariant mass assuming production on free nucleon:
-				double e1c = e1/(1.+sigr) + (eeta-e2)/(1.+(1./sigr));
-				double e2c = eeta - e1c;
-				double invmass_const = sqrt(2.*e1c*e2c*(1.-cos12));
+				double e1c = e1/(1.+sigr) + (etaEnergy-e2)/(1.+(1./sigr));
+				double e2c = etaEnergy - e1c;
+				double invmassConstr = sqrt(2.*e1c*e2c*(1.-cos12));
 				
 				// Energy-constrained invariant mass assuming coherent production on nucleus:
-				double e1c_coh = e1/(1.+sigr) + (eeta_coh-e2)/(1.+(1./sigr));
-				double e2c_coh = eeta_coh - e1c;
-				double invmass_const_coh = sqrt(2.*e1c_coh*e2c_coh*(1.-cos12)); // energy-constrained invariant mass
+				double e1c_coh = e1/(1.+sigr) + (etaEnergy_coh-e2)/(1.+(1./sigr));
+				double e2c_coh = etaEnergy_coh - e1c;
+				double invmassConstr_coh = sqrt(2.*e1c_coh*e2c_coh*(1.-cos12)); // energy-constrained invariant mass
 				
 				// re-compute the polar angle of the two-photon pair using these adjusted energies:
+				/*
 				double px1c  = e1c*pos1.X()/pos1.Mag();
 				double py1c  = e1c*pos1.Y()/pos1.Mag();
 				double pz1c  = e1c*pos1.Z()/pos1.Mag();
@@ -1175,221 +731,195 @@ void JEventProcessor_primex_eta_analysis::eta_gg_analysis(
 				double pggzc = pz1c + pz2c;
 				double pggtc = sqrt(pow(pggxc,2.0) + pow(pggyc,2.0));
 				double prod_th_const = (180./TMath::Pi()) * atan2(pggtc,pggzc);
-				
-				//-----------------------------------------------------//
-				// Hybrid Mass
-				
-				//double hmass = (invmass/m_eta)*cos(TMath::Pi()/4.0) - (Egg/eeta)*sin(TMath::Pi()/4.0);
-				
+				*/
 				//-----------------------------------------------------//
 				// Missing Mass 
-				//   - This is calculated assuming the reaction took place on a quasifree nucleon
-				//     However, we neglect the fermi-momentum of said nucleon
+				//   - This is calculated assuming the reaction took place on a free nucleon
 				
-				//double mmsq = 2.0*m_Proton*eb - 2.0*eb*Egg + m_Proton*m_Proton + m_eta*m_eta 
-				//	- 2.0*m_Proton*Egg + 2.0*eb*cos(prod_th*TMath::Pi()/180.)*sqrt(Egg*Egg - m_eta*m_eta);
-				double sinth = pggt / sqrt(pow(pggt,2.0) + pow(pggz,2.0));
-				double costh = sqrt(1.0 - pow(sinth,2.0));
+				double  mmSq = pow(ParticleMass(Proton),2.0) + pow(ParticleMass(Eta),2.0) 
+					+ 2.0*ParticleMass(Proton)*eb 
+					- 2.0*ParticleMass(Proton)*Egg 
+					- 2.0*eb*(Egg - sqrt(pow(Egg,2.0)-pow(ParticleMass(Eta),2.0))*cos(prodTheta*TMath::DegToRad()));
 				
-				double  mmsq = pow(ParticleMass(m_Target),2.0) + pow(m_eta,2.0) 
-					- 2.0*(Egg*(eb+ParticleMass(m_Target)) 
-					- eb*(sqrt(pow(Egg,2.0)-pow(m_eta,2.0))*costh + ParticleMass(m_Target)));
-				
-				double mmsq_const = pow(ParticleMass(m_Target),2.0) + pow(m_eta,2.0) 
-					- 2.0*(eeta*(eb+ParticleMass(m_Target)) 
-					- eb*(sqrt(pow(eeta,2.0)-pow(m_eta,2.0))*costh + ParticleMass(m_Target)));
-				
-				double mmsq_const_coh = pow(ParticleMass(m_Target),2.0) + pow(m_eta,2.0) 
-					- 2.0*(eeta_coh*(eb+ParticleMass(m_Target)) 
-					- eb*(sqrt(pow(eeta_coh,2.0)-pow(m_eta,2.0))*costh + ParticleMass(m_Target)));
+				double mmSq_coh = pow(ParticleMass(m_Target),2.0) + pow(ParticleMass(Eta),2.0) 
+					+ 2.0*ParticleMass(m_Target)*eb 
+					- 2.0*ParticleMass(m_Target)*Egg 
+					- 2.0*eb*(Egg - sqrt(pow(Egg,2.0)-pow(ParticleMass(Eta),2.0))*cos(prodTheta*TMath::DegToRad()));
 				
 				//-----------------------------------------------------//
-				// Default Cuts
+				// Default Cuts:
 				
-				// plot elasticity vs. mass ratio:
-				if(loc_veto_options[5]) {
+				if(vetoOptions[6]) {
 					
-					h_elas_vs_mgg->Fill(invmass/m_eta, Egg/eeta, fill_weight);
+					// Elasticity vs. Invmass Ratio:
+					h_elasVSmgg->Fill(invmass/ParticleMass(Eta), Egg/etaEnergy, fillWeight);
 					
-					// plot the elasticity distribution for events where the mass is close to the eta:
-					if(eta_cut) {
-						h_elas->Fill(prod_th, Egg/eb, fill_weight);
-						h_elas_corr->Fill(prod_th, Egg/eeta, fill_weight);
+					// Elasticity vs. Polar Angle for events where the mass is close to the eta:
+					if(isEta) {
+						h_elas->Fill(prodTheta, Egg/eb, fillWeight); // measured energy over beam energy
+						h_elasCorr->Fill(prodTheta, Egg/etaEnergy, fillWeight); // measured energy over eta energy
+						h_elasCorr_coh->Fill(prodTheta, Egg/etaEnergy_coh, fillWeight); // measured energy over eta energy (coherent-nuclear)
 						
-						if(fill_weight==1.0) h_elas_corr_main->Fill(prod_th, Egg/eeta);
-						else                 h_elas_corr_side->Fill(prod_th, Egg/eeta, -1.0*fill_weight);
+						if(fillWeight==1.0) h_elasCorrMain->Fill(prodTheta, Egg/etaEnergy);
+						else                h_elasCorrSide->Fill(prodTheta, Egg/etaEnergy, -1.0*fillWeight);
 					}
 					
-					// apply elasticity cut and plot the invariant mass distriubtion:
-					if(elas_cut) {
+					// Energy-constrained Invariant Mass vs. Polar Angle:
+					if(isElastic) {
 						// invariant mass vs. polar angle:
-						h_mgg->Fill(prod_th, invmass, fill_weight);
+						h_mgg->Fill(prodTheta, invmass, fillWeight);
 						
 						// energy-constrained invariant mass vs. polar angle:
-						h_mgg_const->Fill(prod_th, invmass_const, fill_weight);
+						h_mggConstr->Fill(prodTheta, invmassConstr, fillWeight);
+						
+						// energy-constrained invariant mass vs. polar angle (assuming coherent production):
+						h_mggConstr_coh->Fill(prodTheta, invmassConstr_coh, fillWeight);
 						
 						// for monitoring purposes, plot the invariant mass separately for 
 						//   beam photons in the main RF bunch and for beam photons in the accidental sidebands:
 						
-						if(fill_weight==1.0) {
-							h_mgg_main->Fill(prod_th, invmass);
-							h_mgg_const_main->Fill(prod_th, invmass_const);
+						if(fillWeight==1.0) {
+							h_mggMain->Fill(prodTheta, invmass);
+							h_mggConstrMain->Fill(prodTheta, invmassConstr);
 						} else {
-							h_mgg_side->Fill(prod_th, invmass, -1.0*fill_weight);
-							h_mgg_const_side->Fill(prod_th, invmass_const, -1.0*fill_weight);
+							h_mggSide->Fill(prodTheta, invmass, -1.0*fillWeight);
+							h_mggConstrSide->Fill(prodTheta, invmassConstr, -1.0*fillWeight);
 						}
-						
-						// energy-constrained invariant mass vs. energy-constrained polar angle:
-						h_mgg_const_corr->Fill(prod_th_const, invmass_const, fill_weight);
 						
 						// for MC, plot invariant mass vs thrown information:
-						if(is_mc) {
-							h_mgg_thrown->Fill(thrown_eta_angle, invmass, fill_weight);
-							h_mgg_const_thrown->Fill(thrown_eta_angle, invmass_const, fill_weight);
+						if(isMC) {
+							h_mggThrown->Fill(thrownEtaAngle, invmass, fillWeight);
+							h_mggConstrThrown->Fill(thrownEtaAngle, invmassConstr, fillWeight);
 							
 							// plot reconstructed vs. thrown angle:
-							if(0.5078 < invmass_const && invmass_const < 0.5978) {
-								h_rec_vs_thrown->Fill(thrown_eta_angle, prod_th, fill_weight);
+							if(0.5 < invmassConstr && invmassConstr < 0.6) {
+								h_recVSthrown->Fill(thrownEtaAngle, prodTheta, fillWeight);
 							}
 						}
 						
-						if(eta_cut) {
+						if(isEta) {
 							// plot x-y distribution of showers:
-							h_xy_1->Fill(pos1.X(), pos1.Y(), fill_weight);
-							h_xy_2->Fill(pos2.X(), pos2.Y(), fill_weight);
+							h_xy_1->Fill(pos1.X(), pos1.Y(), fillWeight);
+							h_xy_2->Fill(pos2.X(), pos2.Y(), fillWeight);
 						}
 					}
-				}
-				
-				h_mm_vs_theta->Fill(prod_th, mmsq, fill_weight);
-				h_mm_const_vs_theta->Fill(prod_th, mmsq_const, fill_weight);
-				h_mm_const_coh_vs_theta->Fill(prod_th, mmsq_const_coh, fill_weight);
-				if(eta_cut) {
-					h_mm_vs_theta_eta_cut->Fill(prod_th, mmsq, fill_weight);
-					h_mm_const_vs_theta_eta_cut->Fill(prod_th, mmsq_const, fill_weight);
-					if(elas_cut) {
-						h_mm_vs_theta_eta_elas_cut->Fill(prod_th, mmsq, fill_weight);
-						h_mm_const_vs_theta_eta_elas_cut->Fill(prod_th, mmsq_const, fill_weight);
+					
+					// Missing Mass vs. Polar Angle:
+					h_mm->Fill(prodTheta, mmSq-pow(ParticleMass(Proton),2.0), fillWeight);
+					h_mm_coh->Fill(prodTheta, mmSq_coh-pow(ParticleMass(m_Target),2.0), fillWeight);
+					if(isEta) {
+						h_mm_etaCut->Fill(prodTheta, mmSq-pow(ParticleMass(Proton),2.0), fillWeight);
+						h_mm_coh_etaCut->Fill(prodTheta, mmSq_coh-pow(ParticleMass(m_Target),2.0), fillWeight);
+						if(isElastic) {
+							h_mm_elasEtaCut->Fill(prodTheta, mmSq-pow(ParticleMass(Proton),2.0), fillWeight);
+							h_mm_coh_elasEtaCut->Fill(prodTheta, mmSq_coh-pow(ParticleMass(m_Target),2.0), fillWeight);
+						}
 					}
-				}
+				} // end cut requiring default BCAL+SC veto option
 				
-				for(int iveto=0; iveto<m_n_vetos; iveto++) {
-					if(loc_veto_options[iveto]) {
-						if(eta_cut) h_elas_veto[iveto]->Fill(prod_th, Egg/eeta, fill_weight);
-						if(elas_cut) {
-							h_mgg_veto[iveto]->Fill(prod_th, invmass, fill_weight);
-							h_mgg_const_veto[iveto]->Fill(prod_th, invmass_const, fill_weight);
-							h_mgg_const_coh_veto[iveto]->Fill(prod_th, invmass_const_coh, fill_weight);
-							if(eta_cut) {
-								h_mm_veto[iveto]->Fill(prod_th, mmsq, fill_weight);
-								h_mm_const_veto[iveto]->Fill(prod_th, mmsq_const, fill_weight);
-								h_mm_const_coh_veto[iveto]->Fill(prod_th, mmsq_const_coh, fill_weight);
+				//-----------------------------------------------------//
+				// Plot results with different veto options:
+				
+				for(int iveto=0; iveto<m_nVetos; iveto++) {
+					if(vetoOptions[iveto]) {
+						if(isEta) h_elas_veto[iveto]->Fill(prodTheta, Egg/etaEnergy, fillWeight);
+						if(isElastic) {
+							h_mgg_veto[iveto]->Fill(prodTheta, invmass, fillWeight);
+							h_mggConstr_veto[iveto]->Fill(prodTheta, invmassConstr, fillWeight);
+							h_mggConstr_coh_veto[iveto]->Fill(prodTheta, invmassConstr_coh, fillWeight);
+							if(isEta) {
+								h_mm_veto[iveto]->Fill(prodTheta, mmSq-pow(ParticleMass(Proton),2.0), fillWeight);
+								h_mm_coh_veto[iveto]->Fill(prodTheta, mmSq_coh-pow(ParticleMass(m_Target),2.0), fillWeight);
 							}
 						}
 					}
 				}
 				
-				/*
-				// hybrid mass:
-				h_hmass->Fill(prod_th, hmass, fill_weight);
-				
-				// missing mass:
-				h_mm_vs_theta->Fill(prod_th, mmsq, fill_weight);
-				
-				// plot the above two distributions with a cut around the eta mass:
-				
-				if(eta_cut) {
-					h_hmass_eta_cut->Fill(prod_th, hmass, fill_weight);
-					h_mm_vs_theta_eta_cut->Fill(prod_th, mmsq, fill_weight);
-					
-					// next, apply elasticity cut:
-					if(elas_cut) {
-						h_hmass_eta_elas_cut->Fill(prod_th, hmass, fill_weight);
-						h_mm_vs_theta_eta_elas_cut->Fill(prod_th, mmsq, fill_weight);
-					}
-				}
-				*/
-				
-			} // loop over DBeamPhotons
+			}	// loop over DBeamPhotons
 		} // inner loop over DFCALShowers
 	} // outer loop over DFCALShowers
 	
-	
 	return;
 }
 
-int JEventProcessor_primex_eta_analysis::fcal_fiducial_cut(DVector3 pos, double layer_cut) 
+//------------------------------------------//
+
+bool JEventProcessor_primex_eta_analysis::IsElasticCut(double Egg, double Eeta, double theta)
 {
-	int fid_cut = 0;
-	
-	double fcal_inner_layer_cut = (1.5 + layer_cut) * 4.0157; // 4.0157 cm is the size of one FCAL block
-	
-	double fcal_face_x = m_beamSpot.X() + (pos.X() * (m_fcalFace.Z() - m_beamSpot.Z())/pos.Z());
-	double fcal_face_y = m_beamSpot.Y() + (pos.Y() * (m_fcalFace.Z() - m_beamSpot.Z())/pos.Z());
-	
-	fcal_face_x -= m_fcalFace.X();
-	fcal_face_y -= m_fcalFace.Y();
-	
-	if((-1.*fcal_inner_layer_cut < fcal_face_x && fcal_face_x < fcal_inner_layer_cut)
-		&& (-1.*fcal_inner_layer_cut < fcal_face_y 
-		&& fcal_face_y < fcal_inner_layer_cut)) fid_cut = 1;
-	
-	// apply fiducial cut for bad channels in phase 1:
-	/*
-	if(phase_val==1) {
-		if(-32. < fcal_face_y && fcal_face_y < -21. 
-			&& -18. < fcal_face_x && fcal_face_x < 6.) fid_cut = 1;
-		
-		if(15. < fcal_face_y && fcal_face_y < 25. 
-			&& 48. < fcal_face_x && fcal_face_x < 58.) fid_cut = 1;
-		
-		if(-29. < fcal_face_y && fcal_face_y < -19. 
-			&& 61. < fcal_face_x && fcal_face_x < 71.) fid_cut = 1;
-		
-		if(65. < fcal_face_y && fcal_face_y < 75. 
-			&& 24. < fcal_face_x && fcal_face_x < 34.) fid_cut = 1;
-	}
-	*/
-	return fid_cut;
+	double ElasPeakMean  = m_ElasMean_p0 + m_ElasMean_p1*theta;
+	double ElasPeakWidth = m_ElasWidth * m_ElasSigmaCut;
+	if(fabs((Egg/Eeta)-ElasPeakMean)<ElasPeakWidth) return true;
+	else return false;
 }
 
-void JEventProcessor_primex_eta_analysis::check_TOF_match(DVector3 pos1, double rfTime, 
-	vector<const DTOFPoint*> tof_points, double &dx_min, double &dy_min, 
-	double &dt_min, double rf_time_cut) {
+bool JEventProcessor_primex_eta_analysis::IsEtaCut(double invmass)
+{
+	if((0.5<=invmass) && (invmass<0.6)) return true;
+	else return false;
+}
+
+bool JEventProcessor_primex_eta_analysis::IsCoplanarBCAL(double deltaPhi)
+{
+	// deltaPhi = #phi_gg - #phi_SC
 	
-	dx_min = 1000.;
-	dy_min = 1000.;
-	dt_min = 1000.;
+	if(m_phaseVal==1) {
+		// FIELD OFF:
+		if(fabs(fabs(deltaPhi)-180.0) < m_BCALDeltaPhiCut)
+			return true;
+		else
+			return false;
+	} else {
+		// FIELD ON:
+		if(((140.0<deltaPhi) && (deltaPhi<240.0)) || ((-220.0<deltaPhi) && (deltaPhi<-120.0)))
+			return true;
+		else 
+			return false;
+	}
+}
+
+bool JEventProcessor_primex_eta_analysis::IsCoplanarSC(double deltaPhi)
+{
+	// deltaPhi = #phi_gg - #phi_SC
 	
-	for(vector<const DTOFPoint*>::const_iterator tof = tof_points.begin(); 
-		tof != tof_points.end(); tof++) {
-		
-		double xt = (*tof)->pos.X() - m_beamSpot.X();
-		double yt = (*tof)->pos.Y() - m_beamSpot.Y();
-		double zt = (*tof)->pos.Z() - m_beamSpot.Z();
-		double rt = sqrt(xt*xt + yt*yt + zt*zt);
-		double tt = (*tof)->t - (rt/m_c);
-		double dt = tt - rfTime;
-		xt *= pos1.Z() / zt;
-		yt *= pos1.Z() / zt;
-		double dx = pos1.X() - xt;
-		double dy = pos1.Y() - yt;
-		
-		if(fabs(dt) < rf_time_cut) {
-			if((dx*dx + dy*dy) < (dx_min*dx_min + dy_min*dy_min)) {
-				dx_min = dx;
-				dy_min = dy;
-				dt_min = dt;
-			}
+	if(fabs(fabs(deltaPhi)-180.0) < m_SCDeltaPhiCut)
+		return true;
+	else
+		return false;
+}
+
+//------------------------------------------//
+
+int JEventProcessor_primex_eta_analysis::FCALFiducialCut(TVector3 pos, double cutLayer) {
+	
+	int locFiducialCut = 0;
+	
+	double fcalInnerLayerCut = (1.5 + cutLayer) * 4.0157;
+	
+	double fcalFaceX = m_beamSpot.X() + (pos.X() * (m_fcalFace.Z() - m_beamSpot.Z())/pos.Z()) - m_fcalFace.X();
+	double fcalFaceY = m_beamSpot.Y() + (pos.Y() * (m_fcalFace.Z() - m_beamSpot.Z())/pos.Z()) - m_fcalFace.Y();
+	
+	if((fabs(fcalFaceX) < fcalInnerLayerCut) && (fabs(fcalFaceY) < fcalInnerLayerCut)) locFiducialCut = 1;
+	
+	// exclude showers near outer layers:
+	
+	double fcalFaceR = sqrt(pow(fcalFaceX,2.0) + pow(fcalFaceY,2.0));
+	if(fcalFaceR > 100.0) locFiducialCut = 1;
+	
+	// only apply the next fiducial cut for runs from phase-I:
+	/*
+	if(m_phaseVal < 2) {
+		if((-32.<fcalFaceY) && (fcalFaceY<-20.) && (-8.<fcalFaceX) && (fcalFaceX<4.)) {
+			locFiducialCut = 1;
 		}
 	}
-	
-	return;
+	*/
+	return locFiducialCut;
 }
 
-double JEventProcessor_primex_eta_analysis::energy_after_recoil(double eb, double theta, 
+double JEventProcessor_primex_eta_analysis::GetEnergyAfterRecoil(double eb, double theta, 
 	double m0, double mp) 
 {
+	// convert angle to radians:
 	theta *= (TMath::Pi()/180.);
   
 	double t1 = eb*cos(theta);
@@ -1410,9 +940,9 @@ double JEventProcessor_primex_eta_analysis::energy_after_recoil(double eb, doubl
 	return energy;
 }
 
-double JEventProcessor_primex_eta_analysis::fcal_energy_res(double e)
+double JEventProcessor_primex_eta_analysis::GetFCALEnergyRes(double e)
 {
-	// hard-coded values for the FCAL energy resolution (taken from GlueX NIM paper)
+	// Hard-coded values for the FCAL energy resolution (taken from GlueX NIM paper)
 	
 	double a = 0.062, b = 0.047;
 	double sig = (a*a)/e + (b*b);
@@ -1420,7 +950,7 @@ double JEventProcessor_primex_eta_analysis::fcal_energy_res(double e)
 	return sig;
 }
 
-double JEventProcessor_primex_eta_analysis::get_acc_scaling_factor(double eb)
+double JEventProcessor_primex_eta_analysis::GetAccScalingFactor(double eb)
 {
 	if(eb > m_TAGMEnergyBoundHi)
 		return m_HodoscopeHiFactor;
@@ -1430,3 +960,404 @@ double JEventProcessor_primex_eta_analysis::get_acc_scaling_factor(double eb)
 		return m_HodoscopeLoFactor;
 }
 
+void JEventProcessor_primex_eta_analysis::CheckTOFMatch(DVector3 pos1, double rfTime, 
+	vector<const DTOFPoint*> tofPoints, double &dxMin, double &dyMin, double &dtMin, double rfTimingCut) {
+	
+	dxMin = 1000.;
+	dyMin = 1000.;
+	dtMin = 1000.;
+	
+	for(vector<const DTOFPoint*>::const_iterator tof = tofPoints.begin(); 
+		tof != tofPoints.end(); tof++) {
+		
+		double xt = (*tof)->pos.X() - m_beamSpot.X();
+		double yt = (*tof)->pos.Y() - m_beamSpot.Y();
+		double zt = (*tof)->pos.Z() - m_beamSpot.Z();
+		double rt = sqrt(xt*xt + yt*yt + zt*zt);
+		double tt = (*tof)->t - (rt/m_c);
+		double dt = tt - rfTime;
+		xt *= pos1.Z() / zt;
+		yt *= pos1.Z() / zt;
+		double dx = pos1.X() - xt;
+		double dy = pos1.Y() - yt;
+		
+		if(fabs(dt) < rfTimingCut) {
+			if((dx*dx + dy*dy) < (dxMin*dxMin + dyMin*dyMin)) {
+				dxMin = dx;
+				dyMin = dy;
+				dtMin = dt;
+			}
+		}
+	}
+	return;
+}
+
+//------------------------------------------//
+
+Particle_t JEventProcessor_primex_eta_analysis::GetTargetType(int32_t runNumber) {
+	
+	// Set Target type according to RunPeriod and RunNumber:
+	
+	if(runNumber<60000)
+	{
+		// GlueX
+		return Proton;
+	}
+	else if(runNumber<70000)
+	{
+		// PrimEx-eta Phase 1
+		if(runNumber<61355) return Be9;
+		else return Helium;
+	}
+	else if(runNumber<80000)
+	{
+		// GlueX
+		return Proton;
+	}
+	else if(runNumber<90000)
+	{
+		// PrimEx-eta Phase 2
+		if(runNumber<81382) return Be9;
+		else return Helium;
+	}
+	else if(runNumber<100000)
+	{
+		// SRC/CT
+		if((90034<=runNumber) && (runNumber<=90200)) {
+			return Helium;
+		}
+		else if((90207<=runNumber) && (runNumber<=90249)) {
+			return Deuteron;
+		}
+		else if((90263<=runNumber) && (runNumber<=90536)) {
+			return C12;
+		}
+		else if((90558<=runNumber) && (runNumber<=90601)) {
+			return Deuteron;
+		}
+		else if((90607<=runNumber) && (runNumber<=90660)) {
+			return Helium;
+		}
+		else {
+			return Proton;
+		}
+	}
+	else if(runNumber<110000)
+	{
+		// CPP/NPP
+		return Proton; // placeholder
+	}
+	else if(runNumber<120000)
+	{
+		// PrimEx-eta Phase 3
+		if(runNumber<110622) return Be9;
+		else return Helium;
+	}
+	else
+	{
+		return Proton;
+	}
+}
+
+int JEventProcessor_primex_eta_analysis::GetPrimExPhase(int32_t runNumber)
+{
+	if(( 60000<=runNumber) && (runNumber<= 69999)) return 1;
+	if(( 80000<=runNumber) && (runNumber<= 89999)) return 2;
+	if((110000<=runNumber) && (runNumber<=119999)) return 3;
+	return 0;
+}
+
+//-------------------------------------------------------------------------------------//
+
+void JEventProcessor_primex_eta_analysis::InitializeHistograms()
+{
+	int nInvmassBins     = (int)((m_maxInvmassBin-m_minInvmassBin)/m_invmassBinSize);
+	int nRecAngleBins    = (int)((m_maxRecAngleBin-m_minRecAngleBin)/m_recAngleBinSize);
+	int nThrownAngleBins = (int)((m_maxThrownAngleBin-m_minThrownAngleBin)/m_thrownAngleBinSize);
+	
+	TDirectory *dirPrimExEta = new TDirectoryFile("primex_eta_analysis", "primex_eta_analysis");
+	dirPrimExEta->cd();
+	
+	//------------------------------------------//
+	// Thrown angular distributions for different energy ranges:
+	
+	TDirectory *dirThrown = new TDirectoryFile("thrown", "thrown");
+	dirThrown->cd();
+	for(int icut=0; icut<13; icut++) {
+		double beamEnergyCut = 7.6 + 0.2*(double)(icut);
+		h_ThrownAngle[icut] = new TH1F(Form("ThrownAngle_%02d", icut), 
+			Form("Thrown Angle of #eta (E_{#gamma} > %.1f GeV)", beamEnergyCut), 
+			nThrownAngleBins, m_minThrownAngleBin, m_maxThrownAngleBin);
+	}
+	dirThrown->cd("../");
+	
+	//------------------------------------------//
+	// Timing and energy sum for different trigger types:
+	
+	TDirectory *dirTiming = new TDirectoryFile("rfTiming", "rfTiming");
+	dirTiming->cd();
+	for(int itrig=0; itrig<m_nTrigs; itrig++) {
+		h_fcalRFdt[itrig] = new TH1F(Form("fcalRFdt_%d",itrig), 
+			Form("FCAL - RF Time (%s); [ns]", m_triggerNames[itrig].c_str()), 
+			2000, -100., 100.);
+		h_bcalRFdt[itrig] = new TH1F(Form("bcalRFdt_%d",itrig), 
+			Form("BCAL - RF Time (%s); [ns]", m_triggerNames[itrig].c_str()), 
+			2000, -100., 100.);
+		h_ccalRFdt[itrig] = new TH1F(Form("ccalRFdt_%d",itrig), 
+			Form("CCAL - RF Time (%s); [ns]", m_triggerNames[itrig].c_str()), 
+			2000, -100., 100.);
+		h_tofRFdt[itrig] = new TH1F(Form("tofRFdt_%d",itrig), 
+			Form("TOF - RF Time (%s); [ns]", m_triggerNames[itrig].c_str()), 
+			2000, -100., 100.);
+		h_scRFdt[itrig] = new TH1F(Form("scRFdt_%d",itrig), 
+			Form("SC - RF Time (%s); [ns]", m_triggerNames[itrig].c_str()), 
+			2000, -100., 100.);
+		h_taghRFdt[itrig] = new TH1F(Form("taghRFdt_%d",itrig), 
+			Form("TAGH - RF Time (%s); [ns]", m_triggerNames[itrig].c_str()), 
+			2000, -100.0, 100.0);
+		h_tagmRFdt[itrig] = new TH1F(Form("tagmRFdt_%d",itrig), 
+			Form("TAGM - RF Time (%s); [ns]", m_triggerNames[itrig].c_str()), 
+			2000, -100.0, 100.0);
+	}
+	dirTiming->cd("../");
+	
+	TDirectory *dirFCALEnergy = new TDirectoryFile("fcalEnergySum", "fcalEnergySum");
+	dirFCALEnergy->cd();
+	for(int itrig=0; itrig<m_nTrigs; itrig++) {
+		h_fcalEnergySum[itrig] = new TH1F(Form("fcalEnergySum_%d",itrig), 
+			Form("FCAL Shower Energy Sum (%s); E_{FCAL} [GeV]", m_triggerNames[itrig].c_str()), 
+			1200, 0., 12.);
+	}
+	dirFCALEnergy->cd("../");
+	
+	//------------------------------------------//
+	// FCAL-TOF Matching:
+	
+	TDirectory *dirFCALTOF = new TDirectoryFile("fcalTOFMatch", "fcalTOFMatch");
+	dirFCALTOF->cd();
+	h_fcalTOFdx = new TH1F("fcalTOFdx", "x_{FCAL} - x_{TOF} (closest DTOFPoint); [cm]", 2000, -100., 100.);
+	h_fcalTOFdy = new TH1F("fcalTOFdy", "y_{FCAL} - y_{TOF} (closest DTOFPoint); [cm]", 2000, -100., 100.);
+	h_fcalTOFdr = new TH1F("fcalTOFdr", "Distance between FCAL Shower and closest DTOFPoint; [cm]", 1000, 0., 100.);
+	
+	h_fcalTOFdt      = new TH1F("fcalTOFdt",      "t_{FCAL} - t_{TOF}; [ns]", 2000, -100., 100.);
+	h_fcalTOFdt_cut  = new TH1F("fcalTOFdt_cut",  "t_{FCAL} - t_{TOF}; [ns]", 2000, -100., 100.);
+	h_fcalTOFMatches = new TH1F("fcalTOFMatches", "Number of TOF Matches per 2-#gamma Event", 3, -0.5, 2.5);
+	dirFCALTOF->cd("../");
+	
+	TDirectory *dirGG = new TDirectoryFile("eta_gg", "eta_gg");
+	dirGG->cd();
+	
+	//------------------------------------------//
+	// RF timing after cuts are applies:
+	
+	h_beamRFdt_cut = new TH1F("beamRFdt_cut", "; t_{#gamma} - t_{RF} (ns); counts / 0.1 ns", 2000, -100., 100.);
+	h_scRFdt_cut   = new TH1F("scRFdt_cut", "; t_{SC} - t_{RF} (ns); counts / 0.1 ns", 2000, -100., 100.);
+	
+	//------------------------------------------//
+	// Elasticity:
+	
+	h_elas = new TH2F("elas", "Elasticity", 
+		nRecAngleBins, m_minRecAngleBin, m_maxRecAngleBin, 1000, 0., 2.);
+	h_elas->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
+	h_elas->GetYaxis()->SetTitle("E_{#gamma#gamma}/E_{#gamma}");
+	
+	h_elasCorr = new TH2F("elasCorr", "Elasticity (corrected for nucleon recoil)", 
+		nRecAngleBins, m_minRecAngleBin, m_maxRecAngleBin, 1000, 0., 2.);
+	h_elasCorr->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
+	h_elasCorr->GetYaxis()->SetTitle("E_{#gamma#gamma}/E_{#eta}#left(E_{#gamma},#theta_{#gamma#gamma}#right)");
+	
+	h_elasCorrMain = new TH2F("elasCorrMain", "Elasticity (corrected for nucleon recoil)", 
+		nRecAngleBins, m_minRecAngleBin, m_maxRecAngleBin, 1000, 0., 2.);
+	h_elasCorrMain->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
+	h_elasCorrMain->GetYaxis()->SetTitle("E_{#gamma#gamma}/E_{#eta}#left(E_{#gamma},#theta_{#gamma#gamma}#right)");
+	
+	h_elasCorrSide = new TH2F("elasCorrSide", "Elasticity (corrected for nucleon recoil)", 
+		nRecAngleBins, m_minRecAngleBin, m_maxRecAngleBin, 1000, 0., 2.);
+	h_elasCorrSide->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
+	h_elasCorrSide->GetYaxis()->SetTitle("E_{#gamma#gamma}/E_{#eta}#left(E_{#gamma},#theta_{#gamma#gamma}#right)");
+	
+	h_elasCorr_coh = new TH2F("elasCorr_coh", "Elasticity (corrected for helium recoil)", 
+		nRecAngleBins, m_minRecAngleBin, m_maxRecAngleBin, 1000, 0., 2.);
+	h_elasCorr_coh->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
+	h_elasCorr_coh->GetYaxis()->SetTitle("E_{#gamma#gamma}/E_{#eta}#left(E_{#gamma},#theta_{#gamma#gamma}#right)");
+	
+	//------------------------------------------//
+	// Invariant Mass:
+	
+	h_mgg = new TH2F("mgg", "Two-Photon Invariant Mass", 
+		nRecAngleBins, m_minRecAngleBin, m_maxRecAngleBin, 
+		nInvmassBins, m_minInvmassBin, m_maxInvmassBin);
+	h_mgg->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
+	h_mgg->GetYaxis()->SetTitle("M_{#gamma#gamma} [GeV/c^{2}]");
+	h_mgg->Sumw2();
+	
+	h_mggMain = new TH2F("mggMain", "Two-Photon Invariant Mass", 
+		nRecAngleBins, m_minRecAngleBin, m_maxRecAngleBin, 
+		nInvmassBins, m_minInvmassBin, m_maxInvmassBin);
+	h_mggMain->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
+	h_mggMain->GetYaxis()->SetTitle("M_{#gamma#gamma} [GeV/c^{2}]");
+	h_mggMain->Sumw2();
+	
+	h_mggSide = new TH2F("mggSide", "Two-Photon Invariant Mass", 
+		nRecAngleBins, m_minRecAngleBin, m_maxRecAngleBin, 
+		nInvmassBins, m_minInvmassBin, m_maxInvmassBin);
+	h_mggSide->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
+	h_mggSide->GetYaxis()->SetTitle("M_{#gamma#gamma} [GeV/c^{2}]");
+	h_mggSide->Sumw2();
+	
+	h_mggConstr = new TH2F("mggConstr", "Energy-Constrained Inv Mass", 
+		nRecAngleBins, m_minRecAngleBin, m_maxRecAngleBin, 
+		nInvmassBins, m_minInvmassBin, m_maxInvmassBin);
+	h_mggConstr->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
+	h_mggConstr->GetYaxis()->SetTitle("M_{#gamma#gamma}^{constr} [GeV/c^{2}]");
+	h_mggConstr->Sumw2();
+	
+	h_mggConstrMain = new TH2F("mggConstrMain", "Energy-Constrained Inv Mass", 
+		nRecAngleBins, m_minRecAngleBin, m_maxRecAngleBin, 
+		nInvmassBins, m_minInvmassBin, m_maxInvmassBin);
+	h_mggConstrMain->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
+	h_mggConstrMain->GetYaxis()->SetTitle("M_{#gamma#gamma}^{constr} [GeV/c^{2}]");
+	h_mggConstrMain->Sumw2();
+	
+	h_mggConstrSide = new TH2F("mggConstrSide", "Energy-Constrained Inv Mass", 
+		nRecAngleBins, m_minRecAngleBin, m_maxRecAngleBin, 
+		nInvmassBins, m_minInvmassBin, m_maxInvmassBin);
+	h_mggConstrSide->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
+	h_mggConstrSide->GetYaxis()->SetTitle("M_{#gamma#gamma}^{constr} [GeV/c^{2}]");
+	h_mggConstrSide->Sumw2();
+	
+	h_mggConstr_coh = new TH2F("mggConstr_coh", "Energy-Constrained Inv Mass", 
+		nRecAngleBins, m_minRecAngleBin, m_maxRecAngleBin, 
+		nInvmassBins, m_minInvmassBin, m_maxInvmassBin);
+	h_mggConstr_coh->GetXaxis()->SetTitle("#theta_{#gamma#gamma}^{constr} [#circ]");
+	h_mggConstr_coh->GetYaxis()->SetTitle("M_{#gamma#gamma}^{constr} [GeV/c^{2}]");
+	h_mggConstr_coh->Sumw2();
+	
+	//------------------------------------------//
+	// Missing Mass:
+	
+	h_mm = new TH2F("mm", "Squared Missing Mass", 
+		nRecAngleBins, m_minRecAngleBin, m_maxRecAngleBin, 1000, -20.0, 20.0);
+	h_mm->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
+	h_mm->GetYaxis()->SetTitle("#Deltam^{2} [GeV^{2}/c^{4}]");
+	h_mm->Sumw2();
+	
+	h_mm_etaCut = new TH2F("mm_etaCut", "Squared Missing Mass", 
+		nRecAngleBins, m_minRecAngleBin, m_maxRecAngleBin, 1000, -20.0, 20.0);
+	h_mm_etaCut->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
+	h_mm_etaCut->GetYaxis()->SetTitle("#Deltam^{2} [GeV^{2}/c^{4}]");
+	h_mm_etaCut->Sumw2();
+	
+	h_mm_elasEtaCut = new TH2F("mm_elasEtaCut", "Squared Missing Mass", 
+		nRecAngleBins, m_minRecAngleBin, m_maxRecAngleBin, 1000, -20.0, 20.0);
+	h_mm_elasEtaCut->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
+	h_mm_elasEtaCut->GetYaxis()->SetTitle("#Deltam^{2} [GeV^{2}/c^{4}]");
+	h_mm_elasEtaCut->Sumw2();
+	
+	h_mm_coh = new TH2F("mm_coh", "Squared Missing Mass", 
+		nRecAngleBins, m_minRecAngleBin, m_maxRecAngleBin, 1000, -20.0, 20.0);
+	h_mm_coh->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
+	h_mm_coh->GetYaxis()->SetTitle("#Deltam^{2} [GeV^{2}/c^{4}]");
+	h_mm_coh->Sumw2();
+	
+	h_mm_coh_etaCut = new TH2F("mm_coh_etaCut", "Squared Missing Mass", 
+		nRecAngleBins, m_minRecAngleBin, m_maxRecAngleBin, 1000, -20.0, 20.0);
+	h_mm_coh_etaCut->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
+	h_mm_coh_etaCut->GetYaxis()->SetTitle("#Deltam^{2} [GeV^{2}/c^{4}]");
+	h_mm_coh_etaCut->Sumw2();
+	
+	h_mm_coh_elasEtaCut = new TH2F("mm_coh_elasEtaCut", "Squared Missing Mass", 
+		nRecAngleBins, m_minRecAngleBin, m_maxRecAngleBin, 1000, -20.0, 20.0);
+	h_mm_coh_elasEtaCut->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
+	h_mm_coh_elasEtaCut->GetYaxis()->SetTitle("#Deltam^{2} [GeV^{2}/c^{4}]");
+	h_mm_coh_elasEtaCut->Sumw2();
+	
+	//------------------------------------------//
+	// Miscellaneous:
+	
+	h_elasVSmgg = new TH2F("elasVSmgg", "Elasticity vs. Invmass Ratio", 500, 0.0, 2.0, 500, 0.0, 2.0);
+	h_elasVSmgg->GetXaxis()->SetTitle("m_{#gamma#gamma} / m_{#eta,PDG}");
+	h_elasVSmgg->GetXaxis()->SetTitleSize(0.05);
+	h_elasVSmgg->GetXaxis()->CenterTitle(true);
+	h_elasVSmgg->GetYaxis()->SetTitle("E_{#gamma#gamma} / E_{#eta}#left(E_{#gamma},#theta_{#gamma#gamma}#right)");
+	h_elasVSmgg->GetYaxis()->SetTitleSize(0.05);
+	h_elasVSmgg->GetYaxis()->CenterTitle(true);
+	
+	h_xy_1 = new TH2F("xy_1", "Postion of Shower 1; x_{1} [cm]; y_{1} [cm]", 500, -100., 100., 500, -100., 100.);
+	h_xy_2 = new TH2F("xy_2", "Postion of Shower 2; x_{2} [cm]; y_{2} [cm]", 500, -100., 100., 500, -100., 100.);
+	
+	// For MC:
+	
+	h_recVSthrown = new TH2F("recVSthrown", "Reconstructed Angle vs. Thrown Angle; #theta_{thrown} [#circ]; #theta_{rec} [#circ]",
+		nThrownAngleBins, m_minThrownAngleBin, m_maxThrownAngleBin,
+		nRecAngleBins,    m_minRecAngleBin,    m_maxRecAngleBin);
+	h_recVSthrown->Sumw2();
+	
+	h_mggThrown = new TH2F("mggThrown", "Two-Photon Invariant Mass", 
+		nThrownAngleBins, m_minThrownAngleBin, m_maxThrownAngleBin, 
+		nInvmassBins,     m_minInvmassBin,     m_maxInvmassBin);
+	h_mggThrown->GetXaxis()->SetTitle("#theta_{thrown} [#circ]");
+	h_mggThrown->GetYaxis()->SetTitle("m_{#gamma#gamma} [GeV/c^{2}]");
+	h_mggThrown->Sumw2();
+	
+	h_mggConstrThrown = new TH2F("mggConstrThrown", "Two-Photon Invariant Mass", 
+		nThrownAngleBins, m_minThrownAngleBin, m_maxThrownAngleBin, 
+		nInvmassBins,     m_minInvmassBin,     m_maxInvmassBin);
+	h_mggConstrThrown->GetXaxis()->SetTitle("#theta_{thrown} [#circ]");
+	h_mggConstrThrown->GetYaxis()->SetTitle("m_{#gamma#gamma} [GeV/c^{2}]");
+	h_mggConstrThrown->Sumw2();
+	
+	//------------------------------------------//
+	// Different Veto Options:
+	
+	for(int ihist=0; ihist<m_nVetos; ihist++) {
+		
+		h_elas_veto[ihist] = new TH2F(Form("elas_veto_%d",ihist), 
+			Form("Elasticity (Veto Option %d)", ihist+1), 
+			nRecAngleBins, m_minRecAngleBin, m_maxRecAngleBin, 1000, 0.0, 2.0);
+		h_elas_veto[ihist]->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
+		h_elas_veto[ihist]->GetYaxis()->SetTitle(
+			"E_{#gamma#gamma}/E_{#eta}#left(E_{#gamma},#theta_{#gamma#gamma}#right)");
+		
+		h_mgg_veto[ihist] = new TH2F(Form("mgg_veto_%d",ihist), 
+			Form("Two-Photon Invariant Mass (Veto Option %d)", ihist+1), 
+			nRecAngleBins, m_minRecAngleBin, m_maxRecAngleBin, nInvmassBins, m_minInvmassBin, m_maxInvmassBin);
+		h_mgg_veto[ihist]->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
+		h_mgg_veto[ihist]->GetYaxis()->SetTitle("M_{#gamma#gamma} [GeV/c^{2}]");
+		h_mgg_veto[ihist]->Sumw2();
+		
+		h_mggConstr_veto[ihist] = new TH2F(Form("mggConstr_veto_%d",ihist), 
+			Form("Energy-Constrained Invariant Mass (Veto Option %d)", ihist+1), 
+			nRecAngleBins, m_minRecAngleBin, m_maxRecAngleBin, nInvmassBins, m_minInvmassBin, m_maxInvmassBin);
+		h_mggConstr_veto[ihist]->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
+		h_mggConstr_veto[ihist]->GetYaxis()->SetTitle("M_{#gamma#gamma}^{constr} [GeV/c^{2}]");
+		h_mggConstr_veto[ihist]->Sumw2();
+		
+		h_mggConstr_coh_veto[ihist] = new TH2F(Form("mggConstr_coh_veto_%d",ihist), 
+			Form("Energy-Constrained Invariant Mass (Veto Option %d)", ihist+1), 
+			nRecAngleBins, m_minRecAngleBin, m_maxRecAngleBin, nInvmassBins, m_minInvmassBin, m_maxInvmassBin);
+		h_mggConstr_coh_veto[ihist]->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
+		h_mggConstr_coh_veto[ihist]->GetYaxis()->SetTitle("M_{#gamma#gamma}^{constr} [GeV/c^{2}]");
+		h_mggConstr_coh_veto[ihist]->Sumw2();
+		
+		h_mm_veto[ihist] = new TH2F(Form("mm_veto_%d",ihist),
+			Form("Missing Mass Squared (Veto Option %d)", ihist+1), 
+			nRecAngleBins, m_minRecAngleBin, m_maxRecAngleBin, 1000, -20.0, 20.0);
+		h_mm_veto[ihist]->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
+		h_mm_veto[ihist]->GetYaxis()->SetTitle("M_{miss}^{2} [GeV^{2}/c^{4}]");
+		h_mm_veto[ihist]->Sumw2();
+		
+		h_mm_coh_veto[ihist] = new TH2F(Form("mm_coh_veto_%d",ihist),
+			Form("Missing Mass Squared (Energy-constrained) (Veto Option %d)", ihist+1), 
+			nRecAngleBins, m_minRecAngleBin, m_maxRecAngleBin, 1000, -20.0, 20.0);
+		h_mm_coh_veto[ihist]->GetXaxis()->SetTitle("#theta_{#gamma#gamma} [#circ]");
+		h_mm_coh_veto[ihist]->GetYaxis()->SetTitle("M_{miss}^{2} [GeV^{2}/c^{4}]");
+		h_mm_coh_veto[ihist]->Sumw2();
+	}
+	
+	dirGG->cd("../");
+	
+	dirPrimExEta->cd("../");
+	
+	return;
+}
