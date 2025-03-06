@@ -845,29 +845,73 @@ void EtaAnalyzer::ExtractAngularYield(int drawOption)
 		
 		locFitter.FitData();
 		
+		//----------------------------------------------------------------//
+		// Save Results:
+		
+		// Integrated counts for full and empty target histograms:
+		
+		double locCounts, locCountsErr;
+		IntegrateHistogram(locHistFull, locCounts, locCountsErr, 0.5, 0.6);
+		
+		double locCountsEmpty, locCountsEmptyErr;
+		IntegrateHistogram(locHistEmpty, locCountsEmpty, locCountsEmptyErr, 0.5, 0.6);
+		
+		m_angularCounts[iThetaBin]      = {locCounts,      locCountsErr     };
+		m_angularCountsEmpty[iThetaBin] = {locCountsEmpty, locCountsEmptyErr};
+		
+		// Yield of exclusive eta's estimated from histogram counts minus background fit functions:
+		
 		double locYield, locYieldErr;
-		locFitter.GetYield(locYield, locYieldErr, 1, 0);
+		locFitter.GetYield(locYield, locYieldErr, 0, 1);
+		
+		m_angularYield[iThetaBin] = {locYield, locYieldErr};
+		
+		// Yield of exclusive eta's estimated from integrating signal fit function
 		
 		double locYieldFit, locYieldFitErr;
 		locFitter.GetYield(locYieldFit, locYieldFitErr, 1, 1);
 		
-		// Inflate error bars from empty target background:
-		double nEmpty = locHistEmpty->Integral(locHistEmpty->FindBin(0.5), locHistEmpty->FindBin(0.6)) / m_emptyTargetFluxRatio;
-		locYieldErr = sqrt(locYield + pow(m_emptyTargetFluxRatio,2.0)*nEmpty);
-		
-		m_angularYield[iThetaBin]    = {locYield, locYieldErr};
 		m_angularYieldFit[iThetaBin] = {locYieldFit, locYieldFitErr};
 		
+		// Empty target background integrated between mgg cut (from fit function):
+		
 		if(m_fitOption_empty) {
-			double emptyEtaFrac, emptyEtaFracErr;
-			locFitter.GetEmptyEtaFraction(emptyEtaFrac, emptyEtaFracErr);
-			m_angularEmptyEtas[iThetaBin] = {emptyEtaFrac, emptyEtaFracErr};
+			double emptyYield, emptyYieldErr;
+			locFitter.GetEmptyYield(emptyYield, emptyYieldErr);
+			m_angularYieldEmpty[iThetaBin] = {emptyYield, emptyYieldErr};
 		}
+		
+		// Only the peaking part of the empty target background integrated between mgg cut:
+		
+		if(m_fitOption_empty && (m_emptyFitOption_eta || m_emptyFitOption_fdc)) {
+			double emptyYield, emptyYieldErr;
+			locFitter.GetEmptyYield(emptyYield, emptyYieldErr, 1);
+			m_angularYieldEmptyPeaking[iThetaBin] = {emptyYield, emptyYieldErr};
+		}
+		
+		// Fraction of eta pion background (N_eta+pi / N_eta) integrated over all mgg:
+		
 		if(m_fitOption_signal==7) {
 			double etaPionFrac, etaPionFracErr;
 			locFitter.GetEtaPionFraction(etaPionFrac, etaPionFracErr);
 			m_angularEtaPionFraction[iThetaBin] = {etaPionFrac, etaPionFracErr};
 		}
+		
+		// Yield of eta+pion background, integrated between mgg cut:
+		
+		if(m_fitOption_signal==7) {
+			double etaPionYield, etaPionYieldErr;
+			locFitter.GetEtaPionYield(etaPionYield, etaPionYieldErr);
+			m_angularYieldEtaPion[iThetaBin] = {etaPionYield, etaPionYieldErr};
+		}
+		
+		// Yield of omega background, integrated between mgg cut:
+		
+		double locYieldOmega, locYieldOmegaErr;
+		locFitter.GetOmegaYield(locYieldOmega, locYieldOmegaErr);
+		m_angularYieldOmega[iThetaBin] = {locYieldOmega, locYieldOmegaErr};
+		
+		//----------------------------------------------------------------//
 		
 		if(drawOption)
 		{
@@ -1134,8 +1178,14 @@ void EtaAnalyzer::PlotEmptyEtaRatio()
 	double locMaxRatio = 0.0;
 	for(int ibin=0; ibin<m_angularBin.size(); ibin++) {
 		
-		double locRatio    = m_angularEmptyEtas[ibin].first;
-		double locRatioErr = m_angularEmptyEtas[ibin].second;
+		double num    = m_angularYieldEmptyPeaking[ibin].first;
+		double numErr = m_angularYieldEmptyPeaking[ibin].second;
+		
+		double den    = m_angularYield[ibin].first;
+		double denErr = m_angularYield[ibin].second;
+		
+		double locRatio    = num/den;
+		double locRatioErr = sqrt(pow(numErr/den,2.0) + pow(denErr*num/den/den,2.0));
 		
 		if(locRatio>locMaxRatio) locMaxRatio = locRatio;
 		
@@ -1219,6 +1269,129 @@ void EtaAnalyzer::PlotEtaPionFraction()
 	return;
 }
 
+void EtaAnalyzer::StyleYieldHistogram(TH1F *h1, int markerStyle, int markerColor)
+{
+	h1->GetXaxis()->SetTitle("Polar Angle, #theta_{#eta} [#circ]");
+	h1->GetXaxis()->SetTitleSize(0.05);
+	h1->GetXaxis()->SetTitleOffset(1.0);
+	h1->GetXaxis()->CenterTitle("");
+	h1->GetYaxis()->SetTitleSize(0.05);
+	h1->GetYaxis()->SetTitleOffset(1.0);
+	h1->GetYaxis()->CenterTitle("");
+	h1->SetTitle("");
+	h1->SetMarkerStyle(markerStyle);
+	h1->SetMarkerSize(0.7);
+	h1->SetMarkerColor(markerColor);
+	h1->SetLineColor(markerColor);
+	h1->SetLineWidth(2);
+}
+
+void EtaAnalyzer::PlotBackgrounds()
+{
+	h_Counts      = new TH1F("Counts", "", 
+		m_angularBin.size(), 0.0, m_reconAngleBinSize*(double)(m_angularBin.size()));
+	h_EmptyCounts = new TH1F("EmptyCounts", "", 
+		m_angularBin.size(), 0.0, m_reconAngleBinSize*(double)(m_angularBin.size()));
+	
+	StyleYieldHistogram(h_Counts, 4, kBlack);
+	StyleYieldHistogram(h_EmptyCounts, 4, kRed);
+	
+	h_Counts->GetYaxis()->SetTitle(Form("counts / %.2f#circ", 2.0*m_angularBin[0].second));
+	h_EmptyCounts->GetYaxis()->SetTitle(Form("counts / %.2f#circ", 2.0*m_angularBin[0].second));
+	
+	//----------------------------------//
+	
+	h_EmptyYield = new TH1F("EmptyYield", "", 
+		m_angularBin.size(), 0.0, m_reconAngleBinSize*(double)(m_angularBin.size()));
+	h_OmegaYield = new TH1F("OmegaYield", "", 
+		m_angularBin.size(), 0.0, m_reconAngleBinSize*(double)(m_angularBin.size()));
+	h_EtaPionYield = new TH1F("EtaPionYield", "", 
+		m_angularBin.size(), 0.0, m_reconAngleBinSize*(double)(m_angularBin.size()));
+	
+	StyleYieldHistogram(h_EmptyYield, 4, kRed);
+	StyleYieldHistogram(h_OmegaYield, 4, kCyan);
+	StyleYieldHistogram(h_EtaPionYield, 4, kGreen);
+	
+	h_EmptyYield->GetYaxis()->SetTitle(Form("counts / %.2f#circ", 2.0*m_angularBin[0].second));
+	h_OmegaYield->GetYaxis()->SetTitle(Form("counts / %.2f#circ", 2.0*m_angularBin[0].second));
+	h_EtaPionYield->GetYaxis()->SetTitle(Form("counts / %.2f#circ", 2.0*m_angularBin[0].second));
+	
+	//----------------------------------//
+	
+	for(int ibin=0; ibin<m_angularBin.size(); ibin++) 
+	{
+		h_Counts->SetBinContent(ibin+1, m_angularCounts[ibin].first);
+		h_Counts->SetBinError(ibin+1, m_angularCounts[ibin].second);
+		
+		h_EmptyCounts->SetBinContent(ibin+1, m_angularCountsEmpty[ibin].first);
+		h_EmptyCounts->SetBinError(ibin+1, m_angularCountsEmpty[ibin].second);
+		
+		h_EmptyYield->SetBinContent(ibin+1, m_angularYieldEmpty[ibin].first);
+		h_EmptyYield->SetBinError(ibin+1, m_angularYieldEmpty[ibin].second);
+		
+		h_OmegaYield->SetBinContent(ibin+1, m_angularYieldOmega[ibin].first);
+		h_OmegaYield->SetBinError(ibin+1, m_angularYieldOmega[ibin].second);
+		
+		h_EtaPionYield->SetBinContent(ibin+1, m_angularYieldEtaPion[ibin].first);
+		h_EtaPionYield->SetBinError(ibin+1, m_angularYieldEtaPion[ibin].second);
+	}
+	
+	if(cCounts==NULL) {
+		cCounts = new TCanvas("cCounts", "Counts", 950, 700);
+		styleCanvas(cCounts);
+	}
+	
+	cCounts->cd();
+	h_Counts->Draw("PE1X0");
+	h_EmptyCounts->Draw("PE1X0 same");
+	cCounts->Update();
+	cCounts->Modified();
+	
+	if(cBackgrounds==NULL) {
+		cBackgrounds = new TCanvas("cBackgrounds", "Backgrounds", 950, 700);
+		styleCanvas(cBackgrounds);
+	}
+	
+	cBackgrounds->cd();
+	h_Counts->Draw("PE1X0");
+	if(h_Yield) h_Yield->Draw("PE1X0 same");
+	h_EmptyYield->Draw("PE1X0 same");
+	h_OmegaYield->Draw("PE1X0 same");
+	h_EtaPionYield->Draw("PE1X0 same");
+	cBackgrounds->Update();
+	cBackgrounds->Modified();
+	
+	return;
+}
+
+void EtaAnalyzer::IntegrateHistogram(TH1F *h1, double& counts, double& countsErr, double minCut, double maxCut)
+{
+	counts    = 0.0;
+	countsErr = 0.0;
+	
+	// First check that the histogram binnning properly aligns with specified cut range, and provide warning if not:
+	
+	int locMinBin = h1->FindBin(minCut);
+	int locMaxBin = h1->FindBin(maxCut)-1;
+	
+	double locBinSize = h1->GetXaxis()->GetBinWidth(1);
+	double locMinCut  = h1->GetBinCenter(locMinBin) - 0.5*locBinSize;
+	double locMaxCut  = h1->GetBinCenter(locMaxBin) + 0.5*locBinSize;
+	
+	if((fabs(locMinCut-minCut)>1.e-6) || (fabs(locMaxCut-maxCut)>1.e-6)) {
+		printf("\n\nWarning inside 'IntegrateHistogram' function call: Cut ranges don't overlap with histogram bin edges.\n");
+		printf("  Cut range: %f - %f\n", minCut, maxCut);
+		printf("  Bin edges used in signal integration: %f - %f\n\n", locMinCut, locMaxCut);
+	}
+	
+	for(int ibin=locMinBin; ibin<=locMaxBin; ibin++) {
+		counts    += h1->GetBinContent(ibin);
+		countsErr += pow(h1->GetBinError(ibin),2.0);
+	}
+	countsErr = sqrt(countsErr);
+	
+	return;
+}
 
 void EtaAnalyzer::InitializeBinning()
 {
@@ -1227,14 +1400,20 @@ void EtaAnalyzer::InitializeBinning()
 	while(locAngle < m_maxReconAngle) 
 	{
 		m_angularBin.push_back({locAngle, 0.5*m_reconAngleBinSize});
+		
+		m_angularCounts.push_back({0.0, 0.0});
+		m_angularCountsEmpty.push_back({0.0, 0.0});
+		
 		m_angularYield.push_back({0.0, 0.0});
 		m_angularYieldFit.push_back({0.0, 0.0});
-		m_angularYieldEmpty.push_back({0.0, 0.0});
-		m_angularSBR.push_back({0.0, 0.0});
 		
-		m_angularGasEtas.push_back({0.0, 0.0});
-		m_angularEmptyEtas.push_back({0.0, 0.0});
+		m_angularYieldEmpty.push_back({0.0, 0.0});
+		m_angularYieldEmptyPeaking.push_back({0.0, 0.0});
+		
 		m_angularEtaPionFraction.push_back({0.0, 0.0});
+		m_angularYieldEtaPion.push_back({0.0, 0.0});
+		
+		m_angularYieldOmega.push_back({0.0, 0.0});
 		
 		locAngle += m_reconAngleBinSize;
 	}
@@ -1276,6 +1455,11 @@ void EtaAnalyzer::WriteROOTFile(TString fileName)
 	if(h_YieldFit) h_YieldFit->Write();
 	if(h_CrossSection) h_CrossSection->Write();
 	if(h_CrossSectionFit) h_CrossSectionFit->Write();
+	if(h_Counts) h_Counts->Write();
+	if(h_EmptyCounts) h_EmptyCounts->Write();
+	if(h_EmptyYield) h_EmptyYield->Write();
+	if(h_OmegaYield) h_OmegaYield->Write();
+	if(h_EtaPionYield) h_EtaPionYield->Write();
 	fOut->Write();
 	fOut->Close();
 	

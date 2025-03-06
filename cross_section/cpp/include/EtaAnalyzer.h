@@ -44,12 +44,19 @@ class EtaAnalyzer {
 			h_EtaPionFraction_bggen(nullptr), 
 			h_EtaPionFraction(nullptr), 
 			h_EmptyEtaRatio(nullptr), 
+			h_Counts(nullptr),
+			h_EmptyCounts(nullptr),
+			h_EmptyYield(nullptr),
+			h_OmegaYield(nullptr),
+			h_EtaPionYield(nullptr),
 			cFit(nullptr), 
 			cYield(nullptr), 
 			cCrossSection(nullptr), 
 			cAcceptance(nullptr), 
 			cEmptyRatio(nullptr), 
-			cEtaPionFraction(nullptr), 
+			cEtaPionFraction(nullptr),
+			cCounts(nullptr),
+			cBackgrounds(nullptr),
 			l0(nullptr), 
 			lp(nullptr), 
 			lm(nullptr), 
@@ -223,6 +230,7 @@ class EtaAnalyzer {
 		void PlotCrossSection();
 		void PlotEmptyEtaRatio();
 		void PlotEtaPionFraction();
+		void PlotBackgrounds();
 		void WriteROOTFile(TString fileName="yield.root");
 		
 		TH1F* GetAngularYield(int opt=0) { 
@@ -252,6 +260,10 @@ class EtaAnalyzer {
 		
 		// Ratio of etas from empty target runs to full target runs:
 		TH1F *h_EmptyEtaRatio;
+		
+		// 
+		TH1F *h_Counts,     *h_EmptyCounts;
+		TH1F *h_EmptyYield, *h_EtaPionYield, *h_OmegaYield;
 		
 		//-----------------------------------------------------------//
 		// Run-specific numbers:
@@ -294,7 +306,7 @@ class EtaAnalyzer {
 		
 		int m_emptyFitOption_eta;
 		int m_emptyFitOption_omega;
-		int m_emptyFitOption_fdc; 
+		int m_emptyFitOption_fdc;
 		int m_emptyFitOption_bkgd, m_emptyFitOption_poly;
 		
 		double      m_minFitRange,      m_maxFitRange;
@@ -302,13 +314,21 @@ class EtaAnalyzer {
 		
 		// Vectors to store results:
 		
-		vector<pair<double,double>> m_angularBin;
-		vector<pair<double,double>> m_angularYield, m_angularYieldFit, m_angularYieldEmpty;
-		vector<pair<double,double>> m_angularSBR;
+		vector<pair<double,double>> m_angularBin;               // central angle and error of each bin
+		vector<pair<double,double>> m_angularCounts;            // simple integration of histogram within mgg cut
+		vector<pair<double,double>> m_angularCountsEmpty;       // same as above, but for empty target
 		
-		vector<pair<double,double>> m_angularGasEtas;
-		vector<pair<double,double>> m_angularEmptyEtas;
-		vector<pair<double,double>> m_angularEtaPionFraction;
+		vector<pair<double,double>> m_angularYield;             // eta yield extracted as counts minus background fit functions
+		vector<pair<double,double>> m_angularYieldFit;          // eta yield extracted as integrated signal fit function
+		
+		vector<pair<double,double>> m_angularYieldEmpty;        // empty target background integrated within mgg cut
+		vector<pair<double,double>> m_angularYieldEmptyPeaking; // only peaking part of empty background integrated
+		
+		vector<pair<double,double>> m_angularEtaPionFraction;   // fraction parameter fit result 
+		                                                        //  (N_eta+pion/N_eta, integrated over all mgg)
+		vector<pair<double,double>> m_angularYieldEtaPion;      // Eta+Pion yield integrated between mgg cut
+		
+		vector<pair<double,double>> m_angularYieldOmega;
 		
 		// Histograms to store results:
 		
@@ -316,11 +336,14 @@ class EtaAnalyzer {
 		TH1F *h_CrossSection, *h_CrossSectionFit;
 		TH1F *h_Acceptance;
 		
+		void IntegrateHistogram(TH1F*, double&, double&, double, double);
+		void StyleYieldHistogram(TH1F *h1, int markerStyle=4, int markerColor=kBlack);
 		void InitializeBinning();
 		
 		// Objects needed for drawing:
 		
 		TCanvas *cFit, *cYield, *cCrossSection, *cAcceptance, *cEmptyRatio, *cEtaPionFraction;
+		TCanvas *cCounts, *cBackgrounds;
 		TPad *pFit, *pRes;
 		void InitializeFitCanvas();
 		

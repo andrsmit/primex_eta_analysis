@@ -179,7 +179,9 @@ class MggFitter {
 		void FillEmptyPull(TH1F*);
 		
 		void GetYield(double&, double&, int useSignalPars=0, int subtractEtaPion=0);
-		void GetEmptyYield(double&,double&);
+		void GetEmptyYield(double&, double&, int excludeNonPeaking=0);
+		void GetOmegaYield(double&, double&);
+		void GetEtaPionYield(double&, double&);
 		void GetEmptyEtaFraction(double&, double&);
 		void GetEtaPionFraction(double&, double&);
 		

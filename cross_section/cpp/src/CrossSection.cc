@@ -82,7 +82,7 @@ int main(int argc, char **argv)
 	YieldFitter locFitter;
 	InitializeYieldFitter(locFitter, locEtaAna);
 	
-	if(1) {
+	if(0) {
 		locEtaAna.ExtractAngularYield(locDrawOption);
 		if(locEtaAna.CalcAcceptance()) {
 			cout << "\n\nProblem getting acceptance.\n\n" << endl;
@@ -95,12 +95,13 @@ int main(int argc, char **argv)
 		if(locEtaAna.GetFitOption(1)==7) {
 			locEtaAna.PlotEtaPionFraction();
 		}
+		locEtaAna.PlotBackgrounds();
 		locEtaAna.WriteROOTFile(Form("output/yield_phase%d.root",locEtaAna.GetPhase()));
 		locFitter.SetYield((TH1F*)locEtaAna.GetAngularYield(1));
 	}
 	else {
-		TFile *fIn = new TFile("output/yield_phase3_fitEmpty.root", "READ");
-		TH1F *hYield = (TH1F*)fIn->Get("AngularYieldFit");
+		TFile *fIn = new TFile("test.root", "READ");
+		TH1F *hYield = (TH1F*)fIn->Get("hs");
 		hYield->SetDirectory(0);
 		fIn->Close();
 		locFitter.SetYield(hYield);

@@ -51,7 +51,7 @@ int EtaAnalyzer::LoadLuminosity() {
 	//------------------------------------------------//
 	
 	locFluxFile->Close();
-	
+	printf("  Integrated Photon Flux: %f\n", integratedFlux);
 	printf("  Integrated Luminosity [%.2f GeV - %.2f GeV]: %f pb-1\n", m_minBeamEnergy, m_maxBeamEnergy, (1.e-6)*m_luminosity);
 	
 	return 0;

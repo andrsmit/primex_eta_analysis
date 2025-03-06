@@ -102,7 +102,7 @@ void MggFitter::FitData()
 		
 		int frac_etapi_par = f_fit->GetParNumber("frac_{#eta#pi}");
 		f_fit->ReleaseParameter(frac_etapi_par);
-		f_fit->SetParLimits(frac_etapi_par, 0.0, 0.5);
+		f_fit->SetParLimits(frac_etapi_par, 0.0, 10.0);
 		/*
 		f_fit->SetParLimits(frac_etapi_par, 
 			m_etaPionFraction - m_etaPionFraction, 
@@ -1237,7 +1237,7 @@ void MggFitter::GetYield(double &yield, double &yieldErr, int useFitPars, int su
 	return;
 }
 
-void MggFitter::GetEmptyYield(double &yield, double &yieldErr) {
+void MggFitter::GetEmptyYield(double &yield, double &yieldErr, int excludeNonPeaking) {
 	
 	yield    = 0.0;
 	yieldErr = 0.0;
@@ -1247,29 +1247,30 @@ void MggFitter::GetEmptyYield(double &yield, double &yieldErr) {
 	TF1 *locfEta;
 	int nParameters = InitializeEmptyFitFunction(&locfEta, "locfEta");
 	locfEta->SetParameters(f_empty->GetParameters());
-	locfEta->SetParameter(locfEta->GetNpar()-1, emptyBinSize);
 	
 	// zero the parameters not associated with peaking structure in eta mass region:
 	
-	for(int ipar=0; ipar<nParameters; ipar++) {
-		TString locParName = Form("%s",locfEta->GetParName(ipar));
-		//printf(" p%d: %s = %f\n", ipar, locParName.Data(), locfEta->GetParameter(ipar));
-		
-		if(locParName.Contains("eta") || locParName.Contains("sigma")) continue;
-		
-		if(locParName.Contains("fdc,2")) {
-			//
-			// Comment out the following line to exclude the 
-			// portion of the empty fit function which is meant to 
-			// describe the omegas coming from the second FDC package
-			// from the yield of etas estimated from the empty target
-			// runs.
-			// 
-			//continue;
+	if(excludeNonPeaking){
+		for(int ipar=0; ipar<nParameters; ipar++) {
+			TString locParName = Form("%s",locfEta->GetParName(ipar));
+			//printf(" p%d: %s = %f\n", ipar, locParName.Data(), locfEta->GetParameter(ipar));
+			
+			if(locParName.Contains("eta") || locParName.Contains("sigma")) continue;
+			
+			if(locParName.Contains("fdc,2")) {
+				//
+				// Comment out the following line to exclude the 
+				// portion of the empty fit function which is meant to 
+				// describe the omegas coming from the second FDC package
+				// from the yield of etas estimated from the empty target
+				// runs.
+				// 
+				continue;
+			}
+			
+			locfEta->SetParameter(ipar,0.0);
+			locfEta->SetParError(ipar,0.0);
 		}
-		
-		locfEta->SetParameter(ipar,0.0);
-		locfEta->SetParError(ipar,0.0);
 	}
 	/*
 	for(int ipar=0; ipar<nParameters; ipar++) {
@@ -1278,12 +1279,15 @@ void MggFitter::GetEmptyYield(double &yield, double &yieldErr) {
 	}
 	*/
 	
+	// the last parameter of the empty target fit function is the bin size:
+	locfEta->SetParameter(locfEta->GetNpar()-1, emptyBinSize);
+	
 	//-----------------------------------------------//
 	
 	int minMggBin = h_empty->FindBin(minMggCut);
 	int maxMggBin = h_empty->FindBin(maxMggCut)-1;
 	
-	// integrate empty fit function and divide by bin size (make sure h_empty has same bin size as h_data):
+	// integrate empty function:
 	
 	for(int ibin=minMggBin; ibin<=maxMggBin; ibin++) {
 		double locEtas = locfEta->Eval(h_empty->GetBinCenter(ibin));
@@ -1296,6 +1300,99 @@ void MggFitter::GetEmptyYield(double &yield, double &yieldErr) {
 	
 	yield   *= (A_empty * m_emptyRatio);
 	yieldErr = sqrt(yield);
+	
+	delete locfEta;
+	return;
+}
+
+void MggFitter::GetOmegaYield(double &yield, double &yieldErr)
+{
+	yield    = 0.0;
+	yieldErr = 0.0;
+	
+	//-----------------------------------------------//
+	
+	TF1 *locfEta;
+	int nParameters = InitializeFitFunction(&locfEta, "locfEta");
+	locfEta->SetParameters(f_fit->GetParameters());
+	
+	// zero the parameters not associated with the omega background:
+	
+	for(int ipar=0; ipar<nParameters; ipar++) {
+		TString locParName = Form("%s",locfEta->GetParName(ipar));
+		if((locParName.Contains("omega")) || (locParName.Contains("sigma"))) continue;
+		
+		locfEta->SetParameter(ipar,0.0);
+		locfEta->SetParError(ipar,0.0);
+	}
+	
+	//-----------------------------------------------//
+	
+	int minMggBin = h_data->FindBin(minMggCut);
+	int maxMggBin = h_data->FindBin(maxMggCut)-1;
+	
+	// integrate function:
+	
+	for(int ibin=minMggBin; ibin<=maxMggBin; ibin++) {
+		double locYield = locfEta->Eval(h_data->GetBinCenter(ibin));
+		yield += locYield;
+	}
+	
+	// estimate uncertainty from fit parameter:
+	
+	int omegaYieldPar = locfEta->GetParNumber("N_{#omega}");
+	
+	double locRelErr = locfEta->GetParError(omegaYieldPar) / locfEta->GetParameter(omegaYieldPar);
+	
+	yieldErr = yield * locRelErr;
+	
+	delete locfEta;
+	return;
+}
+
+void MggFitter::GetEtaPionYield(double &yield, double &yieldErr)
+{
+	yield    = 0.0;
+	yieldErr = 0.0;
+	
+	if(fitOption_signal<6) return;
+	
+	//-----------------------------------------------//
+	
+	TF1 *locfEta;
+	int nParameters = InitializeFitFunction(&locfEta, "locfEta");
+	locfEta->SetParameters(f_fit->GetParameters());
+	
+	// zero the parameters not associated with the eta+pion background:
+	
+	for(int ipar=0; ipar<nParameters; ipar++) {
+		TString locParName = Form("%s",locfEta->GetParName(ipar));
+		if((locParName=="N_{#eta}") || (locParName=="#Delta#mu_{#eta}") || (locParName.Contains("#eta#pi")) 
+			|| (locParName.Contains("sigma"))) continue;
+		
+		locfEta->SetParameter(ipar,0.0);
+		locfEta->SetParError(ipar,0.0);
+	}
+	
+	//-----------------------------------------------//
+	
+	int minMggBin = h_data->FindBin(minMggCut);
+	int maxMggBin = h_data->FindBin(maxMggCut)-1;
+	
+	// integrate function:
+	
+	for(int ibin=minMggBin; ibin<=maxMggBin; ibin++) {
+		double locYield = locfEta->Eval(h_data->GetBinCenter(ibin));
+		yield += locYield;
+	}
+	
+	// estimate uncertainty from fit parameter:
+	
+	int etaPionYieldPar = locfEta->GetParNumber("frac_{#eta#pi}");
+	
+	double locRelErr = locfEta->GetParError(etaPionYieldPar) / locfEta->GetParameter(etaPionYieldPar);
+	
+	yieldErr = yield * locRelErr;
 	
 	delete locfEta;
 	return;
