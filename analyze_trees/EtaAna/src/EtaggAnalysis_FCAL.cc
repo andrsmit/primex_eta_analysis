@@ -9,7 +9,7 @@ void EtaAna::EtaggAnalysis_FCAL() {
 	double locThrownBeamEnergy = 0.0, locThrownAngle = 0.0;
 	if(m_FillThrown) {
 		GetThrownEnergyAndAngle(locThrownBeamEnergy, locThrownAngle);
-		//if((locThrownBeamEnergy < m_minBeamEnergyCut) || (locThrownBeamEnergy >= m_maxBeamEnergyCut)) return;
+		if((locThrownBeamEnergy < m_minBeamEnergyCut) || (locThrownBeamEnergy >= m_maxBeamEnergyCut)) return;
 		PlotThrown(locThrownBeamEnergy, locThrownAngle);
 	}
 	
@@ -23,8 +23,9 @@ void EtaAna::EtaggAnalysis_FCAL() {
 	// Get list of 'good' FCAL showers:
 	
 	vector<int> locGoodFCALShowers; locGoodFCALShowers.clear();
-	int locNFCALShowers_EnergyCut;
-	int locNFCALShowers = GetFCALShowerList(locGoodFCALShowers, locNFCALShowers_EnergyCut, 0.0, m_FCALExtraEnergyCut, 0.0, m_FCALRFCut);
+	int locNFCALShowersEnergyCut;
+	int locNFCALShowersTotal = GetFCALShowerList(locGoodFCALShowers, locNFCALShowersEnergyCut, 
+		0.0, m_FCALExtraEnergyCut, 0.0, m_FCALRFCut);
 	
 	//-------------------------------------------//
 	// Get list of 'good' BCAL showers:
@@ -41,15 +42,16 @@ void EtaAna::EtaggAnalysis_FCAL() {
 	//-------------------------------------------//
 	
 	int locNBCALShowers_1ns = 0.;
-	double locBCALRFDT = 0., locBCALPhi = 0.; // only useful when there's exactly 1 BCAL shower within timing cut
+	double locBCALRFDT = 0., locBCALPhi = 0., locBCALTheta = 0.; // only useful when there's exactly 1 BCAL shower within timing cut
 	
 	for(int ishow=0; ishow<locGoodBCALShowers.size(); ishow++) {
 		int showIndex = locGoodBCALShowers[ishow];
 		TVector3 locPos = GetBCALPosition(showIndex);
 		double locT = m_bcalT[showIndex] - (locPos.Mag()/m_c) - m_rfTime;
 		
-		locBCALRFDT = locT;
-		locBCALPhi  = locPos.Phi() * TMath::RadToDeg();
+		locBCALRFDT  = locT;
+		locBCALPhi   = locPos.Phi()   * TMath::RadToDeg();
+		locBCALTheta = locPos.Theta() * TMath::RadToDeg();
 		if(fabs(locT) < 1.0) {
 			locNBCALShowers_1ns++;
 		}
@@ -65,9 +67,13 @@ void EtaAna::EtaggAnalysis_FCAL() {
 	for(int icut=0; icut<m_fcalEnergyCuts.size(); icut++) {
 		
 		int locGoodFCALShowers_cut = 0;
-		for(int ishow=0; ishow<locGoodFCALShowers.size(); ishow++) {
-			if((m_fcalE[locGoodFCALShowers[ishow]] > m_fcalEnergyCuts[icut]))
+		for(int ishow=0; ishow<m_nfcal; ishow++) {
+			
+			TVector3 locPos = GetFCALPosition(ishow);
+			double locT = m_fcalT[ishow] - (locPos.Mag()/m_c) - m_rfTime;
+			if((fabs(locT) < m_FCALRFCut) && (m_fcalE[ishow] > m_fcalEnergyCuts[icut])) {
 				locGoodFCALShowers_cut++;
+			}
 		}
 		if(locGoodFCALShowers_cut==2) locEnergyCuts.push_back(1);
 		else locEnergyCuts.push_back(0);
@@ -75,10 +81,10 @@ void EtaAna::EtaggAnalysis_FCAL() {
 	
 	//=====================================================================================//
 	
-	int locNGoodFCALShowers = (int)locGoodFCALShowers.size();
-	if(locNGoodFCALShowers<2) return;
+	int locNFCALShowersGood = (int)locGoodFCALShowers.size();
+	if(locNFCALShowersGood<2) return;
 	
-	for(int ishow=0; ishow<(locNGoodFCALShowers-1); ishow++) {
+	for(int ishow=0; ishow<(locNFCALShowersGood-1); ishow++) {
 		
 		int show1 = locGoodFCALShowers[ishow];
 		TVector3 pos1 = GetFCALPosition(show1);
@@ -95,7 +101,7 @@ void EtaAna::EtaggAnalysis_FCAL() {
 		CheckTOFMatch(pos1, tof_dx1, tof_dy1, tof_dt1, m_TOFRFCut);
 		double tof_dr1 = sqrt(pow(tof_dx1,2.0)+pow(tof_dy1,2.0));
 		
-		for(int jshow=(ishow+1); jshow<locNGoodFCALShowers; jshow++) {
+		for(int jshow=(ishow+1); jshow<locNFCALShowersGood; jshow++) {
 			
 			int show2 = locGoodFCALShowers[jshow];
 			TVector3 pos2 = GetFCALPosition(show2);
@@ -117,7 +123,8 @@ void EtaAna::EtaggAnalysis_FCAL() {
 			
 			// reject combinations of FCAL showers where both showers are near a TOF hit:
 			bool isTOFVeto = false;
-			if((tof_dr1 < m_FCALTOFCut) || (tof_dr2 < m_FCALTOFCut)) isTOFVeto = true;
+			//if((tof_dr1 < m_FCALTOFCut) || (tof_dr2 < m_FCALTOFCut)) isTOFVeto = true;
+			if((tof_dr1 < m_FCALTOFCut) && (tof_dr2 < m_FCALTOFCut)) isTOFVeto = true;
 			
 			if(isTOFVeto) continue;
 			
@@ -147,8 +154,6 @@ void EtaAna::EtaggAnalysis_FCAL() {
 			//-----------------------------------------------------//
 			// BCAL+SC Veto:
 			
-			bool isHadronicVeto = true;
-			
 			int locNSCHits_coplanar = 0;
 			for(int isc=0; isc<locGoodSCHits.size(); isc++) {
 				int hitIndex = locGoodSCHits[isc];
@@ -156,21 +161,10 @@ void EtaAna::EtaggAnalysis_FCAL() {
 				if(IsCoplanarSC(locDeltaPhi)) locNSCHits_coplanar++;
 			}
 			
-			if(locNBCALShowers==0) 
-			{
-				if((locNSCHits<=1) && (locNSCHits_coplanar==locNSCHits)) {
-					isHadronicVeto = false;
-				}
-			}
-			else if(locNBCALShowers==1) {
-				if(IsCoplanarBCAL(prodPhi-locBCALPhi) && (locBCALRFDT>1.0)) {
-					if((locNSCHits<=1) && (locNSCHits_coplanar==locNSCHits)) {
-						isHadronicVeto = false;
-					}
-				}
-			}
-			
-			if(isHadronicVeto) continue;
+			if(
+				IsHadronicVeto(m_vetoOption, locNBCALShowers, locNBCALShowers_1ns, locNSCHits, locNSCHits_coplanar, 
+					prodPhi, locBCALPhi, locBCALTheta, locBCALRFDT)
+			) continue;
 			
 			//-----------------------------------------------------//
 			// Loop over Beam photons
@@ -185,6 +179,9 @@ void EtaAna::EtaggAnalysis_FCAL() {
 				
 				// Calculate the energy of the eta meson, assuming production on a free nucleon:
 				double etaEnergy = GetEnergyAfterRecoil(eb, prodTheta, ParticleMass(Eta), ParticleMass(Proton));
+				
+				// Calculate the energy of the eta meson, assuming production on a helium-4 nucleus::
+				double etaEnergyCoh = GetEnergyAfterRecoil(eb, prodTheta, ParticleMass(Eta), ParticleMass(m_Target));
 				
 				// Apply a cut on the elasticity
 				//  (ratio of measured energy of 2-photons, to the calculated energy above):
@@ -206,8 +203,10 @@ void EtaAna::EtaggAnalysis_FCAL() {
 				double sigr = pow(sig1/sig2,2.0);
 				
 				// Energy-constrained invariant mass assuming production on free nucleon:
-				double e1c = e1/(1.+sigr) + (etaEnergy-e2)/(1.+(1./sigr));
-				double e2c = etaEnergy - e1c;
+				double constraintEnergy = m_IsCohMC ? etaEnergyCoh : etaEnergy;
+				
+				double e1c = e1/(1.+sigr) + (constraintEnergy-e2)/(1.+(1./sigr));
+				double e2c = constraintEnergy - e1c;
 				double invmassConstr = sqrt(2.*e1c*e2c*(1.-cos12));
 				
 				//-----------------------------------------------------//
@@ -220,22 +219,22 @@ void EtaAna::EtaggAnalysis_FCAL() {
 					h_mgg_FCALFidCut->Fill(prodTheta, invmassConstr, fillWeight);
 					if((e1 > m_FCALEnergyCut) && (e2 > m_FCALEnergyCut)) {
 						h_mgg_FCALCuts->Fill(prodTheta, invmassConstr, fillWeight);
-						if(locNFCALShowers_EnergyCut==2) {
+						if(locNFCALShowersEnergyCut==2) {
 							h_mgg_FCALGoodMult->Fill(prodTheta, invmassConstr, fillWeight);
-							if(locNFCALShowers==2) {
+							if(locNFCALShowersTotal==2) {
 								h_mgg_FCALMult->Fill(prodTheta, invmassConstr, fillWeight);
 							}
 						}
 					}
 				}
 				
-				if(locNFCALShowers_EnergyCut==2) {
+				if(locNFCALShowersEnergyCut==2) {
 					// Vary the size of the fiducial cut used:
 					if((e1 > m_FCALEnergyCut) && (e2 > m_FCALEnergyCut)) {
 						for(int icut=0; icut<m_fcalFiducialCuts.size(); icut++) {
 							if(!FCALFiducialCut(pos1, m_fcalFiducialCuts[icut]) && !FCALFiducialCut(pos2, m_fcalFiducialCuts[icut])) {
 								h_mgg_FCALFidCutVec[icut]->Fill(prodTheta, invmassConstr, fillWeight);
-								if(m_FillThrown && isEta) {
+								if(m_FillThrown && IsEtaCut(invmassConstr)) {
 									h_AngularMatrix_FCALFidCutVec[icut]->Fill(locThrownAngle, prodTheta, locThrownBeamEnergy, fillWeight);
 								}
 							}
@@ -247,7 +246,7 @@ void EtaAna::EtaggAnalysis_FCAL() {
 						for(int icut=0; icut<m_fcalEnergyCuts.size(); icut++) {
 							if(e1>m_fcalEnergyCuts[icut] && e2>m_fcalEnergyCuts[icut]) {
 								h_mgg_FCALECutVec[icut]->Fill(prodTheta, invmassConstr, fillWeight);
-								if(m_FillThrown && isEta) {
+								if(m_FillThrown && IsEtaCut(invmassConstr)) {
 									h_AngularMatrix_FCALECutVec[icut]->Fill(locThrownAngle, prodTheta, locThrownBeamEnergy, fillWeight);
 								}
 							}
@@ -260,7 +259,7 @@ void EtaAna::EtaggAnalysis_FCAL() {
 					for(int icut=0; icut<locEnergyCuts.size(); icut++) {
 						if(locEnergyCuts[icut]==1) {
 							h_mgg_FCALExtraECutVec[icut]->Fill(prodTheta, invmassConstr, fillWeight);
-							if(m_FillThrown && isEta) {
+							if(m_FillThrown && IsEtaCut(invmassConstr)) {
 								h_AngularMatrix_FCALExtraECutVec[icut]->Fill(locThrownAngle, prodTheta, locThrownBeamEnergy, fillWeight);
 							}
 						}

@@ -1,5 +1,5 @@
-#ifndef _ETA_INCLUDE_
-#define _ETA_INCLUDE_
+#ifndef _BGGEN_ANA_INCLUDE_
+#define _BGGEN_ANA_INCLUDE_
 
 using namespace std;
 
@@ -25,21 +25,44 @@ using namespace std;
 //---------------------------------------------//
 // Structure for the configuration settings:
 
-struct genSettings_t {
-	string ver_str;
-	int min_run;
-	int max_run;
-	int run_number;       //
-	string  input_fname;
-	string output_fname;
+struct anaSettings_t {
+	string versionString;
+	int primexPhase;
+	int analysisOption;
+	int vetoOption;
+	int minRunNumber;
+	int maxRunNumber;
+	string configFileName;
+	
+	// only used for analyzing phase 3 simulations:
+	int batchNumber  = 0;
+	int targetNumber = 0;
+	
+	// only used for testing code over single file:
+	int singleRunNumber;
+	string  inputFileName;
+	string outputFileName;
 };
 
-void printUsage(genSettings_t, int goYes);
+int GetMinRunNumber(int phase) {
+	if(phase==1)      return  61378;
+	else if(phase==2) return  81396;
+	else if(phase==3) return 110657;
+	else return -1;
+};
+int GetMaxRunNumber(int phase) {
+	if(phase==1)      return  61956;
+	else if(phase==2) return  81716;
+	else if(phase==3) return 111957;
+	else return -1;
+};
+
+void printUsage(anaSettings_t, int goYes);
 
 int main(int argc, char **argv);
 
 //----------   Data Objects   ----------//
 
-char rootTree_pathName[256], rootFile_pathName[256];
+char rootTreePathName[256], rootFilePathName[256], runListPathName[256];
 
 #endif

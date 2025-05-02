@@ -14,8 +14,24 @@ void MggFitter::DrawFitResults(TCanvas &canvas)
 
 void MggFitter::FitData()
 {
+	fitOption = "R0Q";
+	
 	InitializeFitFunction(&f_fit);
 	m_nParameters = InitializeFitParameters();
+	
+	int hadronicBkgdFracPar = f_fit->GetParNumber("frac_{bkgd}");
+	int  etaPionBkgdFracPar = f_fit->GetParNumber("frac_{#eta#pi}");
+	
+	if(useRawMass) {
+		// If fitting the raw invariant mass, don't try to separate hadronic background:
+		if((fitOption_signal==7) || (fitOption_signal==8)) {
+			f_fit->FixParameter(hadronicBkgdFracPar, 0.0);
+		}
+		else if(fitOption_signal>8) {
+			f_fit->FixParameter( etaPionBkgdFracPar, 0.0);
+			f_fit->FixParameter(hadronicBkgdFracPar, 0.0);
+		}
+	}
 	
 	//-----------------------------------------------------------------//
 	// release omega parameters and fit the region around the peak:
@@ -40,8 +56,14 @@ void MggFitter::FitData()
 	h_data->GetXaxis()->SetRangeUser(minFitRange, maxFitRange);
 	
 	excludeRegions.clear();
-	f_fit->SetRange(0.52, 0.60);
+	f_fit->SetRange(0.50, 0.60);
 	GuessEtaParameters();
+	
+	int deltaMuPar = f_fit->GetParNumber("#Delta#mu_{#eta}");
+	f_fit->SetParameter(deltaMuPar, 0.002);
+	f_fit->SetParLimits(deltaMuPar,-0.01,0.02);
+	f_fit->FixParameter(deltaMuPar,0.0025);
+	
 	h_data->Fit(f_fit, fitOption);
 	
 	// widen fit range and release background parameters:
@@ -50,11 +72,12 @@ void MggFitter::FitData()
 	
 	// if we're fitting with the empty target pdf, release that normalization here:
 	if(fitOption_empty) {
-		//if(emptyFitOption_eta>1)   f_empty->SetParameter("N_{#eta}",   0.0);
-		//if(emptyFitOption_omega>1) f_empty->SetParameter("N_{#omega}", 0.0);
+		//if(emptyFitOption_eta>0)   f_empty->SetParameter("N_{#eta}",   0.0);
+		//if(emptyFitOption_omega>0) f_empty->SetParameter("N_{#omega}", 0.0);
+		//f_empty->SetParameter("N_{fdc,2}", 0.0);
 		
-		GuessEmptyParameters();
-		h_data->Fit(f_fit, fitOption);
+		//GuessEmptyParameters();
+		//h_data->Fit(f_fit, fitOption);
 	}
 	
 	GuessBkgdParameters();
@@ -74,60 +97,184 @@ void MggFitter::FitData()
 		h_data->Fit(f_fit, fitOption);
 	}
 	
-	if(fitOption_signal==6 && angle>0.5) {
+	if(fitOption_signal==6) {
 		
-		// Use a second Gaussian to approximate shape of inclusive background:
+		FixBkgdParameters();
+		f_fit->SetRange(0.5, maxFitRange);
 		
-		int     N_eta_par = f_fit->GetParNumber("N_{#eta,inc}");
-		int    mu_eta_par = f_fit->GetParNumber("#mu_{#eta,inc}");
-		int sigma_eta_par = f_fit->GetParNumber("#sigma_{#eta,inc}");
+		int     NBkgdPar = f_fit->GetParNumber(     "N_{#eta,bkgd}");
+		int    muBkgdPar = f_fit->GetParNumber(   "#mu_{#eta,bkgd}");
+		int sigmaBkgdPar = f_fit->GetParNumber("#sigma_{#eta,bkgd}");
+		int alphaBkgdPar = f_fit->GetParNumber("#alpha_{#eta,bkgd}");
+		int     nBkgdPar = f_fit->GetParNumber(     "n_{#eta,bkgd}");
 		
-		f_fit->ReleaseParameter(    N_eta_par);
-		f_fit->ReleaseParameter(   mu_eta_par);
-		f_fit->ReleaseParameter(sigma_eta_par);
+		double NBkgdGuess = f_fit->GetParameter("N_{#eta}") * m_etaPionBkgdFrac;
 		
-		f_fit->SetParLimits(    N_eta_par, 0.,   1.e5);
-		f_fit->SetParLimits(   mu_eta_par, 0.55, 0.62);
-		f_fit->SetParLimits(sigma_eta_par, 0.015, 0.05);
+		f_fit->ReleaseParameter(    NBkgdPar);
+		f_fit->ReleaseParameter(   muBkgdPar);
+		f_fit->ReleaseParameter(sigmaBkgdPar);
+		f_fit->ReleaseParameter(alphaBkgdPar);
+		f_fit->ReleaseParameter(    nBkgdPar);
+		
+		f_fit->SetParameter(    NBkgdPar, NBkgdGuess);
+		f_fit->SetParameter(   muBkgdPar, 0.58);
+		f_fit->SetParameter(sigmaBkgdPar, 0.02);
+		f_fit->SetParameter(alphaBkgdPar, 1.0);
+		f_fit->SetParameter(    nBkgdPar, 2.0);
+		
+		f_fit->SetParLimits(    NBkgdPar, 0.000,  1.0e5);
+		f_fit->SetParLimits(   muBkgdPar, 0.560,  0.585);
+		f_fit->SetParLimits(sigmaBkgdPar, 0.010,  0.025);
+		f_fit->SetParLimits(alphaBkgdPar, 0.500,  9.999);
+		f_fit->SetParLimits(    nBkgdPar, 1.100, 49.999);
+		
+		f_fit->FixParameter(alphaBkgdPar, 1.e6);
+		f_fit->FixParameter(    nBkgdPar, 2.0);
 		
 		h_data->Fit(f_fit, fitOption);
+		
+		f_fit->SetRange(minFitRange, maxFitRange);
+		ReleaseBkgdParameters();
+		h_data->Fit(f_fit, fitOption);
+		
+		f_fit->SetRange(minMggCut, maxFitRange);
+		FixBkgdParameters();
+		FixOmegaParameters();
+		h_data->Fit(f_fit, fitOption);
 	}
-	
-	if(fitOption_signal==7) {
+	else if((fitOption_signal==7) || (fitOption_signal==8)) {
 		
 		FixBkgdParameters();
 		
-		// Use a eta+pion lineshape from bggen:
-		f_fit->SetRange(0.5, 0.62);
+		f_fit->SetRange(0.5, maxFitRange);
 		
-		int frac_etapi_par = f_fit->GetParNumber("frac_{#eta#pi}");
-		f_fit->ReleaseParameter(frac_etapi_par);
-		f_fit->SetParLimits(frac_etapi_par, 0.0, 10.0);
-		/*
-		f_fit->SetParLimits(frac_etapi_par, 
-			m_etaPionFraction - m_etaPionFraction, 
-			m_etaPionFraction + m_etaPionFraction);
-		*/
-		h_data->Fit(f_fit, fitOption);
+		if(!useRawMass) {
+			f_fit->ReleaseParameter(hadronicBkgdFracPar);
+			f_fit->SetParLimits(hadronicBkgdFracPar, 0.0, 3.0);
+			h_data->Fit(f_fit, fitOption);
+		}
 		
-		//---------------------------------//
-		// allow 'shift' of eta+pion background to change compared with exclusive signal:
-		/*
-		int dmu_etapi_par = f_fit->GetParNumber("#Delta#mu_{#eta#pi}");
-		f_fit->ReleaseParameter(dmu_etapi_par);
-		f_fit->SetParLimits(dmu_etapi_par, -0.01, 0.01);
-		
-		h_data->Fit(f_fit, fitOption);
-		*/
 		//---------------------------------//
 		
 		f_fit->SetRange(minFitRange, maxFitRange);
 		ReleaseBkgdParameters();
 		h_data->Fit(f_fit, fitOption);
+		
+		// If at this point the eta+pion fraction is near 0, fix it as such to get a better estimation on the signal yield uncertainty:
+		if(f_fit->GetParameter(hadronicBkgdFracPar)<0.001) {
+			f_fit->FixParameter(hadronicBkgdFracPar, 0.0);
+			FixBkgdParameters();
+			h_data->Fit(f_fit, fitOption);
+		}
+		h_data->Fit(f_fit, fitOption);
+		
+		f_fit->SetRange(minMggCut, maxFitRange);
+		FixBkgdParameters();
+		FixOmegaParameters();
+		h_data->Fit(f_fit, fitOption);
+	}
+	else if((fitOption_signal==9) || (fitOption_signal==10)) {
+		
+		FixBkgdParameters();
+		
+		f_fit->SetRange(0.5, maxFitRange);
+		
+		if(!useRawMass) {
+			f_fit->ReleaseParameter(etaPionBkgdFracPar);
+			f_fit->SetParLimits(etaPionBkgdFracPar, 0.0, 3.0);
+			
+			f_fit->ReleaseParameter(hadronicBkgdFracPar);
+			f_fit->SetParLimits(hadronicBkgdFracPar, 0.0, 3.0);
+			
+			h_data->Fit(f_fit, fitOption);
+		}
+		
+		//---------------------------------//
+		
+		f_fit->SetRange(minFitRange, maxFitRange);
+		ReleaseBkgdParameters();
+		h_data->Fit(f_fit, fitOption);
+		
+		// If at this point the eta+pion fraction is near 0, fix it as such to get a better estimation on the signal yield uncertainty:
+		if(f_fit->GetParameter(etaPionBkgdFracPar)<0.01) {
+			f_fit->FixParameter(etaPionBkgdFracPar, 0.0);
+			FixBkgdParameters();
+			h_data->Fit(f_fit, fitOption);
+		}
+		if(f_fit->GetParameter(hadronicBkgdFracPar)<0.01) {
+			f_fit->FixParameter(hadronicBkgdFracPar, 0.0);
+			FixBkgdParameters();
+			h_data->Fit(f_fit, fitOption);
+		}
+		h_data->Fit(f_fit, fitOption);
+		
+		f_fit->SetRange(minMggCut, maxFitRange);
+		FixBkgdParameters();
+		FixOmegaParameters();
+		h_data->Fit(f_fit, fitOption);
+	}
+	else if(fitOption_signal>10) {
+		
+		FixBkgdParameters();
+		
+		f_fit->SetRange(0.5, maxFitRange);
+		
+		if(!useRawMass) {
+			etaPionBkgdFracPar = f_fit->GetParNumber("A_{#eta#pi}");
+			hadronicBkgdFracPar = f_fit->GetParNumber("A_{bkgd}");
+			
+			printf("\n\nETAPIONYIELD: %f\n", m_etaPionYieldBGGEN);
+			printf("HADRONICBKGDYIELD: %f\n", m_hadronicBkgdYieldBGGEN);
+			printf("ETAYIELD: %f\n\n", f_fit->GetParameter("N_{#eta}"));
+			
+			//if(m_etaPionYieldBGGEN<(0.02*f_fit->GetParameter("N_{#eta}"))) {
+				//f_fit->FixParameter(etaPionBkgdFracPar, 1.0);
+			//} else {
+				f_fit->ReleaseParameter(etaPionBkgdFracPar);
+				f_fit->SetParLimits(etaPionBkgdFracPar, 0.0, 10.0);
+			//}
+			if(m_hadronicBkgdYieldBGGEN<(0.05*f_fit->GetParameter("N_{#eta}"))) {
+				f_fit->FixParameter(hadronicBkgdFracPar, 1.0);
+			} else {
+				f_fit->ReleaseParameter(hadronicBkgdFracPar);
+				f_fit->SetParLimits(hadronicBkgdFracPar, 0.0, 3.0);
+			}
+			
+			if(vetoOption>=6) {
+				f_fit->FixParameter(hadronicBkgdFracPar, 1.0);
+			}
+			
+			h_data->Fit(f_fit, fitOption);
+		}
+		
+		//---------------------------------//
+		
+		f_fit->SetRange(minFitRange, maxFitRange);
+		ReleaseBkgdParameters();
+		h_data->Fit(f_fit, fitOption);
+		
+		// If at this point the eta+pion fraction is near 0, fix it as such to get a better estimation on the signal yield uncertainty:
+		/*
+		if(f_fit->GetParameter(etaPionBkgdFracPar)<0.01) {
+			f_fit->FixParameter(etaPionBkgdFracPar, 0.0);
+			FixBkgdParameters();
+			h_data->Fit(f_fit, fitOption);
+		}
+		if(f_fit->GetParameter(hadronicBkgdFracPar)<0.01) {
+			f_fit->FixParameter(hadronicBkgdFracPar, 0.0);
+			FixBkgdParameters();
+			h_data->Fit(f_fit, fitOption);
+		}
+		
+		h_data->Fit(f_fit, fitOption);
+		*/
+		f_fit->SetRange(minMggCut, maxFitRange);
+		FixBkgdParameters();
+		FixOmegaParameters();
+		h_data->Fit(f_fit, fitOption);
 	}
 	
-	f_fit->SetRange(minFitRange, maxFitRange);
-	
+	f_fit->SetRange(0.35, 1.20);
 	return;
 }
 
@@ -141,9 +288,9 @@ void MggFitter::GuessOmegaParameters()
 	
 	double     NGuess = h_data->Integral(h_data->FindBin(minOmegaFit), h_data->FindBin(maxOmegaFit));
 	double    muGuess = EtaAnalyzer::m_massOmega;
-	double sigmaGuess = 0.025;
+	double sigmaGuess = 0.032;
 	double alphaGuess = 1.0;
-	double     nGuess = 2.0;
+	double     nGuess = 6.0;
 	
 	double locMax = 0.0;
 	for(int ibin=h_data->FindBin(0.75); ibin<=h_data->FindBin(maxOmegaFit); ibin++) {
@@ -165,14 +312,14 @@ void MggFitter::GuessOmegaParameters()
 			f_fit->SetParameter(    NPar,     NGuess);
 			f_fit->SetParameter(   muPar,    muGuess);
 			f_fit->SetParameter(sigmaPar, sigmaGuess);
-			f_fit->SetParameter(alphaPar, alphaGuess);
-			f_fit->SetParameter(    nPar,    nGuess);
+			//f_fit->SetParameter(alphaPar, alphaGuess);
+			//f_fit->SetParameter(    nPar,    nGuess);
 			
 			f_fit->SetParLimits(    NPar, 0.000,  1.0e6);
 			f_fit->SetParLimits(   muPar, 0.750,  0.800);
 			f_fit->SetParLimits(sigmaPar, 0.015,  0.050);
-			f_fit->SetParLimits(alphaPar, 0.200,  9.999);
-			f_fit->SetParLimits(    nPar, 1.100, 49.999);
+			//f_fit->SetParLimits(alphaPar, 0.200,  9.999);
+			//f_fit->SetParLimits(    nPar, 1.100, 49.999);
 			/*
 			if(m_FIX_OMEGA_PARS) {
 				f_fit->FixParameter(   muPar, m_OMEGA_MU);
@@ -221,6 +368,47 @@ void MggFitter::GuessOmegaParameters()
 			*/
 			break;
 		}
+		case 4:
+		{
+			// Lineshape fit:
+			
+			int NomegaPar = f_fit->GetParNumber("N_{#omega}");
+			int   NrhoPar = f_fit->GetParNumber("N_{#rho}");
+			int    dmuPar = f_fit->GetParNumber("#Delta#mu_{#omega}");
+			
+			f_fit->SetParameter(NomegaPar, NGuess);
+			f_fit->SetParameter(  NrhoPar, 0.0);
+			f_fit->SetParameter(   dmuPar, muGuess - h_omegaLineshape->GetBinCenter(h_omegaLineshape->GetMaximumBin()));
+			
+			f_fit->SetParLimits(NomegaPar,  0.00, 1.e5);
+			f_fit->SetParLimits(  NrhoPar,  0.00, 1.e5);
+			f_fit->SetParLimits(   dmuPar, -0.03, 0.03);
+			/*
+			if(m_FIX_OMEGA_PARS) {
+				f_fit->FixParameter(dmuPar, m_OMEGA_DMU);
+			}
+			*/
+			break;
+		}
+		case 5:
+		{
+			// Using lineshape fit result as initial guess
+			
+			// Let number of omega's and center of peak float freely:
+			int  NPar = f_fit->GetParNumber(  "N_{#omega}");
+			int muPar = f_fit->GetParNumber("#mu_{#omega}");
+			
+			f_fit->SetParameter( NPar, NGuess);
+			f_fit->SetParLimits( NPar,  0.00, 1.e5);
+			f_fit->SetParameter(muPar, f_omegaLineshape->GetParameter(0));
+			f_fit->SetParLimits(muPar,  0.76, 0.80);
+			
+			// for all other parameters, fix according to lineshape:
+			for(int ipar=2; ipar<10; ipar++) {
+				f_fit->FixParameter(NPar+ipar, f_omegaLineshape->GetParameter(ipar-1));
+			}
+			break;
+		}
 	}
 	return;
 }
@@ -259,6 +447,14 @@ void MggFitter::FixOmegaParameters()
 			
 			f_fit->FixParameter(  NPar, f_fit->GetParameter(  NPar));
 			f_fit->FixParameter(dmuPar, f_fit->GetParameter(dmuPar));
+			break;
+		}
+		case 5:
+		{
+			int NPar = f_fit->GetParNumber("N_{#omega}");
+			for(int ipar=0; ipar<10; ipar++) {
+				f_fit->FixParameter(NPar+ipar, f_fit->GetParameter(NPar+ipar));
+			}
 			break;
 		}
 	}
@@ -333,6 +529,26 @@ void MggFitter::ReleaseOmegaParameters()
 			*/
 			break;
 		}
+		case 5:
+		{
+			int      NPar = f_fit->GetParNumber("N_{#omega}");
+			int sigma1Par = f_fit->GetParNumber("#sigma_{#omega,1}");
+			int sigma2Par = f_fit->GetParNumber("#sigma_{#omega,2}");
+			
+			f_fit->ReleaseParameter(NPar);
+			f_fit->SetParLimits(NPar, 0., 1.e6);
+			
+			f_fit->ReleaseParameter(sigma1Par);
+			f_fit->SetParLimits(sigma1Par, 0.02, 0.05);
+			f_fit->ReleaseParameter(sigma2Par);
+			f_fit->SetParLimits(sigma1Par, 0.02, 0.05);
+			/*
+			if(m_FIX_OMEGA_PARS) {
+				f_fit->FixParameter(dmuPar, m_OMEGA_DMU);
+			}
+			*/
+			break;
+		}
 	}
 	return;
 }
@@ -353,11 +569,10 @@ void MggFitter::GuessBkgdParameters()
 	double p1Guess = 0., p2Guess = 0., p3Guess = 0., p4Guess = 0.;
 	
 	if(fitOption_bkgd==2) {
-		p0Guess = h_data->GetBinContent(h_data->FindBin(minFitRange)) - f_fit->Eval(minFitRange);
-		p1Guess =  0.0;
-		p2Guess = -1.0;
-		p3Guess =  0.0;
-		p4Guess = minFitRange;
+		p0Guess =  h_data->GetBinContent(h_data->FindBin(minFitRange)) - f_fit->Eval(minFitRange);
+		p1Guess =  minFitRange;
+		p2Guess = -0.63;
+		p3Guess =  0.00;
 	}
 	
 	switch(fitOption_bkgd) {
@@ -367,7 +582,7 @@ void MggFitter::GuessBkgdParameters()
 			for(int ipar=0; ipar<=fitOption_poly; ipar++) {
 				int locParIndex = f_fit->GetParNumber(Form("p%d",ipar));
 				f_fit->SetParameter(locParIndex, 0.0);
-				f_fit->SetParLimits(locParIndex, -1.e4, 1.e4);
+				f_fit->SetParLimits(locParIndex, -1.e5, 1.e5);
 			}
 			break;
 		}
@@ -376,14 +591,14 @@ void MggFitter::GuessBkgdParameters()
 			// Exponential:
 			
 			f_fit->SetParameter(p0Par, p0Guess);
-			f_fit->SetParameter(p1Par, p1Guess);
+			f_fit->FixParameter(p1Par, p1Guess);
 			f_fit->SetParameter(p2Par, p2Guess);
-			f_fit->SetParameter(p3Par, p3Guess);
+			//f_fit->SetParameter(p3Par, p3Guess);
 			
 			f_fit->SetParLimits(p0Par,  0.00, 1.e5);
-			f_fit->SetParLimits(p1Par,  0.00, 1.00);
-			f_fit->SetParLimits(p2Par, -1.e3, 1.e3);
-			f_fit->SetParLimits(p3Par, -1.e3, 1.e3);
+			//f_fit->SetParLimits(p1Par,  0.00, 1.00);
+			f_fit->SetParLimits(p2Par, -1.e3, 0.0);
+			//f_fit->SetParLimits(p3Par, -1.e3, 1.e3);
 			break;
 		}
 		case 3:
@@ -392,7 +607,7 @@ void MggFitter::GuessBkgdParameters()
 			for(int ipar=0; ipar<=fitOption_poly; ipar++) {
 				int locParIndex = f_fit->GetParNumber(Form("p%d",ipar));
 				f_fit->SetParameter(locParIndex, 0.0001);
-				f_fit->SetParLimits(locParIndex, -1.e4, 1.e4);
+				f_fit->SetParLimits(locParIndex, -1.e5, 1.e5);
 			}
 			break;
 		}
@@ -447,7 +662,7 @@ void MggFitter::ReleaseBkgdParameters()
 			for(int ipar=0; ipar<=fitOption_poly; ipar++) {
 				int locParIndex = f_fit->GetParNumber(Form("p%d",ipar));
 				f_fit->ReleaseParameter(locParIndex);
-				f_fit->SetParLimits(locParIndex, -1.e4, 1.e4);
+				f_fit->SetParLimits(locParIndex, -1.e5, 1.e5);
 			}
 			break;
 		}
@@ -460,14 +675,14 @@ void MggFitter::ReleaseBkgdParameters()
 			int p3Par = f_fit->GetParNumber("p3");
 			
 			f_fit->ReleaseParameter(p0Par);
-			f_fit->ReleaseParameter(p1Par);
+			//f_fit->ReleaseParameter(p1Par);
 			f_fit->ReleaseParameter(p2Par);
-			f_fit->ReleaseParameter(p3Par);
+			//f_fit->ReleaseParameter(p3Par);
 			
 			f_fit->SetParLimits(p0Par,  0.00, 1.e5);
-			f_fit->SetParLimits(p1Par,  0.00, 1.00);
-			f_fit->SetParLimits(p2Par, -1.e3, 1.e3);
-			f_fit->SetParLimits(p3Par, -1.e3, 1.e3);
+			//f_fit->SetParLimits(p1Par,  0.00, 1.00);
+			f_fit->SetParLimits(p2Par, -1.e3, -0.0);
+			//f_fit->SetParLimits(p3Par, -1.e3, 1.e3);
 			break;
 		}
 		case 3:
@@ -476,7 +691,7 @@ void MggFitter::ReleaseBkgdParameters()
 			for(int ipar=0; ipar<=fitOption_poly; ipar++) {
 				int locParIndex = f_fit->GetParNumber(Form("p%d",ipar));
 				f_fit->ReleaseParameter(locParIndex);
-				f_fit->SetParLimits(locParIndex, -1.e4, 1.e4);
+				f_fit->SetParLimits(locParIndex, -1.e5, 1.e5);
 			}
 			break;
 		}
@@ -558,32 +773,33 @@ void MggFitter::GuessEtaParameters()
 		{
 			// double Gaussian:
 			
-			int     N1Par = f_fit->GetParNumber("N_{#eta,1}");
-			int     N2Par = f_fit->GetParNumber("N_{#eta,2}");
+			int      NPar = f_fit->GetParNumber("N_{#eta}");
+			int   fracPar = f_fit->GetParNumber("fraction_{#eta}");
 			int    mu1Par = f_fit->GetParNumber("#mu_{#eta,1}");
 			int    dmuPar = f_fit->GetParNumber("#mu_{#eta,2}-#mu_{#eta,1}");
 			int sigma1Par = f_fit->GetParNumber("#sigma_{#eta,1}");
 			int sigma2Par = f_fit->GetParNumber("#sigma_{#eta,2}");
 			
-			f_fit->SetParameter(    N1Par, 0.9*NGuess);
-			f_fit->SetParameter(    N2Par, 0.1*NGuess);
+			f_fit->SetParameter(     NPar, NGuess);
+			f_fit->SetParameter(  fracPar, 0.2);
 			f_fit->SetParameter(   mu1Par, muGuess);
 			f_fit->SetParameter(   dmuPar, 0.0);
 			f_fit->SetParameter(sigma1Par, sigmaGuess);
 			f_fit->SetParameter(sigma2Par, sigmaGuess*2.0);
 			
-			f_fit->SetParLimits(    N1Par,  0.00, 1.e5);
-			f_fit->SetParLimits(    N2Par,  0.00, 0.5*NGuess);
+			f_fit->SetParLimits(     NPar,  0.00, 1.e5);
+			f_fit->SetParLimits(  fracPar,  0.00, 1.00);
 			f_fit->SetParLimits(   mu1Par,  0.54, 0.62);
 			f_fit->SetParLimits(   dmuPar,  0.00, 0.03);
 			f_fit->SetParLimits(sigma1Par,  0.01, 0.03);
 			f_fit->SetParLimits(sigma2Par,  0.01, 0.05);
-			
+			/*
 			if(angle<0.5) {
-				f_fit->FixParameter(    N2Par, 0.0);
+				f_fit->FixParameter(  fracPar, 0.0);
 				f_fit->FixParameter(   dmuPar, 0.0);
 				f_fit->FixParameter(sigma2Par, 2.0*sigmaGuess);
 			}
+			*/
 			break;
 		}
 		case 3:
@@ -632,28 +848,142 @@ void MggFitter::GuessEtaParameters()
 		{
 			// Start with Lineshape fit:
 			
-			int   NPar = f_fit->GetParNumber("N_{#eta}");
+			int   NPar = f_fit->GetParNumber(        "N_{#eta}");
 			int dmuPar = f_fit->GetParNumber("#Delta#mu_{#eta}");
 			
-			f_fit->SetParameter(  NPar, NGuess);
-			f_fit->SetParameter(dmuPar, 0.005);
+			f_fit->SetParameter( NPar, NGuess);
+			f_fit->SetParLimits( NPar, 0.00, 1.e5);
+			//f_fit->SetParameter(dmuPar, 0.0);
+			//f_fit->SetParLimits(dmuPar, -0.01, 0.02);
 			
-			f_fit->SetParLimits(  NPar,  0.00, 1.e5);
-			f_fit->SetParLimits(dmuPar, -0.01, 0.02);
+			/*
+			int     NBkgdPar = f_fit->GetParNumber(     "N_{#eta,bkgd}");
+			int    muBkgdPar = f_fit->GetParNumber(   "#mu_{#eta,bkgd}");
+			int sigmaBkgdPar = f_fit->GetParNumber("#sigma_{#eta,bkgd}");
+			int alphaBkgdPar = f_fit->GetParNumber("#alpha_{#eta,bkgd}");
+			int     nBkgdPar = f_fit->GetParNumber(     "n_{#eta,bkgd}");
+			
+			double NBkgdGuess = NGuess * m_etaPionBkgdFrac;
+			
+			f_fit->SetParameter(    NBkgdPar, NBkgdGuess);
+			f_fit->SetParameter(   muBkgdPar, 0.58);
+			f_fit->SetParameter(sigmaBkgdPar, 0.02);
+			f_fit->SetParameter(alphaBkgdPar, 1.0);
+			f_fit->SetParameter(    nBkgdPar, 2.0);
+			
+			f_fit->SetParLimits(    NBkgdPar, 0.000,  1.0e5);
+			f_fit->SetParLimits(   muBkgdPar, 0.560,  0.585);
+			f_fit->SetParLimits(sigmaBkgdPar, 0.010,  0.050);
+			f_fit->SetParLimits(alphaBkgdPar, 0.200,  9.999);
+			f_fit->SetParLimits(    nBkgdPar, 1.100, 49.999);
+			
+			f_fit->FixParameter(alphaBkgdPar, 1.e6);
+			*/
 			break;
 		}
 		case 7:
 		{
 			// Start with Lineshape fit:
 			
-			int   NPar = f_fit->GetParNumber("N_{#eta}");
+			int NPar = f_fit->GetParNumber("N_{#eta}");
+			f_fit->SetParameter(NPar, NGuess);
+			f_fit->SetParLimits(NPar,  0.00, 1.e5);
+			
 			int dmuPar = f_fit->GetParNumber("#Delta#mu_{#eta}");
 			
-			f_fit->SetParameter(  NPar, NGuess);
-			f_fit->SetParameter(dmuPar, 0.005);
+			// Fixed by a sloped line:
+			//f_fit->FixParameter(dmuPar, 0.00127989 + 0.000870044*angle);
 			
-			f_fit->SetParLimits(  NPar,  0.00, 1.e5);
-			f_fit->SetParLimits(dmuPar, -0.01, 0.02);
+			// Floating:
+			//f_fit->SetParameter(dmuPar, 0.0020);
+			//f_fit->SetParLimits(dmuPar, -0.01, 0.03);
+			
+			// Fixed at a flat value:
+			f_fit->FixParameter(dmuPar, 0.00);
+			break;
+		}
+		case 8:
+		{
+			// Start with Lineshape fit:
+			
+			int NPar = f_fit->GetParNumber("N_{#eta}");
+			f_fit->SetParameter(NPar, NGuess);
+			f_fit->SetParLimits(NPar,  0.00, 1.e5);
+			
+			int dmuPar = f_fit->GetParNumber("#Delta#mu_{#eta}");
+			
+			// Fixed by a sloped line:
+			//f_fit->FixParameter(dmuPar, 0.00127989 + 0.000870044*angle);
+			
+			// Floating:
+			//f_fit->SetParameter(dmuPar, 0.0020);
+			//f_fit->SetParLimits(dmuPar, -0.01, 0.03);
+			
+			// Fixed at a flat value:
+			f_fit->FixParameter(dmuPar, 0.00);
+			break;
+		}
+		case 9:
+		{
+			// Start with Lineshape fit:
+			
+			int NPar = f_fit->GetParNumber("N_{#eta}");
+			f_fit->SetParameter(NPar, NGuess);
+			f_fit->SetParLimits(NPar,  0.00, 1.e5);
+			
+			int dmuPar = f_fit->GetParNumber("#Delta#mu_{#eta}");
+			
+			// Fixed by a sloped line:
+			//f_fit->FixParameter(dmuPar, 0.00127989 + 0.000870044*angle);
+			
+			// Floating:
+			//f_fit->SetParameter(dmuPar, 0.0020);
+			//f_fit->SetParLimits(dmuPar, -0.01, 0.03);
+			
+			// Fixed at a flat value:
+			f_fit->FixParameter(dmuPar, 0.00);
+			break;
+		}
+		case 10:
+		{
+			// Start with Lineshape fit:
+			
+			int NPar = f_fit->GetParNumber("N_{#eta}");
+			f_fit->SetParameter(NPar, NGuess);
+			f_fit->SetParLimits(NPar,  0.00, 1.e5);
+			
+			int dmuPar = f_fit->GetParNumber("#Delta#mu_{#eta}");
+			
+			// Fixed by a sloped line:
+			//f_fit->FixParameter(dmuPar, 0.00127989 + 0.000870044*angle);
+			
+			// Floating:
+			//f_fit->SetParameter(dmuPar, 0.0020);
+			//f_fit->SetParLimits(dmuPar, -0.01, 0.03);
+			
+			// Fixed at a flat value:
+			f_fit->FixParameter(dmuPar, 0.00);
+			break;
+		}
+		case 11:
+		{
+			// Start with Lineshape fit:
+			
+			int NPar = f_fit->GetParNumber("N_{#eta}");
+			f_fit->SetParameter(NPar, NGuess);
+			f_fit->SetParLimits(NPar,  0.00, 1.e5);
+			
+			int dmuPar = f_fit->GetParNumber("#Delta#mu_{#eta}");
+			
+			// Fixed by a sloped line:
+			//f_fit->FixParameter(dmuPar, 0.00127989 + 0.000870044*angle);
+			
+			// Floating:
+			//f_fit->SetParameter(dmuPar, 0.0020);
+			//f_fit->SetParLimits(dmuPar, -0.01, 0.03);
+			
+			// Fixed at a flat value:
+			f_fit->FixParameter(dmuPar, 0.00);
 			break;
 		}
 	}
@@ -690,93 +1020,320 @@ void MggFitter::FitEtaLineshape(int drawOption)
 	if(h_etaLineshape==NULL) return;
 	
 	// first, check that the bin width of h_etaLineshape matches 'binSize':
-	CheckBinSize(h_etaLineshape, "Eta Lineshape");
+	//CheckBinSize(h_etaLineshape, "Eta Lineshape");
+	/*
+	for(int ibin=1; ibin<=h_etaLineshape->GetXaxis()->GetNbins(); ibin++) {
+		double locX = h_etaLineshape->GetBinCenter(ibin);
+		if((locX<minMggCut) || (locX>maxMggCut)) {
+			h_etaLineshape->SetBinContent(ibin, 0.0);
+			h_etaLineshape->SetBinError(ibin, 0.0);
+		}
+	}
+	h_etaLineshape->Scale(1.0/h_etaLineshape->Integral());
+	*/
 	
-	TF1 *locfEta = new TF1("locfEta", DoubleCrystalBallPDF_oneflip, 0.45, 0.65, 10);
-	locfEta->SetParameters(
-		0.538, //    mu1
-		0.007, // sigma1
-		0.925, // alpha1
-		6.122, //     n1
-		0.000, //    mu2-mu1
-		0.010, // sigma2
-		1.455, // alpha2
-		9.266, //     n2
-		0.300  // fraction
-	);
-	locfEta->FixParameter(9, h_etaLineshape->GetXaxis()->GetBinWidth(1));
+	h_etaLineshape->SetMarkerStyle(8);
+	h_etaLineshape->SetMarkerSize(0.7);
+	h_etaLineshape->SetMarkerColor(kBlue);
+	h_etaLineshape->SetLineColor(kBlue);
+	h_etaLineshape->GetYaxis()->SetTitle(Form("Normalized Counts / %d MeV/c^{2}", (int)(1.e3 * h_etaLineshape->GetBinWidth(1))));
+	h_etaLineshape->GetYaxis()->SetTitleSize(0.05);
+	h_etaLineshape->GetYaxis()->SetTitleOffset(1.2);
+	h_etaLineshape->GetYaxis()->CenterTitle(true);
+	h_etaLineshape->GetXaxis()->SetTitleSize(0.05);
+	h_etaLineshape->GetXaxis()->SetTitleOffset(1.0);
+	h_etaLineshape->GetXaxis()->CenterTitle(true);
+	h_etaLineshape->SetTitle("");
 	
-	locfEta->SetParLimits(0, 0.530,  0.560);
-	locfEta->SetParLimits(1, 0.004,  0.050);
-	locfEta->SetParLimits(2, 0.200,  9.999);
-	locfEta->SetParLimits(3, 1.100, 49.999);
+	switch(useRawMass) {
+		case 0:
+		{
+			// Two Crystal Ball Functions + One Gaussian:
+			
+			TF1 *locfEta = new TF1("locfEta", DoubleCrystalBallPlusGausPDF, 0.30, 0.80, 13);
+			locfEta->SetParameter(0, 0.540);  // mu1
+			locfEta->SetParameter(1, 0.0075); // sigma1
+			locfEta->SetParameter(2, 1.400);  // alpha1
+			locfEta->SetParameter(3, 9.000);  // n1
+			locfEta->SetParameter(4, 0.015);  // mu2-mu1
+			locfEta->SetParameter(5, 0.010);  // sigma2
+			locfEta->SetParameter(6, 1.400);  // alpha2
+			locfEta->SetParameter(7, 13.50);  // n2
+			locfEta->SetParameter(8, 0.535);  // mu3
+			locfEta->SetParameter(9, 0.007);  // sigma3
+			locfEta->SetParameter(10, 0.63);   // fraction1
+			locfEta->SetParameter(11, 0.20);   // fraction2
+			locfEta->FixParameter(12, h_etaLineshape->GetXaxis()->GetBinWidth(1));
+			
+			locfEta->SetParName(0, "#mu_{1}");
+			locfEta->SetParName(1, "#sigma_{1}");
+			locfEta->SetParName(2, "#alpha_{1}");
+			locfEta->SetParName(3, "n_{1}");
+			locfEta->SetParName(4, "#mu_{2}-#mu_{1}");
+			locfEta->SetParName(5, "#sigma_{2}");
+			locfEta->SetParName(6, "#alpha_{2}");
+			locfEta->SetParName(7, "n_{2}");
+			locfEta->SetParName(8, "#mu_{1}");
+			locfEta->SetParName(9, "#sigma_{1}");
+			locfEta->SetParName(10, "frac1");
+			locfEta->SetParName(11, "frac2");
+			
+			locfEta->SetParLimits(0, 0.530,  0.560);
+			locfEta->SetParLimits(1, 0.004,  0.050);
+			locfEta->SetParLimits(2, 0.200,  9.999);
+			locfEta->SetParLimits(3, 1.100, 49.999);
+			
+			locfEta->SetParLimits(4,-0.050,  0.050);
+			locfEta->SetParLimits(5, 0.004,  0.050);
+			locfEta->SetParLimits(6, 0.200,  9.999);
+			locfEta->SetParLimits(7, 1.100, 49.999);
+			
+			locfEta->SetParLimits(10, 0.0, 1.0);
+			locfEta->SetParLimits(11, 0.0, 1.0);
+			
+			// Force both crystal ball shapes to have the same mean:
+			//locfEta->FixParameter(4, 0.0);
+			
+			h_etaLineshape->Fit(locfEta, "R0Q");
+			
+			if(drawOption) {
+				TCanvas *cEtaLS = new TCanvas("cEtaLS", "cEtaLS", 950, 700);
+				cEtaLS->SetLeftMargin(0.13); cEtaLS->SetRightMargin(0.07);
+				cEtaLS->SetBottomMargin(0.13); cEtaLS->SetTopMargin(0.07);
+				
+				h_etaLineshape->GetXaxis()->SetRangeUser(0.4,0.7);
+				h_etaLineshape->Draw();
+				locfEta->SetRange(0.4,0.7);
+				locfEta->SetNpx(1000);
+				locfEta->Draw("same");
+				//h_etaLineshape->Draw("same");
+				
+				// Calculate fraction of PDF between 0.5 and 0.6 GeV/c2:
+				double fracAccepted = locfEta->Integral(0.5,0.6) / h_etaLineshape->GetXaxis()->GetBinWidth(1);
+				printf("  fraction of signal lineshape within mgg cut: %f\n", fracAccepted);
+				
+				TLatex locLat;
+				locLat.SetTextFont(42);
+				locLat.SetTextSize(0.045);
+				
+				double locMinAngle = angle - angleWidth;
+				double locMaxAngle = angle + angleWidth;
+				
+				locLat.SetTextColor(kBlue);
+				locLat.DrawLatexNDC(0.155, 0.875, 
+					Form("#scale[1.0]{%.2f#circ < #theta_{#gamma#gamma} < %.2f#circ}", locMinAngle, locMaxAngle));
+				
+				locLat.SetTextColor(kBlack);
+				locLat.DrawLatexNDC(0.165, 0.725, Form("#int_{%.2f}^{%.2f}#color[632]{f_{#eta}}dm_{#gamma#gamma} = %.4f", 
+					minMggCut, maxMggCut, fracAccepted));
+				
+				cEtaLS->Update();
+				getchar();
+				cEtaLS->SetLogy();
+				cEtaLS->Update();
+				
+				//cEtaLS->SaveAs(Form("mgg_lineshape_%.2fdeg_%.2fdeg_log.pdf", locMinAngle, locMaxAngle));
+				getchar();
+				delete cEtaLS;
+			}
+			
+			f_etaLineshape = new TF1("f_etaLineshape", DoubleCrystalBallPlusGausPDF, minFitRange, maxFitRange, 13);
+			f_etaLineshape->SetParameters(locfEta->GetParameters());
+			f_etaLineshape->FixParameter(12, 1.0);
+			
+			// Widen the lineshape by 10% (test):
+			//f_etaLineshape->SetParameter(1, 1.1*f_etaLineshape->GetParameter(1));
+			//f_etaLineshape->SetParameter(5, 1.1*f_etaLineshape->GetParameter(5));
+			
+			locfEta->Delete();
+			break;
+		}
+		case 2:
+		{
+			// Two Gaussian Functions:
+			
+			TF1 *locfEta = new TF1("locfEta", DoubleGausPDF, 0.52, 0.59, 6);
+			locfEta->SetParameters(
+				0.547, //      mu1
+				0.010, //   sigma1
+				0.000, //  mu2-mu1
+				0.015, //   sigma2
+				0.300  // fraction
+			);
+			locfEta->FixParameter(5, h_etaLineshape->GetXaxis()->GetBinWidth(1));
+			
+			locfEta->SetParLimits(0, 0.530,  0.570);
+			locfEta->SetParLimits(1, 0.005,  0.050);
+			locfEta->SetParLimits(2,-0.050,  0.050);
+			locfEta->SetParLimits(3, 0.010,  0.050);
+			locfEta->SetParLimits(4, 0.000,  1.000);
+			
+			// Force both crystal ball shapes to have the same mean:
+			//locfEta->FixParameter(2, 0.0);
+			
+			h_etaLineshape->Fit(locfEta, "R0QL");
+			
+			if(drawOption) {
+				TCanvas *cEtaLS = new TCanvas("cEtaLS", "cEtaLS", 950, 700);
+				h_etaLineshape->GetXaxis()->SetRangeUser(0.4,0.7);
+				locfEta->SetRange(0.4,0.7);
+				h_etaLineshape->Draw();
+				locfEta->Draw("same");
+				h_etaLineshape->Draw("same");
+				
+				// Calculate fraction of PDF between 0.5 and 0.6 GeV/c2:
+				double fracAccepted = locfEta->Integral(0.5,0.6) / h_etaLineshape->GetXaxis()->GetBinWidth(1);
+				printf("  fraction of signal lineshape within mgg cut: %f\n", fracAccepted);
+				
+				cEtaLS->Update();
+				getchar();
+				cEtaLS->SetLogy();
+				cEtaLS->Update();
+				getchar();
+				delete cEtaLS;
+			}
+			
+			f_etaLineshape = new TF1("f_etaLineshape", DoubleGausPDF, minFitRange, maxFitRange, 6);
+			f_etaLineshape->SetParameters(locfEta->GetParameters());
+			f_etaLineshape->FixParameter(5, 1.0);
+			
+			locfEta->Delete();
+			break;
+		}
+		case 1:
+		{
+			// Two Gaussian Functions:
+			
+			TF1 *locfEta = new TF1("locfEta", DoubleGausPDF, 0.40, 0.70, 6);
+			locfEta->SetParameters(
+				0.547, //      mu1
+				0.015, //   sigma1
+				0.000, //  mu2-mu1
+				0.025, //   sigma2
+				0.300  // fraction
+			);
+			locfEta->FixParameter(5, h_etaLineshape->GetXaxis()->GetBinWidth(1));
+			
+			locfEta->SetParLimits(0, 0.530,  0.570);
+			locfEta->SetParLimits(1, 0.005,  0.050);
+			locfEta->SetParLimits(2,-0.050,  0.050);
+			locfEta->SetParLimits(3, 0.010,  0.050);
+			locfEta->SetParLimits(4, 0.000,  1.000);
+			
+			// Force both crystal ball shapes to have the same mean:
+			//locfEta->FixParameter(2, 0.0);
+			
+			h_etaLineshape->Fit(locfEta, "R0QL");
+			
+			if(drawOption) {
+				TCanvas *cEtaLS = new TCanvas("cEtaLS", "cEtaLS", 950, 700);
+				h_etaLineshape->GetXaxis()->SetRangeUser(0.4,0.7);
+				locfEta->SetRange(0.4,0.7);
+				h_etaLineshape->Draw();
+				locfEta->Draw("same");
+				h_etaLineshape->Draw("same");
+				
+				// Calculate fraction of PDF between 0.5 and 0.6 GeV/c2:
+				double fracAccepted = locfEta->Integral(0.5,0.6) / h_etaLineshape->GetXaxis()->GetBinWidth(1);
+				printf("  fraction of signal lineshape within mgg cut: %f\n", fracAccepted);
+				
+				cEtaLS->Update();
+				getchar();
+				cEtaLS->SetLogy();
+				cEtaLS->Update();
+				getchar();
+				delete cEtaLS;
+			}
+			
+			f_etaLineshape = new TF1("f_etaLineshape", DoubleGausPDF, minFitRange, maxFitRange, 6);
+			f_etaLineshape->SetParameters(locfEta->GetParameters());
+			f_etaLineshape->FixParameter(5, 1.0);
+			
+			locfEta->Delete();
+			break;
+		}
+	}
+	return;
+}
+
+void MggFitter::FitHadronicBkgdLineshape(int drawOption)
+{
+	if(h_hadronicBkgdLineshape==NULL) return;
 	
-	locfEta->SetParLimits(4,-0.050,  0.050);
-	locfEta->SetParLimits(5, 0.004,  0.050);
-	locfEta->SetParLimits(6, 0.200,  9.999);
-	locfEta->SetParLimits(7, 1.100, 49.999);
+	TF1 *fHadronicBkgd1 = new TF1("fHadronicBkgd1", CrystalBallPDF_flip, 0.5, 0.7, 5);
 	
-	locfEta->SetParLimits(8, 0.0, 1.0);
+	double    muGuess = h_hadronicBkgdLineshape->GetBinCenter(h_hadronicBkgdLineshape->GetMaximumBin());
+	double sigmaGuess = 0.015;
+	double alphaGuess = 1.0;
+	double     nGuess = 2.0;
 	
-	// Force both crystal ball shapes to have the same mean:
-	locfEta->FixParameter(4, 0.0);
+	fHadronicBkgd1->SetParameter(0,    muGuess);
+	fHadronicBkgd1->SetParameter(1, sigmaGuess);
+	fHadronicBkgd1->SetParameter(2, alphaGuess);
+	fHadronicBkgd1->SetParameter(3,     nGuess);
 	
-	h_etaLineshape->Fit(locfEta, "R0QL");
+	fHadronicBkgd1->SetParLimits(0, 0.540,  0.610);
+	fHadronicBkgd1->SetParLimits(1, 0.010,  0.050);
+	fHadronicBkgd1->SetParLimits(2, 0.200,  9.999);
+	fHadronicBkgd1->SetParLimits(3, 1.100, 49.999);
+	
+	fHadronicBkgd1->FixParameter(4, h_hadronicBkgdLineshape->GetBinWidth(1));
+	
+	h_hadronicBkgdLineshape->Fit(fHadronicBkgd1, "R0QL");
+	
+	TF1 *fHadronicBkgd2 = new TF1("fHadronicBkgd2", DoubleCrystalBallPDF_flip, 0.5, 0.75, 10);
+	fHadronicBkgd2->SetParameter(0, fHadronicBkgd1->GetParameter(0));
+	fHadronicBkgd2->SetParameter(1, fHadronicBkgd1->GetParameter(1));
+	fHadronicBkgd2->SetParameter(2, fHadronicBkgd1->GetParameter(2));
+	fHadronicBkgd2->SetParameter(3, fHadronicBkgd1->GetParameter(3));
+	fHadronicBkgd2->SetParameter(4, 0.02);
+	fHadronicBkgd2->SetParameter(5, fHadronicBkgd1->GetParameter(1)*2.0);
+	fHadronicBkgd2->SetParameter(6, fHadronicBkgd1->GetParameter(2));
+	fHadronicBkgd2->SetParameter(7, fHadronicBkgd1->GetParameter(3));
+	fHadronicBkgd2->SetParameter(8, 0.0);
+	
+	fHadronicBkgd2->SetParLimits(0,  0.540,  0.610);
+	fHadronicBkgd2->SetParLimits(1,  0.010,  0.050);
+	fHadronicBkgd2->SetParLimits(2,  0.200,  9.999);
+	fHadronicBkgd2->SetParLimits(3,  1.100, 49.999);
+	fHadronicBkgd2->SetParLimits(4, -0.050,  0.050);
+	fHadronicBkgd2->SetParLimits(5,  0.010,  0.050);
+	fHadronicBkgd2->SetParLimits(6,  0.200,  9.999);
+	fHadronicBkgd2->SetParLimits(7,  1.100, 49.999);
+	fHadronicBkgd2->SetParLimits(8,  0.000,  1.000);
+	
+	fHadronicBkgd2->FixParameter(9, h_hadronicBkgdLineshape->GetBinWidth(1));
+	
+	h_hadronicBkgdLineshape->Fit(fHadronicBkgd2, "R0Q");
 	
 	if(drawOption) {
-		TCanvas *cEtaLS = new TCanvas("cEtaLS", "cEtaLS", 950, 700);
-		h_etaLineshape->GetXaxis()->SetRangeUser(0.4,0.7);
-		h_etaLineshape->Draw();
-		locfEta->Draw("same");
-		h_etaLineshape->Draw("same");
+		TCanvas *cHadronicBkgdLS = new TCanvas("cHadronicBkgdLS", "cHadronicBkgdLS", 950, 700);
+		//cHadronicBkgdLS->SetLogy();
+		h_hadronicBkgdLineshape->Draw();
+		fHadronicBkgd2->Draw("same");
 		
 		// Calculate fraction of PDF between 0.5 and 0.6 GeV/c2:
-		double fracAccepted = locfEta->Integral(0.5,0.6) / h_etaLineshape->GetXaxis()->GetBinWidth(1);
-		printf("  fraction of signal lineshape within mgg cut: %f\n", fracAccepted);
+		double fracAccepted = fHadronicBkgd2->Integral(0.5,0.6) / h_hadronicBkgdLineshape->GetXaxis()->GetBinWidth(1);
+		printf("  fraction of hadronic bkgd lineshape within mgg cut: %f\n", fracAccepted);
 		
-		/*
-		TF1 *fEtaA = new TF1("fEtaA", CrystalBall, 0.4, 0.7, 5);
-		for(int i=0; i<5; i++) fEtaA->SetParameter(i, locfEta->GetParameter(i));
-		fEtaA->SetLineColor(kBlue);
-		fEtaA->SetLineStyle(2);
-		
-		TF1 *fEtaB = new TF1("fEtaB", CrystalBall_flip, 0.4, 0.7, 5);
-		for(int i=0; i<5; i++) fEtaB->SetParameter(i, locfEta->GetParameter(i+5));
-		fEtaB->SetLineColor(kMagenta);
-		fEtaB->SetLineStyle(2);
-		
-		printf("Eta lineshape fit parameters:\n");
-		for(int i=0; i<10; i++) {
-			printf(" p%d = %f\n", i, locfEta->GetParameter(i));
-		}
-		fEtaA->Draw("same");
-		fEtaB->Draw("same");
-		*/
-		
-		cEtaLS->Update();
+		cHadronicBkgdLS->Update();
 		getchar();
-		cEtaLS->SetLogy();
-		cEtaLS->Update();
-		getchar();
-		delete cEtaLS;
+		delete cHadronicBkgdLS;
 	}
 	
-	f_etaLineshape = new TF1("f_etaLineshape", DoubleCrystalBallPDF_oneflip, minFitRange, maxFitRange, 10);
-	f_etaLineshape->SetParameters(locfEta->GetParameters());
-	f_etaLineshape->FixParameter(9, 1.0);
+	f_hadronicBkgdLineshape = new TF1("f_hadronicBkgdLineshape", DoubleCrystalBallPDF_flip, minFitRange, maxFitRange, 10);
+	f_hadronicBkgdLineshape->SetParameters(fHadronicBkgd2->GetParameters());
+	f_hadronicBkgdLineshape->FixParameter(9, 1.0);
 	
-	locfEta->Delete();
+	fHadronicBkgd1->Delete();
+	fHadronicBkgd2->Delete();
 	
 	return;
 }
 
 void MggFitter::FitEtaPionLineshape(int drawOption)
 {
-	if(fitOption_signal<7) return;
 	if(h_etaPionLineshape==NULL) return;
-	
-	// first, check that the bin width of h_etaLineshape matches 'binSize':
-	CheckBinSize(h_etaPionLineshape, "Eta+Pion Lineshape");
 	
 	TF1 *fEtaPion1 = new TF1("fEtaPion1", CrystalBallPDF_flip, 0.5, 0.7, 5);
 	
@@ -799,12 +1356,12 @@ void MggFitter::FitEtaPionLineshape(int drawOption)
 	
 	h_etaPionLineshape->Fit(fEtaPion1, "R0QL");
 	
-	TF1 *fEtaPion2 = new TF1("fEtaPion2", DoubleCrystalBallPDF_flip, 0.5, 0.7, 10);
+	TF1 *fEtaPion2 = new TF1("fEtaPion2", DoubleCrystalBallPDF_flip, 0.5, 0.75, 10);
 	fEtaPion2->SetParameter(0, fEtaPion1->GetParameter(0));
 	fEtaPion2->SetParameter(1, fEtaPion1->GetParameter(1));
 	fEtaPion2->SetParameter(2, fEtaPion1->GetParameter(2));
 	fEtaPion2->SetParameter(3, fEtaPion1->GetParameter(3));
-	fEtaPion2->SetParameter(4, 0.0);
+	fEtaPion2->SetParameter(4, 0.02);
 	fEtaPion2->SetParameter(5, fEtaPion1->GetParameter(1)*2.0);
 	fEtaPion2->SetParameter(6, fEtaPion1->GetParameter(2));
 	fEtaPion2->SetParameter(7, fEtaPion1->GetParameter(3));
@@ -822,7 +1379,7 @@ void MggFitter::FitEtaPionLineshape(int drawOption)
 	
 	fEtaPion2->FixParameter(9, h_etaPionLineshape->GetBinWidth(1));
 	
-	h_etaPionLineshape->Fit(fEtaPion2, "R0QL");
+	h_etaPionLineshape->Fit(fEtaPion2, "R0Q");
 	
 	if(drawOption) {
 		TCanvas *cEtaPionLS = new TCanvas("cEtaPionLS", "cEtaPionLS", 950, 700);
@@ -851,7 +1408,6 @@ void MggFitter::FitEtaPionLineshape(int drawOption)
 
 void MggFitter::FitOmegaLineshape(int drawOption)
 {
-	if(fitOption_omega!=2) return;
 	if(h_omegaLineshape==nullptr) return;
 	
 	// first, check that the bin width of h_etaLineshape matches 'binSize':
@@ -913,7 +1469,7 @@ void MggFitter::FitOmegaLineshape(int drawOption)
 	
 	if(drawOption) {
 		TCanvas *cOmegaLS = new TCanvas("cOmegaLS", "cOmegaLS", 950, 700);
-		cOmegaLS->SetLogy();
+		//cOmegaLS->SetLogy();
 		h_omegaLineshape->Draw();
 		fOmega2->Draw("same");
 		
@@ -1006,7 +1562,7 @@ void MggFitter::FitFDCOmegaLineshape(int drawOption)
 	return;
 }
 
-void MggFitter::GetYield(double &yield, double &yieldErr, int useFitPars, int subtractEtaPion) {
+void MggFitter::GetYield(double &yield, double &yieldErr, int useFitPars, int subtractHadronicBkgd) {
 	
 	// if useFitPars==0 (default), extract yield by integrating counts and subtracting bkgd parameters
 	// if useFitPars==1, extract yield by integrating signal lineshape
@@ -1016,8 +1572,8 @@ void MggFitter::GetYield(double &yield, double &yieldErr, int useFitPars, int su
 	
 	//-----------------------------------------------//
 	
-	int minMggBin = h_data->FindBin(minMggCut);
-	int maxMggBin = h_data->FindBin(maxMggCut)-1;
+	int minMggBin = h_data->FindBin(minMggCut+0.001*binSize);
+	int maxMggBin = h_data->FindBin(maxMggCut-0.001*binSize);
 	
 	double locMinMggCut = h_data->GetBinCenter(minMggBin) - 0.5*binSize;
 	double locMaxMggCut = h_data->GetBinCenter(maxMggBin) + 0.5*binSize;
@@ -1033,24 +1589,24 @@ void MggFitter::GetYield(double &yield, double &yieldErr, int useFitPars, int su
 	TF1 *locfBkgd;
 	int nParameters = InitializeFitFunction(&locfBkgd, "locBkgdClone");
 	locfBkgd->SetParameters(f_fit->GetParameters());
-	ZeroSignalPars(locfBkgd, subtractEtaPion);
+	ZeroSignalPars(locfBkgd, subtractHadronicBkgd);
 	
 	if(useFitPars==0) {
+		double dataCounts = 0.0;
+		double  fitCounts = 0.0;
 		for(int ibin=minMggBin; ibin<=maxMggBin; ibin++) {
 			double locData = h_data->GetBinContent(ibin);
 			double locBkgd = locfBkgd->Eval(h_data->GetBinCenter(ibin));
+			double locFit  = f_fit->Eval(h_data->GetBinCenter(ibin));
+			fitCounts  += locFit;
+			dataCounts += locData;
 			yield    += locData - locBkgd;
 			yieldErr += pow(h_data->GetBinError(ibin),2.0) + locBkgd;
+			//printf("  mgg, data, fit: %f %f %f\n", h_data->GetBinCenter(ibin), locData, locFit);
 		}
 		yieldErr = sqrt(yieldErr);
 		
-		// For debugging:
-		/*
-		printf("\n\n");
-		for(int ipar=0; ipar<nParameters; ipar++) {
-			printf(" %s: %f +/- %f\n", locfBkgd->GetParName(ipar), locfBkgd->GetParameter(ipar), locfBkgd->GetParError(ipar));
-		}
-		*/
+		printf("Difference between data and fit: %f sigma\n", (dataCounts-fitCounts)/yieldErr);
 	}
 	else {
 		switch(fitOption_signal) {
@@ -1091,6 +1647,8 @@ void MggFitter::GetYield(double &yield, double &yieldErr, int useFitPars, int su
 				
 				double locInt    = (1.0 - locFraction)*locInt1 + locFraction*locInt2;
 				double locIntErr = locFractionErr * fabs(locInt2 - locInt1);
+				
+				printf("Int1, Int2, locInt = %f, %f, %f\n", locInt1, locInt2, locInt);
 				
 				yield    = locYield * locInt;
 				yieldErr = sqrt(pow(locYieldErr*locInt,2.0) + pow(locYield*locIntErr,2.0));
@@ -1147,60 +1705,56 @@ void MggFitter::GetYield(double &yield, double &yieldErr, int useFitPars, int su
 			}
 			case 6:
 			{
-				// Lineshape (with histogram) + Extra Gaussian:
-				int yieldPar    = f_fit->GetParNumber("N_{#eta}");
-				int fractionPar = f_fit->GetParNumber("fraction_{#eta#pi}");
+				// Eta Lineshape (PDF) + Eta+Pion Lineshape (PDF):
 				
-				int locMinMggBin = h_etaLineshape->FindBin(locMinMggCut + 0.5*h_etaLineshape->GetBinWidth(1));
-				int locMaxMggBin = h_etaLineshape->FindBin(locMaxMggCut - 0.5*h_etaLineshape->GetBinWidth(1));
+				int yieldPar          = f_fit->GetParNumber("N_{#eta}");
+				double N_eta          = f_fit->GetParameter(yieldPar);
+				double N_etaErr       = f_fit->GetParError(yieldPar);
+				double locCorrection  = f_etaLineshape->Integral(minMggCut, maxMggCut);
+				double locYieldEta    = locCorrection * N_eta;
+				double locYieldEtaErr = locCorrection * N_etaErr;
 				
-				double lsMinMggCut = h_etaLineshape->GetBinCenter(locMinMggBin) - 0.5*h_etaLineshape->GetBinWidth(1);
-				double lsMaxMggCut = h_etaLineshape->GetBinCenter(locMaxMggBin) + 0.5*h_etaLineshape->GetBinWidth(1);
+				int bkgdPar           = f_fit->GetParNumber("N_{#eta,bkgd}");
+				double N_etaBkgd      = f_fit->GetParameter(bkgdPar);
+				double N_etaBkgdErr   = f_fit->GetParError(bkgdPar);
 				
-				// check that lsMinMggCut and lsMaxMggCut align with desired cut range:
-				if((fabs(lsMinMggCut-locMinMggCut)>1.e-6) || (fabs(lsMaxMggCut-locMaxMggCut)>1.e-6)) {
-					printf("\n\nWarning: Mgg binning of eta lineshape does not overlap with data.\n");
-					printf("  Lineshape cut range: %f GeV - %f GeV\n", lsMinMggCut, lsMaxMggCut);
-					printf("  Data cut range: %f GeV - %f GeV\n\n", locMinMggCut, locMaxMggCut);
-				}
+				TF1 *flocClone;
+				InitializeFitFunction(&flocClone,"locf1");
+				flocClone->SetParameters(f_fit->GetParameters());
+				ZeroSignalPars(flocClone);
+				ZeroBkgdPars(flocClone);
+				flocClone->SetParameter(bkgdPar, f_fit->GetParameter(bkgdPar));
 				
-				double locIntExc      = h_etaLineshape->Integral(locMinMggBin, locMaxMggBin);
-				double locYieldExc    = locIntExc * f_fit->GetParameter(yieldPar);
-				double locYieldExcErr = locIntExc * f_fit->GetParError(yieldPar);
+				double locYieldBkgd    = flocClone->Integral(minMggCut,maxMggCut);
+				double locYieldBkgdErr = locYieldBkgd * (N_etaBkgdErr/N_etaBkgd);
 				
-				double locIntEtapi = IntegrateGaussian(
-					f_fit->GetParameter("#mu_{#eta#pi}"), f_fit->GetParameter("#sigma_{#eta#pi}"), 
-					locMinMggCut, locMaxMggCut);
-				double locYieldEtapi    = locIntEtapi * f_fit->GetParameter(yieldPar) * f_fit->GetParameter(fractionPar);
-				double locYieldEtapiErr = locIntEtapi * sqrt(
-					pow(f_fit->GetParError( yieldPar)*f_fit->GetParameter(fractionPar),2.0) +
-					pow(f_fit->GetParameter(yieldPar)*f_fit->GetParError( fractionPar), 2.0)
-				);
+				double locYieldInc    = locYieldEta + locYieldBkgd;
+				double locYieldIncErr = sqrt(pow(locYieldEtaErr,2.0) + pow(locYieldBkgdErr,2.0));
 				
-				if(subtractEtaPion) {
-					yield    = locYieldExc;
-					yieldErr = locYieldExcErr;
+				if(subtractHadronicBkgd) {
+					yield    = locYieldEta;
+					yieldErr = locYieldEtaErr;
 				} else {
-					yield    = locYieldExc + locYieldEtapi;
-					yieldErr = sqrt(pow(locYieldExcErr,2.0) + pow(locYieldEtapiErr,2.0));
+					yield    = locYieldInc;
+					yieldErr = locYieldIncErr;
 				}
 				break;
 			}
 			case 7:
 			{
-				// Eta Lineshape (PDF) + Eta+Pion Lineshape (PDF):
+				// Eta Lineshape (PDF) + Hadronic Lineshape (PDF):
 				
 				int yieldPar    = f_fit->GetParNumber("N_{#eta}");
-				int fractionPar = f_fit->GetParNumber("frac_{#eta#pi}");
+				int fractionPar = f_fit->GetParNumber("frac_{bkgd}");
 				
 				double N_eta    = f_fit->GetParameter(yieldPar);
 				double N_etaErr = f_fit->GetParError(yieldPar);
 				
-				double frac_etapi    = f_fit->GetParameter(fractionPar);
-				double frac_etapiErr = f_fit->GetParError(fractionPar);
+				double frac_bkgd    = f_fit->GetParameter(fractionPar);
+				double frac_bkgdErr = f_fit->GetParError(fractionPar);
 				
-				double N_etapi    = N_eta * frac_etapi;
-				double N_etapiErr = sqrt(pow(N_etaErr*frac_etapi,2.0) + pow(N_eta*frac_etapiErr,2.0));
+				double N_bkgd    = N_eta * frac_bkgd;
+				double N_bkgdErr = sqrt(pow(N_etaErr*frac_bkgd,2.0) + pow(N_eta*frac_bkgdErr,2.0));
 				
 				/*
 				'N_eta' and 'N_etapi' above represent the yield of exclusive eta's and eta+pions integrated over all mgg.
@@ -1214,14 +1768,218 @@ void MggFitter::GetYield(double &yield, double &yieldErr, int useFitPars, int su
 				double locYieldEta    = locCorrection * N_eta;
 				double locYieldEtaErr = locCorrection * N_etaErr;
 				
-				double locCorrection_etapi = f_etaPionLineshape->Integral(minMggCut, maxMggCut);
-				double locYieldEtaPi    = locCorrection_etapi * N_etapi;
-				double locYieldEtaPiErr = locCorrection_etapi * N_etapiErr;
+				double locCorrection_bkgd = f_hadronicBkgdLineshape->Integral(minMggCut, maxMggCut);
+				double locYieldHadronicBkgd    = locCorrection_bkgd * N_bkgd;
+				double locYieldHadronicBkgdErr = locCorrection_bkgd * N_bkgdErr;
 				
-				double locYieldInc    = locYieldEta + locYieldEtaPi;
-				double locYieldIncErr = sqrt(pow(locYieldEtaErr,2.0) + pow(locYieldEtaPiErr,2.0));
+				double locYieldInc    = locYieldEta + locYieldHadronicBkgd;
+				double locYieldIncErr = sqrt(pow(locYieldEtaErr,2.0) + pow(locYieldHadronicBkgdErr,2.0));
 				
-				if(subtractEtaPion) {
+				if(subtractHadronicBkgd) {
+					yield    = locYieldEta;
+					yieldErr = locYieldEtaErr;
+				} else {
+					yield    = locYieldInc;
+					yieldErr = locYieldIncErr;
+				}
+				break;
+			}
+			case 8:
+			{
+				// Eta Lineshape (PDF) + Hadronic Lineshape (PDF):
+				
+				int yieldPar    = f_fit->GetParNumber("N_{#eta}");
+				int fractionPar = f_fit->GetParNumber("frac_{bkgd}");
+				
+				double N_eta    = f_fit->GetParameter(yieldPar);
+				double N_etaErr = f_fit->GetParError(yieldPar);
+				
+				double frac_bkgd    = f_fit->GetParameter(fractionPar);
+				double frac_bkgdErr = f_fit->GetParError(fractionPar);
+				
+				double N_bkgd    = N_eta * frac_bkgd;
+				double N_bkgdErr = sqrt(pow(N_etaErr*frac_bkgd,2.0) + pow(N_eta*frac_bkgdErr,2.0));
+				
+				/*
+				'N_eta' and 'N_etapi' above represent the yield of exclusive eta's and eta+pions integrated over all mgg.
+				But to be consistent with our efficiency correction that will be applied later, we need to correct
+				this for the small fraction of events that fall outside our mgg cut range.
+				
+				Recall that at this point f_etaLineshape and f_etaPionLineshape are normalized to have unit-integrals.
+				*/
+				
+				double locCorrection  = f_etaLineshape->Integral(minMggCut, maxMggCut);
+				double locYieldEta    = locCorrection * N_eta;
+				double locYieldEtaErr = locCorrection * N_etaErr;
+				
+				double locCorrection_bkgd = h_hadronicBkgdLineshape->Integral(h_hadronicBkgdLineshape->FindBin(minMggCut), 
+					h_hadronicBkgdLineshape->FindBin(maxMggCut));
+				double locYieldHadronicBkgd    = locCorrection_bkgd * N_bkgd;
+				double locYieldHadronicBkgdErr = locCorrection_bkgd * N_bkgdErr;
+				
+				double locYieldInc    = locYieldEta + locYieldHadronicBkgd;
+				double locYieldIncErr = sqrt(pow(locYieldEtaErr,2.0) + pow(locYieldHadronicBkgdErr,2.0));
+				
+				if(subtractHadronicBkgd) {
+					yield    = locYieldEta;
+					yieldErr = locYieldEtaErr;
+				} else {
+					yield    = locYieldInc;
+					yieldErr = locYieldIncErr;
+				}
+				break;
+			}
+			case 9:
+			{
+				// Eta (Histogram) + Eta+Pion Background (Histogram) + Other Hadronic Bkgd (Histogram):
+				
+				int yieldPar         = f_fit->GetParNumber("N_{#eta}");
+				int fractionParEtaPi = f_fit->GetParNumber("frac_{#eta#pi}");
+				int fractionParBkgd  = f_fit->GetParNumber("frac_{bkgd}");
+				
+				double N_eta    = f_fit->GetParameter(yieldPar);
+				double N_etaErr = f_fit->GetParError(yieldPar);
+				
+				double frac_etapi    = f_fit->GetParameter(fractionParEtaPi);
+				double frac_etapiErr = f_fit->GetParError(fractionParEtaPi);
+				
+				double frac_bkgd     = f_fit->GetParameter(fractionParBkgd);
+				double frac_bkgdErr  = f_fit->GetParError(fractionParBkgd);
+				
+				double N_etapi    = N_eta * frac_etapi;
+				double N_etapiErr = sqrt(pow(N_etaErr*frac_etapi,2.0) + pow(N_eta*frac_etapiErr,2.0));
+				
+				double N_bkgd     = N_eta * frac_bkgd;
+				double N_bkgdErr  = sqrt(pow(N_etaErr*frac_bkgd,2.0) + pow(N_eta*frac_bkgdErr,2.0));
+				
+				/*
+				'N_eta', 'N_etapi', and 'N_bkgd' above represent the yield of exclusive eta's, eta+pions, and other 
+				hadronic backgrounds integrated over all mgg. But to be consistent with our efficiency correction 
+				that will be applied later, we need to correct this for the fraction of events that fall outside our mgg cut range.
+				*/
+				
+				double locCorrection  = h_etaLineshape->Integral(h_etaLineshape->FindBin(minMggCut), h_etaLineshape->FindBin(maxMggCut));
+				double locYieldEta    = locCorrection * N_eta;
+				double locYieldEtaErr = locCorrection * N_etaErr;
+				
+				double locCorrectionEtaPion = h_etaPionLineshape->Integral(h_etaPionLineshape->FindBin(minMggCut), 
+					h_etaPionLineshape->FindBin(maxMggCut));
+				double locYieldEtaPion    = locCorrectionEtaPion * N_etapi;
+				double locYieldEtaPionErr = locCorrectionEtaPion * N_etapiErr;
+				
+				double locCorrectionBkgd = h_hadronicBkgdLineshape->Integral(h_hadronicBkgdLineshape->FindBin(minMggCut), 
+					h_hadronicBkgdLineshape->FindBin(maxMggCut));
+				double locYieldBkgd    = locCorrectionBkgd * N_bkgd;
+				double locYieldBkgdErr = locCorrectionBkgd * N_bkgdErr;
+				
+				double locYieldInc    = locYieldEta + locYieldEtaPion + locYieldBkgd;
+				double locYieldIncErr = sqrt(pow(locYieldEtaErr,2.0) + pow(locYieldEtaPion,2.0) + pow(locYieldBkgdErr,2.0));
+				
+				if(subtractHadronicBkgd) {
+					yield    = locYieldEta;
+					yieldErr = locYieldEtaErr;
+				} else {
+					yield    = locYieldInc;
+					yieldErr = locYieldIncErr;
+				}
+				break;
+			}
+			case 10:
+			{
+				// Eta (Lineshape) + Eta+Pion Background (Lineshape) + Other Hadronic Bkgd (Histogram):
+				
+				int yieldPar         = f_fit->GetParNumber("N_{#eta}");
+				int fractionParEtaPi = f_fit->GetParNumber("frac_{#eta#pi}");
+				int fractionParBkgd  = f_fit->GetParNumber("frac_{bkgd}");
+				
+				double N_eta    = f_fit->GetParameter(yieldPar);
+				double N_etaErr = f_fit->GetParError(yieldPar);
+				
+				double frac_etapi    = f_fit->GetParameter(fractionParEtaPi);
+				double frac_etapiErr = f_fit->GetParError(fractionParEtaPi);
+				
+				double frac_bkgd     = f_fit->GetParameter(fractionParBkgd);
+				double frac_bkgdErr  = f_fit->GetParError(fractionParBkgd);
+				
+				double N_etapi    = N_eta * frac_etapi;
+				double N_etapiErr = sqrt(pow(N_etaErr*frac_etapi,2.0) + pow(N_eta*frac_etapiErr,2.0));
+				
+				double N_bkgd     = N_eta * frac_bkgd;
+				double N_bkgdErr  = sqrt(pow(N_etaErr*frac_bkgd,2.0) + pow(N_eta*frac_bkgdErr,2.0));
+				
+				/*
+				'N_eta', 'N_etapi', and 'N_bkgd' above represent the yield of exclusive eta's, eta+pions, and other 
+				hadronic backgrounds integrated over all mgg. But to be consistent with our efficiency correction 
+				that will be applied later, we need to correct this for the fraction of events that fall outside our mgg cut range.
+				*/
+				
+				double locCorrection  = f_etaLineshape->Integral(minMggCut, maxMggCut);
+				double locYieldEta    = locCorrection * N_eta;
+				double locYieldEtaErr = locCorrection * N_etaErr;
+				
+				double locCorrectionEtaPion = f_etaPionLineshape->Integral(minMggCut, maxMggCut);
+				double locYieldEtaPion      = locCorrectionEtaPion * N_etapi;
+				double locYieldEtaPionErr   = locCorrectionEtaPion * N_etapiErr;
+				
+				double locCorrectionBkgd = h_hadronicBkgdLineshape->Integral(h_hadronicBkgdLineshape->FindBin(minMggCut), 
+					h_hadronicBkgdLineshape->FindBin(maxMggCut));
+				double locYieldBkgd    = locCorrectionBkgd * N_bkgd;
+				double locYieldBkgdErr = locCorrectionBkgd * N_bkgdErr;
+				
+				double locYieldInc    = locYieldEta + locYieldEtaPion + locYieldBkgd;
+				double locYieldIncErr = sqrt(pow(locYieldEtaErr,2.0) + pow(locYieldEtaPion,2.0) + pow(locYieldBkgdErr,2.0));
+				
+				if(subtractHadronicBkgd) {
+					yield    = locYieldEta;
+					yieldErr = locYieldEtaErr;
+				} else {
+					yield    = locYieldInc;
+					yieldErr = locYieldIncErr;
+				}
+				break;
+			}
+			case 11:
+			{
+				// Eta (Lineshape) + Eta+Pion Background (Lineshape) + Other Hadronic Bkgd (Histogram):
+				
+				int yieldPar      = f_fit->GetParNumber("N_{#eta}");
+				int yieldParEtaPi = f_fit->GetParNumber("A_{#eta#pi}");
+				int yieldParBkgd  = f_fit->GetParNumber("A_{bkgd}");
+				
+				double lsShift    = f_fit->GetParameter("#Delta#mu_{#eta}");
+				
+				double N_eta    = f_fit->GetParameter(yieldPar);
+				double N_etaErr = f_fit->GetParError(yieldPar);
+				
+				double N_etapi    = f_fit->GetParameter(yieldParEtaPi) * m_etaPionYieldBGGEN;
+				double N_etapiErr = f_fit->GetParError(yieldParEtaPi) * m_etaPionYieldBGGEN;
+				
+				double N_bkgd     = f_fit->GetParameter(yieldParBkgd) * m_hadronicBkgdYieldBGGEN;
+				double N_bkgdErr  = f_fit->GetParError(yieldParBkgd) * m_hadronicBkgdYieldBGGEN;
+				
+				/*
+				'N_eta', 'N_etapi', and 'N_bkgd' above represent the yield of exclusive eta's, eta+pions, and other 
+				hadronic backgrounds integrated over all mgg. But to be consistent with our efficiency correction 
+				that will be applied later, we need to correct this for the fraction of events that fall outside our mgg cut range.
+				*/
+				
+				double locCorrection  = f_etaLineshape->Integral(minMggCut-lsShift, maxMggCut-lsShift);
+				double locYieldEta    = locCorrection * N_eta;
+				double locYieldEtaErr = locCorrection * N_etaErr;
+				
+				double locCorrectionEtaPion = f_etaPionLineshape->Integral(minMggCut-lsShift, maxMggCut-lsShift);
+				double locYieldEtaPion      = locCorrectionEtaPion * N_etapi;
+				double locYieldEtaPionErr   = locCorrectionEtaPion * N_etapiErr;
+				
+				double locCorrectionBkgd = h_hadronicBkgdLineshape->Integral(h_hadronicBkgdLineshape->FindBin(minMggCut-lsShift), 
+					h_hadronicBkgdLineshape->FindBin(maxMggCut-lsShift));
+				double locYieldBkgd    = locCorrectionBkgd * N_bkgd;
+				double locYieldBkgdErr = locCorrectionBkgd * N_bkgdErr;
+				
+				double locYieldInc    = locYieldEta + locYieldEtaPion + locYieldBkgd;
+				double locYieldIncErr = sqrt(pow(locYieldEtaErr,2.0) + pow(locYieldEtaPion,2.0) + pow(locYieldBkgdErr,2.0));
+				
+				if(subtractHadronicBkgd) {
 					yield    = locYieldEta;
 					yieldErr = locYieldEtaErr;
 				} else {
@@ -1255,7 +2013,7 @@ void MggFitter::GetEmptyYield(double &yield, double &yieldErr, int excludeNonPea
 			TString locParName = Form("%s",locfEta->GetParName(ipar));
 			//printf(" p%d: %s = %f\n", ipar, locParName.Data(), locfEta->GetParameter(ipar));
 			
-			if(locParName.Contains("eta") || locParName.Contains("sigma")) continue;
+			if(locParName.Contains("eta") || locParName.Contains("sigma") || locParName.Contains("alpha")) continue;
 			
 			if(locParName.Contains("fdc,2")) {
 				//
@@ -1340,9 +2098,10 @@ void MggFitter::GetOmegaYield(double &yield, double &yieldErr)
 	
 	// estimate uncertainty from fit parameter:
 	
-	int omegaYieldPar = locfEta->GetParNumber("N_{#omega}");
+	int omegaYieldPar = f_fit->GetParNumber("N_{#omega}");
 	
-	double locRelErr = locfEta->GetParError(omegaYieldPar) / locfEta->GetParameter(omegaYieldPar);
+	double locRelErr = f_fit->GetParError(omegaYieldPar) / f_fit->GetParameter(omegaYieldPar);
+	if(locRelErr>2.0) locRelErr = 2.0;
 	
 	yieldErr = yield * locRelErr;
 	
@@ -1350,7 +2109,7 @@ void MggFitter::GetOmegaYield(double &yield, double &yieldErr)
 	return;
 }
 
-void MggFitter::GetEtaPionYield(double &yield, double &yieldErr)
+void MggFitter::GetHadronicBkgdYield(double &yield, double &yieldErr)
 {
 	yield    = 0.0;
 	yieldErr = 0.0;
@@ -1367,8 +2126,15 @@ void MggFitter::GetEtaPionYield(double &yield, double &yieldErr)
 	
 	for(int ipar=0; ipar<nParameters; ipar++) {
 		TString locParName = Form("%s",locfEta->GetParName(ipar));
-		if((locParName=="N_{#eta}") || (locParName=="#Delta#mu_{#eta}") || (locParName.Contains("#eta#pi")) 
-			|| (locParName.Contains("sigma"))) continue;
+		
+		if(locParName=="N_{#eta}") {
+			if(fitOption_signal<11) continue;
+		}
+		if(locParName=="#Delta#mu_{#eta}") continue;
+		if(locParName=="frac_{bkgd}")      continue;
+		if(locParName=="A_{bkgd}")         continue;
+		if(locParName.Contains("sigma"))   continue;
+		if(locParName.Contains("alpha"))   continue;
 		
 		locfEta->SetParameter(ipar,0.0);
 		locfEta->SetParError(ipar,0.0);
@@ -1388,9 +2154,12 @@ void MggFitter::GetEtaPionYield(double &yield, double &yieldErr)
 	
 	// estimate uncertainty from fit parameter:
 	
-	int etaPionYieldPar = locfEta->GetParNumber("frac_{#eta#pi}");
+	int bkgdYieldPar;
+	if(fitOption_signal>10) bkgdYieldPar = f_fit->GetParNumber("A_{bkgd}");
+	else bkgdYieldPar = f_fit->GetParNumber("frac_{bkgd}");
 	
-	double locRelErr = locfEta->GetParError(etaPionYieldPar) / locfEta->GetParameter(etaPionYieldPar);
+	double locRelErr = f_fit->GetParError(bkgdYieldPar) / f_fit->GetParameter(bkgdYieldPar);
+	if(locRelErr>2.0) locRelErr = 2.0;
 	
 	yieldErr = yield * locRelErr;
 	
@@ -1398,15 +2167,85 @@ void MggFitter::GetEtaPionYield(double &yield, double &yieldErr)
 	return;
 }
 
-void MggFitter::ZeroSignalPars(TF1 *f1, int subtractEtaPion)
+void MggFitter::GetEtaPionYield(double &yield, double &yieldErr)
+{
+	yield    = 0.0;
+	yieldErr = 0.0;
+	
+	if(fitOption_signal<9) return;
+	
+	//-----------------------------------------------//
+	
+	TF1 *locfEta;
+	int nParameters = InitializeFitFunction(&locfEta, "locfEta");
+	locfEta->SetParameters(f_fit->GetParameters());
+	
+	// zero the parameters not associated with the eta+pion background:
+	
+	for(int ipar=0; ipar<nParameters; ipar++) {
+		TString locParName = Form("%s",locfEta->GetParName(ipar));
+		
+		if(locParName=="N_{#eta}") {
+			if(fitOption_signal<11) continue;
+		}
+		if(locParName=="#Delta#mu_{#eta}") continue;
+		if(locParName=="frac_{#eta#pi}")   continue;
+		if(locParName=="A_{#eta#pi}")      continue;
+		if(locParName.Contains("sigma"))   continue;
+		if(locParName.Contains("alpha"))   continue;
+		
+		locfEta->SetParameter(ipar,0.0);
+		locfEta->SetParError(ipar,0.0);
+	}
+	
+	//-----------------------------------------------//
+	
+	int minMggBin = h_data->FindBin(minMggCut);
+	int maxMggBin = h_data->FindBin(maxMggCut)-1;
+	
+	// integrate function:
+	
+	for(int ibin=minMggBin; ibin<=maxMggBin; ibin++) {
+		double locYield = locfEta->Eval(h_data->GetBinCenter(ibin));
+		yield += locYield;
+	}
+	
+	// estimate uncertainty from fit parameter:
+	
+	int etaPionYieldPar;
+	if(fitOption_signal>10) etaPionYieldPar = f_fit->GetParNumber("A_{#eta#pi}");
+	else etaPionYieldPar = f_fit->GetParNumber("frac_{#eta#pi}");
+	
+	double locRelErr = f_fit->GetParError(etaPionYieldPar) / f_fit->GetParameter(etaPionYieldPar);
+	if(locRelErr>2.0) locRelErr = 2.0;
+	
+	yieldErr = yield * locRelErr;
+	
+	delete locfEta;
+	return;
+}
+
+void MggFitter::GetLineshapeShift(double &shift, double &shiftErr)
+{
+	shift    = 0.0;
+	shiftErr = 0.0;
+	
+	if(fitOption_signal<6) return;
+	
+	int ipar = f_fit->GetParNumber("#Delta#mu_{#eta}");
+	shift    = f_fit->GetParameter(ipar);
+	shiftErr = f_fit->GetParError(ipar);
+	return;
+}
+
+void MggFitter::ZeroSignalPars(TF1 *f1, int subtractHadronicBkgd)
 {
 	switch(fitOption_signal) {
 		case 1:
 			f1->SetParameter("N_{#eta}", 0.0);
 			break;
 		case 2:
-			f1->SetParameter("N_{#eta,1}", 0.0);
-			f1->SetParameter("N_{#eta,2}", 0.0);
+			f1->SetParameter("N_{#eta}", 0.0);
 			break;
 		case 3:
 			f1->SetParameter("N_{#eta}", 0.0);
@@ -1419,11 +2258,11 @@ void MggFitter::ZeroSignalPars(TF1 *f1, int subtractEtaPion)
 			f1->SetParameter("N_{#eta}", 0.0);
 			break;
 		case 6:
-			f1->SetParameter("N_{#eta}",     0.0);
-			f1->SetParameter("N_{#eta,inc}", 0.0);
+			f1->SetParameter("N_{#eta}", 0.0);
+			if(!subtractHadronicBkgd) f1->SetParameter("N_{#eta,bkgd}", 0.0);
 			break;
 		case 7:
-			if(subtractEtaPion) {
+			if(subtractHadronicBkgd) {
 				// If we are subtracting the eta+pion background, we
 				// don't consider it as 'signal' parameter. So when
 				// we zero the signal parameters, we only zero the portion
@@ -1433,6 +2272,60 @@ void MggFitter::ZeroSignalPars(TF1 *f1, int subtractEtaPion)
 			else {
 				// By default, zero everything peaking in the eta mass region.
 				f1->SetParameter("N_{#eta}", 0.0);
+			}
+			break;
+		case 8:
+			if(subtractHadronicBkgd) {
+				// If we are subtracting the eta+pion background, we
+				// don't consider it as 'signal' parameter. So when
+				// we zero the signal parameters, we only zero the portion
+				// due to exclusive etas.
+				f1->SetParameter("frac_{#eta}", 0.0);
+			}
+			else {
+				// By default, zero everything peaking in the eta mass region.
+				f1->SetParameter("N_{#eta}", 0.0);
+			}
+			break;
+		case 9:
+			if(subtractHadronicBkgd) {
+				// If we are subtracting the eta+pion background, we
+				// don't consider it as 'signal' parameter. So when
+				// we zero the signal parameters, we only zero the portion
+				// due to exclusive etas.
+				f1->SetParameter("frac_{#eta}", 0.0);
+			}
+			else {
+				// By default, zero everything peaking in the eta mass region.
+				f1->SetParameter("N_{#eta}", 0.0);
+			}
+			break;
+		case 10:
+			if(subtractHadronicBkgd) {
+				// If we are subtracting the eta+pion background, we
+				// don't consider it as 'signal' parameter. So when
+				// we zero the signal parameters, we only zero the portion
+				// due to exclusive etas.
+				f1->SetParameter("frac_{#eta}", 0.0);
+			}
+			else {
+				// By default, zero everything peaking in the eta mass region.
+				f1->SetParameter("N_{#eta}", 0.0);
+			}
+			break;
+		case 11:
+			if(subtractHadronicBkgd) {
+				// If we are subtracting the eta+pion background, we
+				// don't consider it as 'signal' parameter. So when
+				// we zero the signal parameters, we only zero the portion
+				// due to exclusive etas.
+				f1->SetParameter("N_{#eta}", 0.0);
+			}
+			else {
+				// By default, zero everything peaking in the eta mass region.
+				f1->SetParameter("N_{#eta}",    0.0);
+				f1->SetParameter("A_{#eta#pi}", 0.0);
+				f1->SetParameter("A_{bkgd}",    0.0);
 			}
 			break;
 	}
@@ -1459,9 +2352,32 @@ void MggFitter::ZeroBkgdPars(TF1 *f1)
 			break;
 	}
 	f1->SetParameter("N_{#omega}",  0.0);
+	f1->SetParameter("N_{#rho}",  0.0);
 	f1->SetParameter("N_{#eta'}",   0.0);
-	f1->SetParameter("frac_{#eta#pi}", 0.0);
 	f1->SetParameter("N_{empty}",   0.0);
+	switch(fitOption_signal) {
+		case 6:
+			f1->SetParameter("N_{#eta,bkgd}",  0.0);
+			break;
+		case 7:
+			f1->SetParameter("frac_{bkgd}", 0.0);
+			break;
+		case 8:
+			f1->SetParameter("frac_{bkgd}", 0.0);
+			break;
+		case 9:
+			f1->SetParameter("frac_{#eta#pi}", 0.0);
+			f1->SetParameter("frac_{bkgd}",    0.0);
+			break;
+		case 10:
+			f1->SetParameter("frac_{#eta#pi}", 0.0);
+			f1->SetParameter("frac_{bkgd}",    0.0);
+			break;
+		case 11:
+			f1->SetParameter("A_{#eta#pi}", 0.0);
+			f1->SetParameter("A_{bkgd}",    0.0);
+			break;
+	}
 	return;
 }
 
@@ -1567,15 +2483,34 @@ void MggFitter::GetEmptyEtaFraction(double &fraction, double &fractionErr)
 	return;
 }
 
-void MggFitter::GetEtaPionFraction(double &fraction, double &fractionErr)
+void MggFitter::GetHadronicBkgdFraction(double &fraction, double &fractionErr)
 {
 	fraction    = 0.0;
 	fractionErr = 0.0;
 	
 	// redundant check:
-	if(fitOption_signal!=7) return;
+	if(fitOption_signal<7) return;
 	
-	int fractionPar = f_fit->GetParNumber("frac_{#eta#pi}");
+	int fractionPar;
+	if(fitOption_signal==11) fractionPar = f_fit->GetParNumber("A_{bkgd}");
+	else fractionPar = f_fit->GetParNumber("frac_{bkgd}");
+	
+	fraction    = f_fit->GetParameter(fractionPar);
+	fractionErr = f_fit->GetParError(fractionPar);
+	return;
+}
+
+void MggFitter::GetEtaPionBkgdFraction(double &fraction, double &fractionErr)
+{
+	fraction    = 0.0;
+	fractionErr = 0.0;
+	
+	// redundant check:
+	if(fitOption_signal<9) return;
+	
+	int fractionPar;
+	if(fitOption_signal==11) fractionPar = f_fit->GetParNumber("A_{#eta#pi}");
+	else fractionPar = f_fit->GetParNumber("frac_{#eta#pi}");
 	
 	fraction    = f_fit->GetParameter(fractionPar);
 	fractionErr = f_fit->GetParError(fractionPar);

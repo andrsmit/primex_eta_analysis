@@ -35,9 +35,12 @@ void MyReadConfig::ReadConfigFile(const Char_t *szFin) {
 	
 	// Build File name
 	char szCalibFile[400];
+	/*
 	sprintf(szCalibFile, "%s/%s",
 		strCaLibPath.Data(),
 		szFin);
+	*/
+	sprintf(szCalibFile, "%s", szFin);
 	
 	ifstream infile;
 	infile.open(szCalibFile);

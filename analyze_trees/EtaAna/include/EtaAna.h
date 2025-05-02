@@ -66,6 +66,9 @@ class EtaAna {
 		// decides whether to create and fill thrown histograms:
 		bool m_FillThrown = false;
 		
+		// decides what kinematics to use in energy constraint:
+		bool m_IsCohMC = false;
+		
 		int m_event;
 		
 		vector<vector<Particle_t>> m_reaction_types;
@@ -112,6 +115,7 @@ class EtaAna {
 		double GetFCALEnergyResolution(double);
 		void GetThrownEnergyAndAngle(double&, double&);
 		void GetThrownEnergyAndAngleBGGEN(double&, double&);
+		void GetThrownPion(double&, double&, double&);
 		
 		void SmearShowerEnergy(double&);
 		
@@ -122,6 +126,9 @@ class EtaAna {
 		bool IsCoplanarBCAL(double);
 		bool IsCoplanarSC(double);
 		
+		bool IsHadronicVeto(int vetoOption, int nBCALShowers, int nBCALShowers_1ns, int nSCHits, int nSCHits_coplanar, 
+			double etaPhi, double BCALphi, double BCALtheta, double BCALRFdt);
+		
 		//-------------------------------------------------------------------//
 		
 		// Different ways to do analysis (each function is defined in it's own .cc file):
@@ -131,6 +138,8 @@ class EtaAna {
 		void EtaggAnalysis_TOF();
 		void EtaggAnalysis_bggen();
 		void Omega3gAnalysis();
+		void EtaggAnalysis_AngularSystematics();
+		void EtaggAnalysis_special();
 		
 		// functions for default analysis option:
 		void InitializeDefaultHists();
@@ -163,6 +172,16 @@ class EtaAna {
 		void InitializeOmegaHists();
 		void      ResetOmegaHists();
 		void      WriteOmegaHists();
+		
+		// functions for studying angle reconstruction systematics:
+		void InitializeAngularHists();
+		void      ResetAngularHists();
+		void      WriteAngularHists();
+		
+		// functions for studying angle reconstruction systematics:
+		void InitializeSpecialHists();
+		void      ResetSpecialHists();
+		void      WriteSpecialHists();
 		
 		//-------------------------------------------------------------------//
 		// TTree Variables:
@@ -248,31 +267,53 @@ class EtaAna {
 		TH1F *h_mcVertex, *h_mcVertexAccepted;
 		TH2F *h_thrown;
 		
-		TH1F *h_fcalRFdt, *h_bcalRFdt, *h_tofRFdt, *h_scRFdt;
+		TH1F *h_fcalRFdt, *h_tofRFdt;
 		TH1F *h_beamRFdt, *h_beamRFdt_cut;
 		
 		TH2F *h_tofMatch;
 		
+		TH2F *h_dTheta;
+		
 		static const int m_nVetos = 9;
 		TH2F *h_elasticity[m_nVetos];
 		TH2F *h_elasticityConstr[m_nVetos];
-		TH2F *h_mgg[m_nVetos];
-		TH2F *h_mggConstr[m_nVetos];
-		TH2F *h_mggConstr_coh[m_nVetos];
+		
+		TH2F *h_mgg[m_nVetos],           *h_mgg_cut[m_nVetos];
+		TH2F *h_mggConstr[m_nVetos],     *h_mggConstr_cut[m_nVetos];
+		TH2F *h_mggConstr_coh[m_nVetos], *h_mggConstr_coh_cut[m_nVetos];
+		
 		TH2F *h_mm[m_nVetos],      *h_mm_coh[m_nVetos];
 		TH2F *h_mm_elas[m_nVetos], *h_mm_elas_coh[m_nVetos];
-		TH2F *h_pt[m_nVetos],      *h_ptCoh[m_nVetos];
 		
+		TH2F *h_hmass[m_nVetos],        *h_hmassCorr[m_nVetos],        *h_hmassCorrCoh[m_nVetos];
+		TH2F *h_hmass_etaCut[m_nVetos], *h_hmassCorr_etaCut[m_nVetos], *h_hmassCorrCoh_etaCut[m_nVetos];
+		
+		TH2F *h_pt[m_nVetos], *h_ptCoh[m_nVetos];
 		TH2F *h_t_vs_theta;
-		
 		TH2F *h_mgg_vs_vertexZ, *h_mgg_vs_vertexR;
 		
-		TH2F *h_scDeltaPhi,           *h_bcalDeltaPhi;
-		TH2F *h_scDeltaPhi_singleHit, *h_bcalDeltaPhi_singleHit;
+		// opening angle plots:
+		TH2F *h_openAngle, *h_openAngleCut;
+		TH2F *h_openAngleVsElas;
 		
-		TH1F *h_nSC, *h_nSC_nobcal, *h_nSC_onebcal, *h_nSC_bcalVeto, *h_nSC_extra;
+		// SC Plots:
+		TH2F *h_scRFdt,     *h_scRFdt_cut;
+		TH2F *h_scdE,       *h_scdE_singleHit;
+		TH2F *h_scDeltaPhi, *h_scDeltaPhi_singleHit;
+		TH2F *h_nSC, *h_nSC_nobcal, *h_nSC_onebcal, *h_nSC_bcalVeto, *h_nSC_extra;
+		
+		// BCAL Plots:
+		TH2F *h_bcalRFdt;
+		TH2F *h_bcalEnergy,      *h_bcalEnergy_singleHit;
+		TH2F *h_bcalTheta,       *h_bcalTheta_singleHit;
+		TH2F *h_bcalDeltaPhi,    *h_bcalDeltaPhi_singleHit;
+		TH2F *h_bcalThetaVSTime, *h_bcalDeltaPhiVSTime, *h_bcalThetaVSEnergy;
+		TH2F *h_nBCAL,           *h_nBCAL_1ns;
 		
 		TH2F *h_xy1, *h_xy2;
+		
+		TH2F *h_elasVSmgg_low,     *h_elasVSmgg_high;
+		TH2F *h_elasCorrVSmgg_low, *h_elasCorrVSmgg_high;
 		
 		vector<TH3F*> h_AngularMatrix_vetos;
 		
@@ -324,23 +365,63 @@ class EtaAna {
 		/////////////////////////////////////////
 		// BGGEN Analysis:
 		
-		TH2F *h_mgg_const_bggen_signal,   *h_elas_bggen_signal,   *h_elas_bggen_signal_cut;
-		TH2F *h_mgg_const_bggen_etapion,  *h_elas_bggen_etapion,  *h_elas_bggen_etapion_cut;
-		TH2F *h_mgg_const_bggen_eta2pion, *h_elas_bggen_eta2pion, *h_elas_bggen_eta2pion_cut;
-		TH2F *h_mgg_const_bggen_omega,    *h_elas_bggen_omega,    *h_elas_bggen_omega_cut;
-		TH2F *h_mgg_const_bggen_rho,      *h_elas_bggen_rho,      *h_elas_bggen_rho_cut;
-		TH2F *h_mgg_const_bggen_bkgd,     *h_elas_bggen_bkgd,     *h_elas_bggen_bkgd_cut;
+		TH2F *h_mgg_const_bggen_signal,   *h_mgg_const_bggen_signal_cut;
+		TH2F *h_mgg_const_bggen_etapion,  *h_mgg_const_bggen_etapion_cut;
+		TH2F *h_mgg_const_bggen_eta2pion, *h_mgg_const_bggen_eta2pion_cut;
+		TH2F *h_mgg_const_bggen_eta3pion, *h_mgg_const_bggen_eta3pion_cut;
+		TH2F *h_mgg_const_bggen_omega,    *h_mgg_const_bggen_omega_cut;
+		TH2F *h_mgg_const_bggen_rho,      *h_mgg_const_bggen_rho_cut;
+		TH2F *h_mgg_const_bggen_bkgd,     *h_mgg_const_bggen_bkgd_cut;
+		
+		TH2F *h_elas_bggen_signal,        *h_elas_bggen_signal_cut;
+		TH2F *h_elas_bggen_etapion,       *h_elas_bggen_etapion_cut;
+		TH2F *h_elas_bggen_eta2pion,      *h_elas_bggen_eta2pion_cut;
+		TH2F *h_elas_bggen_eta3pion,      *h_elas_bggen_eta3pion_cut;
+		TH2F *h_elas_bggen_omega,         *h_elas_bggen_omega_cut;
+		TH2F *h_elas_bggen_rho,           *h_elas_bggen_rho_cut;
+		TH2F *h_elas_bggen_bkgd,          *h_elas_bggen_bkgd_cut;
+		
+		TH2F *h_hmass_bggen_signal,       *h_hmass_bggen_signal_cut;
+		TH2F *h_hmass_bggen_etapion,      *h_hmass_bggen_etapion_cut;
+		TH2F *h_hmass_bggen_eta2pion,     *h_hmass_bggen_eta2pion_cut;
+		TH2F *h_hmass_bggen_eta3pion,     *h_hmass_bggen_eta3pion_cut;
+		TH2F *h_hmass_bggen_omega,        *h_hmass_bggen_omega_cut;
+		TH2F *h_hmass_bggen_rho,          *h_hmass_bggen_rho_cut;
+		TH2F *h_hmass_bggen_bkgd,         *h_hmass_bggen_bkgd_cut;
+		
+		TH2F *h_mm_bggen_signal,          *h_mm_bggen_signal_cut;
+		TH2F *h_mm_bggen_etapion,         *h_mm_bggen_etapion_cut;
+		TH2F *h_mm_bggen_eta2pion,        *h_mm_bggen_eta2pion_cut;
+		TH2F *h_mm_bggen_eta3pion,        *h_mm_bggen_eta3pion_cut;
+		TH2F *h_mm_bggen_omega,           *h_mm_bggen_omega_cut;
+		TH2F *h_mm_bggen_rho,             *h_mm_bggen_rho_cut;
+		TH2F *h_mm_bggen_bkgd,            *h_mm_bggen_bkgd_cut;
+		
+		TH2F *h_mgg_vs_elas_bggen_signal;
+		TH2F *h_mgg_vs_elas_bggen_etapion;
+		TH2F *h_mgg_vs_elas_bggen_eta2pion;
+		TH2F *h_mgg_vs_elas_bggen_eta3pion;
+		TH2F *h_mgg_vs_elas_bggen_omega;
+		TH2F *h_mgg_vs_elas_bggen_rho;
+		TH2F *h_mgg_vs_elas_bggen_bkgd;
 		
 		TH1F *h_thrown_reactions_bggen;
 		TH1F *h_rec_reactions_bggen;
 		
 		vector<TH2F*> h_bcalDeltaPhi_bggen, h_scDeltaPhi_bggen, h_scDeltaPhi_singleHit_bggen;
+		vector<TH2F*> h_bcalTheta_bggen;
+		vector<TH2F*> h_thrown_bggen, h_rec_bggen;
 		
 		TH2F *h_thrown_proton,        *h_thrown_neutron;
 		TH3F *h_AngularMatrix_proton, *h_AngularMatrix_neutron;
 		
 		TH1F *h_thrown_proton_1d,  *h_rec_proton_1d;
 		TH1F *h_thrown_neutron_1d, *h_rec_neutron_1d;
+		
+		TH2F *h_thrownPionMomentum, *h_recPionMomentum;
+		TH2F *h_thrownPionTheta,    *h_recPionTheta;
+		TH2F *h_thrownPionDeltaPhi, *h_recPionDeltaPhi;
+		TH2F *h_thrownPion,         *h_recPion;
 		
 		/////////////////////////////////////////
 		// Omega->pi0+gamma:
@@ -350,11 +431,34 @@ class EtaAna {
 		TH1F *h_3gamma_vz,       *h_3gamma_vz_elas;
 		TH1F *h_3gamma_theta_targ, *h_3gamma_theta_fdc1, *h_3gamma_theta_fdc2, *h_3gamma_theta_fdc3;
 		TH2F *h_xy_targ, *h_xy_fdc1, *h_xy_fdc2, *h_xy_fdc3;
+		
+		/////////////////////////////////////////
+		// Angular Reconstruction Systematics:
+		
+		vector<double> m_AngularShifts;
+		vector<TH2F*> h_mgg_AngularShift;
+		vector<TH2F*> h_mggConstr_AngularShift;
+		vector<TH3F*> h_AngularMatrix_AngularShift;
+		
+		vector<double> m_AngularSmears;
+		vector<TH2F*> h_mgg_AngularSmear;
+		vector<TH2F*> h_mggConstr_AngularSmear;
+		vector<TH3F*> h_AngularMatrix_AngularSmear;
+		
+		/////////////////////////////////////////
+		// Special analysis for studying cut dependence on acceptance:
+		
+		static const int m_nSpecialHists = 9;
+		TH2F *h_mgg_Special[m_nSpecialHists];
+		TH2F *h_mggConstr_Special[m_nSpecialHists];
+		
 		//----------------------------------------------------------------------------------------------//
 		
 	public:
 		//-------------------------------------------------------------------//
 		// Cuts:
+		
+		int m_vetoOption;
 		
 		double m_FCALRFCut;
 		double m_BCALRFCut;
@@ -391,12 +495,16 @@ class EtaAna {
 		int  SetCuts(TString configFileName);
 		void DumpCuts();
 		
+		void SetVetoOption(int vetoOption) { m_vetoOption = vetoOption; }
+		int  GetVetoOption() { return m_vetoOption; }
+		
 		void RunAnalysis(TString inputFileName, int analysisOption=0);
 		void  InitHistograms(int analysisOptions=0);
 		void ResetHistograms(int analysisOptions=0);
 		void WriteHistograms(int analysisOptions=0);
 		
 		void SetFillThrown(bool doFill) { m_FillThrown = doFill; return; };
+		void SetIsCohMC(bool isMC) { m_IsCohMC = isMC; return; };
 };
 
 #endif

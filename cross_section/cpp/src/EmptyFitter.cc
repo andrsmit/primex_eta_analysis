@@ -6,7 +6,7 @@ void MggFitter::FitEmpty()
 	
 	emptyBinSize = h_empty->GetBinWidth(1);
 	
-	Option_t *locFitOption = "R0QL";
+	Option_t *locFitOption = "R0Q";
 	
 	m_nEmptyParameters = InitializeEmptyFitParameters();
 	excludeRegions.clear();
@@ -264,10 +264,10 @@ void MggFitter::GuessEmptyEtaParameters() {
 			int dmuPar = f_empty->GetParNumber("#Delta#mu_{#eta}");
 			
 			f_empty->SetParameter(  NPar, NGuess);
-			f_empty->SetParameter(dmuPar, 0.005);
+			f_empty->FixParameter(dmuPar, 0.002);
 			
 			f_empty->SetParLimits(  NPar,  0.00, 1.e5);
-			f_empty->SetParLimits(dmuPar, -0.05, 0.02);
+			//f_empty->SetParLimits(dmuPar, -0.05, 0.02);
 			break;
 		}
 	}

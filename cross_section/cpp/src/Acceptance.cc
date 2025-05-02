@@ -128,6 +128,7 @@ int EtaAnalyzer::LoadAngularMatrix()
 	delete fMatrix;
 	delete hThrown;
 	
+	m_IsMatrixLoaded = true;
 	return 0;
 }
 
@@ -263,6 +264,8 @@ int EtaAnalyzer::CalcAcceptance()
 		styleCanvas(cAcceptance);
 	}
 	h_Acceptance->Draw("PE");
+	cAcceptance->Update();
+	cAcceptance->Modified();
 	
 	return 0;
 }
@@ -278,19 +281,22 @@ TString EtaAnalyzer::GetMatrixFileName()
 			matrixFileName = Form("phase%d.root", locPhase);
 			break;
 		case 1:
-			matrixFileName = Form("phase%d_matrix.root", locPhase);
+			matrixFileName = Form("phase%d_matrix_VetoOption%d.root", locPhase, m_vetoOption);
 			break;
 		case 2:
-			matrixFileName = Form("phase%d_FCAL.root", locPhase);
+			matrixFileName = Form("phase%d_FCAL_VetoOption%d.root", locPhase, m_vetoOption);
 			break;
 		case 3:
-			matrixFileName = Form("phase%d_BCAL.root", locPhase);
+			matrixFileName = Form("phase%d_BCAL_VetoOption%d.root", locPhase, m_vetoOption);
 			break;
 		case 4:
-			matrixFileName = Form("phase%d_BEAM.root", locPhase);
+			matrixFileName = Form("phase%d_BEAM_VetoOption%d.root", locPhase, m_vetoOption);
 			break;
 		case 5:
-			matrixFileName = Form("phase%d_TOF.root", locPhase);
+			matrixFileName = Form("phase%d_TOF_VetoOption%d.root", locPhase, m_vetoOption);
+			break;
+		case 8:
+			matrixFileName = Form("phase%d_angular.root", locPhase, m_vetoOption);
 			break;
 		default:
 			printf("\nInvalid analysisOption\n");

@@ -11,6 +11,9 @@ EtaAna::EtaAna() {
 	
 	m_random = new TRandom3(0);
 	
+	// set default veto option:
+	m_vetoOption = 6;
+	
 	// set defaults for cut values:
 	
 	m_FCALRFCut =  2.004;
@@ -32,7 +35,7 @@ EtaAna::EtaAna() {
 	
 	m_FCALTOFCut      =  8.0; // [cm]
 	m_BCALDeltaPhiCut = 30.0; // [deg]
-	m_SCDeltaPhiCut   = 36.0; // [deg]
+	m_SCDeltaPhiCut   = 45.0; // [deg]
 	
 	m_ElasMean_p0  = 1.0;
 	m_ElasMean_p1  = 0.0;
@@ -129,6 +132,12 @@ int EtaAna::SetGeometry() {
 	}
 	else if(m_phaseVal==2) {
 		
+		// Correction to alignment after Simon updated beam spot:
+		
+		m_fcalFace.SetXYZ(0.189, 0.022, 624.32);
+		m_fcalCorrection.SetXYZ(0.0, 0.0, 0.0);
+		m_vertex.SetXYZ(0.139874, -0.040895, 65.0);
+		
 		if(m_runNumber<81396) {
 			
 			// Beryllium Target runs:
@@ -149,13 +158,14 @@ int EtaAna::SetGeometry() {
 			m_targetAtten   = 0.00821;
 			m_vertex.SetZ(65.0);
 		}
+	}
+	else if(m_phaseVal==3) {
 		
 		// Correction to alignment after Simon updated beam spot:
 		
 		m_fcalFace.SetXYZ(0.189, 0.022, 624.32);
 		m_fcalCorrection.SetXYZ(0.0, 0.0, 0.0);
-	}
-	else if(m_phaseVal==3) {
+		m_vertex.SetXYZ(-0.00439156, -0.0456728, 65.0);
 		
 		if(m_runNumber<110622) {
 			
@@ -177,11 +187,6 @@ int EtaAna::SetGeometry() {
 			m_targetAtten   = 0.00821;
 			m_vertex.SetZ(65.0);
 		}
-		
-		// Correction to alignment after Simon updated beam spot:
-		
-		m_fcalFace.SetXYZ(0.189, 0.022, 624.32);
-		m_fcalCorrection.SetXYZ(0.0, 0.0, 0.0);
 	}
 	else {
 		std::cout << "Unsupported run period provided. Skipping Run." << std::endl;
@@ -387,27 +392,27 @@ void EtaAna::FillInvmassMatrix(double theta, double mgg, double beamEnergy, doub
 	return;
 }
 
-int EtaAna::GetFCALShowerList(vector<int> &goodShowers, int &nGoodFCALShowers, 
-	double energyCut, double extraEnergyCut, double fiducialCut, double timingCut) {
+int EtaAna::GetFCALShowerList(vector<int> &goodShowers, int &nFCALShowersEnergyCut, 
+	double energyCutGood, double energyCutTotal, double fiducialCut, double timingCut) {
 	
-	int nFCALShowers = 0;
-	nGoodFCALShowers = 0;
+	int nFCALShowersTotal = 0;
+	nFCALShowersEnergyCut = 0;
+	
 	for(int ishow=0; ishow<m_nfcal; ishow++) {
 		
 		TVector3 locPos = GetFCALPosition(ishow);
 		double locT = m_fcalT[ishow] - (locPos.Mag()/m_c) - m_rfTime;
 		
 		if(fabs(locT) < timingCut) {
-			nFCALShowers++;
-			if(m_fcalE[ishow] > extraEnergyCut) nGoodFCALShowers++;
+			nFCALShowersTotal++;
+			if(m_fcalE[ishow] > energyCutTotal) nFCALShowersEnergyCut++;
 			
-			if((m_fcalE[ishow] > energyCut) && !FCALFiducialCut(locPos, fiducialCut)) {
+			if((m_fcalE[ishow] > energyCutGood) && !FCALFiducialCut(locPos, fiducialCut)) {
 				goodShowers.push_back(ishow);
 			}
 		}
 	}
-	
-	return nFCALShowers;
+	return nFCALShowersTotal;
 }
 
 int EtaAna::GetBCALShowerList(vector<int> &goodShowers, double energyCut, double timingCut) {
@@ -418,14 +423,13 @@ int EtaAna::GetBCALShowerList(vector<int> &goodShowers, double energyCut, double
 		TVector3 locPos = GetBCALPosition(ishow);
 		double locT = m_bcalT[ishow] - (locPos.Mag()/m_c) - m_rfTime;
 		
-		if(fabs(locT) < timingCut) {
-			nBCALShowers++;
+		if((-1.0 < locT) && (locT < timingCut)) {
 			if(m_bcalE[ishow] > energyCut) {
+				nBCALShowers++;
 				goodShowers.push_back(ishow);
 			}
 		}
 	}
-	
 	return nBCALShowers;
 }
 
@@ -437,14 +441,13 @@ int EtaAna::GetSCHitList(vector<int> &goodHits) {
 	for(int ihit=0; ihit<m_nsc; ihit++) {
 		
 		double locT  = m_scT[ihit] - m_rfTime;
-		double locdE = m_scdE[ihit];
+		double locdE = 1.e3 * m_scdE[ihit];
 		
-		if((1.0 < locT) && (locT < 9.0) && (locdE > 0.0002)) {
+		if((1.0 < locT) && (locT < 9.0) && (locdE > 0.2)) {
 			nSCHits++;
 			goodHits.push_back(ihit);
 		}
 	}
-	
 	return nSCHits;
 }
 
@@ -621,6 +624,27 @@ void EtaAna::GetThrownEnergyAndAngleBGGEN(double &thrownEnergy, double &thrownAn
 	return;
 }
 
+void EtaAna::GetThrownPion(double &pionMom, double &pionAngle, double &pionDeltaPhi) {
+	
+	// in principle all simulations should be analyzed in this way, but at the 
+	// time of writing this (2/18/25) only the BGGEN mc trees have been updated to 
+	// include the "thrownBeamEnergy" branch.
+	
+	double pionPhi = 0.0, etaPhi = 0.0;
+	for(int imc=0; imc<m_nmc; imc++) {
+		if((m_mcPDGType[imc]==PDGtype(PiPlus)) || (m_mcPDGType[imc]==PDGtype(PiMinus)) || (m_mcPDGType[imc]==PDGtype(Pi0))) {
+			pionMom   = m_mcP[imc];
+			pionAngle = m_mcTheta[imc];
+			pionPhi   = m_mcPhi[imc];
+		}
+		if(m_mcPDGType[imc]==PDGtype(Eta)) {
+			etaPhi    = m_mcPhi[imc];
+		}
+	}
+	pionDeltaPhi = etaPhi-pionPhi;
+	return;
+}
+
 bool EtaAna::IsElasticCut(double Egg, double Eeta, double theta) {
 	double ElasPeakMean  = m_ElasMean_p0 + m_ElasMean_p1*theta;
 	double ElasPeakWidth = m_ElasWidth * m_ElasSigmaCut;
@@ -637,14 +661,17 @@ bool EtaAna::IsCoplanarBCAL(double deltaPhi) {
 	
 	// deltaPhi = #phi_gg - #phi_BCAL
 	
+	// locDeltaPhi = deltaPhi-180:
+	double locDeltaPhi = deltaPhi>0.0 ? (deltaPhi-180.0) : (deltaPhi+180.0);
+	
 	if(m_phaseVal>1) {
-		if(((140.0<deltaPhi) && (deltaPhi<240.0)) || ((-220.0<deltaPhi) && (deltaPhi<-120.0)))
+		if(((-1.0*m_BCALDeltaPhiCut)<locDeltaPhi) && (locDeltaPhi<(m_BCALDeltaPhiCut+20.0)))
 			return true;
 		else 
 			return false;
 	}
 	else {
-		if(fabs(fabs(deltaPhi)-180.0) < m_BCALDeltaPhiCut)
+		if(fabs(locDeltaPhi) < m_BCALDeltaPhiCut)
 			return true;
 		else
 			return false;
@@ -655,10 +682,166 @@ bool EtaAna::IsCoplanarSC(double deltaPhi) {
 	
 	// deltaPhi = #phi_gg - #phi_SC
 	
-	if(fabs(fabs(deltaPhi)-180.0) < m_SCDeltaPhiCut)
+	// locDeltaPhi = deltaPhi-180:
+	double locDeltaPhi = deltaPhi>0.0 ? (deltaPhi-180.0) : (deltaPhi+180.0);
+	
+	// The magnetic field creates a ~5degree shift:
+	if(m_phaseVal>1) locDeltaPhi -= 5.0;
+	
+	if(fabs(locDeltaPhi) < m_SCDeltaPhiCut)
 		return true;
 	else
 		return false;
+}
+
+bool EtaAna::IsHadronicVeto(int vetoOption, int nBCALShowers, int nBCALShowers_1ns, int nSCHits, int nSCHits_coplanar, 
+	double etaPhi, double BCALphi, double BCALtheta, double BCALRFdt)
+{
+	// return true if specified BCAL/SC veto is fired:
+	
+	switch(vetoOption) {
+		case 0:
+		{
+			// No Veto:
+			return false;
+			break;
+		}
+		case 1:
+		{
+			// Strict BCAL Veto:
+			if(nBCALShowers==0) return false;
+			break;
+		}
+		case 2:
+		{
+			// Loose BCAL Veto:
+			if(nBCALShowers_1ns==0) return false;
+			break;
+		}
+		case 3:
+		{
+			// Loose BCAL w/ coplanarity cut:
+			if(nBCALShowers==0) 
+			{
+				return false;
+			}
+			else if(nBCALShowers==1) 
+			{
+				if(BCALRFdt>1.0) {
+					if(IsCoplanarBCAL(etaPhi-BCALphi)) {
+						return false;
+					}
+				}
+			}
+			break;
+		}
+		case 4:
+		{
+			// Loose BCAL w/ coplanarity cut and theta cut:
+			if(nBCALShowers==0) 
+			{
+				return false;
+			}
+			else if(nBCALShowers==1) 
+			{
+				if(BCALRFdt>1.0) {
+					if(IsCoplanarBCAL(etaPhi-BCALphi)) {
+						if(BCALtheta > 40.0) {
+							return false;
+						}
+					}
+				}
+			}
+			break;
+		}
+		case 5:
+		{
+			// Loose BCAL w/ coplanarity+theta cut + SC Veto:
+			if(nBCALShowers==0) 
+			{
+				if(nSCHits<=1) {
+					return false;
+				}
+			}
+			else if(nBCALShowers==1) 
+			{
+				if(BCALRFdt>1.0) {
+					if(IsCoplanarBCAL(etaPhi-BCALphi)) {
+						if(BCALtheta > 40.0) {
+							if(nSCHits<=1) {
+								return false;
+							}
+						}
+					}
+				}
+			}
+			break;
+		}
+		case 6:
+		{
+			// Loose BCAL w/ coplanarity+theta cut + (slightly less) Loose SC w/coplanarity:
+			if(nBCALShowers==0) 
+			{
+				if(nSCHits<=1) {
+					if(nSCHits_coplanar==nSCHits) {
+						return false;
+					}
+				}
+			}
+			else if(nBCALShowers==1) 
+			{
+				if(BCALRFdt>1.0) {
+					if(IsCoplanarBCAL(etaPhi-BCALphi)) {
+						if(BCALtheta > 40.0) {
+							if(nSCHits<=1) {
+								if(nSCHits_coplanar==nSCHits) {
+									return false;
+								}
+							}
+						}
+					}
+				}
+			}
+			break;
+		}
+		case 7:
+		{
+			// Strict BCAL + Strict SC Vetos:
+			if(nSCHits==0 && nBCALShowers==0) return false;
+			break;
+		}
+		case 8:
+		{
+			// Should be the same as 6, but BCAL and SC are de-coupled:
+			bool isBCALVeto = true;
+			if(nBCALShowers==0)
+			{
+				isBCALVeto = false;
+			}
+			else if(nBCALShowers==1)
+			{
+				if(IsCoplanarBCAL(etaPhi-BCALphi)) {
+					if(BCALRFdt>1.0) {
+						isBCALVeto = false;
+					}
+				}
+			}
+			
+			bool isSCVeto = true;
+			if(nSCHits<=1)
+			{
+				if(nSCHits==nSCHits_coplanar) {
+					isSCVeto = false;
+				}
+			}
+			
+			if(!isSCVeto && !isBCALVeto) {
+				return false;
+			}
+			break;
+		}
+	}
+	return true;
 }
 
 void EtaAna::SmearShowerEnergy(double &e) {
@@ -844,6 +1027,12 @@ void EtaAna::RunAnalysis(TString inputFileName, int analysisOption) {
 			case 7:
 				Omega3gAnalysis();
 				break;
+			case 8:
+				EtaggAnalysis_AngularSystematics();
+				break;
+			case 9:
+				EtaggAnalysis_special();
+				break;
 			default:
 				EtaggAnalysis();
 				break;
@@ -894,6 +1083,16 @@ void EtaAna::InitHistograms(int analysisOption) {
 			InitializeOmegaHists();
 			break;
 		}
+		case 8:
+		{
+			InitializeAngularHists();
+			break;
+		}
+		case 9:
+		{
+			InitializeSpecialHists();
+			break;
+		}
 	}
 	
 	return;
@@ -930,6 +1129,16 @@ void EtaAna::ResetHistograms(int analysisOption) {
 		case 7:
 		{
 			ResetOmegaHists();
+			break;
+		}
+		case 8:
+		{
+			ResetAngularHists();
+			break;
+		}
+		case 9:
+		{
+			ResetSpecialHists();
 			break;
 		}
 	}
@@ -974,6 +1183,16 @@ void EtaAna::WriteHistograms(int analysisOption) {
 		case 7:
 		{
 			WriteOmegaHists();
+			break;
+		}
+		case 8:
+		{
+			WriteAngularHists();
+			break;
+		}
+		case 9:
+		{
+			WriteSpecialHists();
 			break;
 		}
 	}

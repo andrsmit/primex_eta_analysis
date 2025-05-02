@@ -34,26 +34,39 @@ class EtaAnalyzer {
 		EtaAnalyzer() : 
 			h_mggVsThetaFull(nullptr), 
 			h_mggVsThetaEmpty(nullptr),  
-			h_etaLineshape(nullptr), 
+			
+			h_etaLineshapeCoh(nullptr),  
+			h_etaLineshapeBGGEN(nullptr), 
 			h_omegaLineshape(nullptr), 
-			h_etaPionLineshape(nullptr), 
 			h_fdcOmegaLineshape(nullptr), 
+			
+			h_eta1PionLineshape(nullptr), 
+			h_eta2PionLineshape(nullptr), 
+			h_eta3PionLineshape(nullptr), 
+			h_hadronicBkgdLineshape(nullptr), 
+			h_HadronicBkgdFraction_bggen(nullptr), 
+			h_HadronicBkgdFraction_bggen_cut(nullptr), 
+			h_HadronicBkgdFraction(nullptr), 
+			h_EtaPionBkgdFraction_bggen(nullptr), 
+			h_EtaPionBkgdFraction_bggen_cut(nullptr), 
+			h_EtaPionBkgdFraction(nullptr), 
+			
 			h_fluxWeights(nullptr), 
 			h_matrix(nullptr), 
 			h_matrixFine(nullptr), 
-			h_EtaPionFraction_bggen(nullptr), 
-			h_EtaPionFraction(nullptr), 
 			h_EmptyEtaRatio(nullptr), 
-			h_Counts(nullptr),
-			h_EmptyCounts(nullptr),
-			h_EmptyYield(nullptr),
-			h_OmegaYield(nullptr),
-			h_EtaPionYield(nullptr),
+			h_Counts(nullptr), 
+			h_EmptyCounts(nullptr), 
+			h_EmptyYield(nullptr), 
+			h_OmegaYield(nullptr),  
+			h_HadronicBkgdYield(nullptr), 
+			h_EtaPionYield(nullptr), 
 			cFit(nullptr), 
 			cYield(nullptr), 
 			cCrossSection(nullptr), 
 			cAcceptance(nullptr), 
 			cEmptyRatio(nullptr), 
+			cHadronicBkgdFraction(nullptr),
 			cEtaPionFraction(nullptr),
 			cCounts(nullptr),
 			cBackgrounds(nullptr),
@@ -74,6 +87,8 @@ class EtaAnalyzer {
 			m_matrixHistName       = "AngularMatrix";
 			m_luminosity           =  0.0;
 			m_emptyTargetFluxRatio =  1.0;
+			
+			m_IsMatrixLoaded       = false;
 			
 			// Binning defaults:
 			
@@ -106,6 +121,9 @@ class EtaAnalyzer {
 			m_fitOption_poly       = 1;
 			m_fitOption_omega      = 2;
 			m_fitOption_etap       = 1;
+			
+			m_lineshapeOption      = 0;
+			m_useRawMass           = 0;
 			
 			m_emptyFitOption_eta   = 0;
 			m_emptyFitOption_omega = 0;
@@ -149,7 +167,9 @@ class EtaAnalyzer {
 		void SetRebinsMgg(int);
 		void SetRebinsTheta(int);
 		void SetRebinsEmptyMgg(int);
+		void SetAngularRange(double min, double max) { m_minReconAngle = min; m_maxReconAngle = max; }
 		void SetBeamEnergy(double, double);
+		void SetBeamEnergy();
 		
 		double GetMggBinSize() { return m_mggBinSize; }
 		double GetEmptyMggBinSize() { return m_emptyMggBinSize; }
@@ -174,6 +194,12 @@ class EtaAnalyzer {
 		void SetEmptyFitOption_bkgd(int, int);
 		void SetEmptyFitOption_bkgd(int);
 		
+		int  GetRawMassOption() { return m_useRawMass; }
+		void SetRawMassOption(int opt) { m_useRawMass = opt; }
+		
+		int  GetLineshapeOption() { return m_lineshapeOption; }
+		void SetLineshapeOption(int opt) { m_lineshapeOption = opt; }
+		
 		void SetFitRange(double, double);
 		void SetEmptyFitRange(double, double);
 		
@@ -191,16 +217,18 @@ class EtaAnalyzer {
 		TString GetEmptyFitOptionStr();
 		void DumpSettings();
 		
+		bool IsMatrixLoaded() { return m_IsMatrixLoaded; }
+		
 		// Load data (functions are defined in Data.cc):
 		
 		int LoadDataHistograms();
 		
 		int LoadLineshapes();
 		int LoadEtaLineshape();
+		int LoadBGGENLineshape();
 		int LoadEtaPionLineshape();
 		int LoadOmegaLineshape();
 		int LoadFDCOmegaLineshape();
-		int LoadEtaPionFraction();
 		
 		// Get photon flux (functinos are defined in Flux.cc):
 		
@@ -229,8 +257,10 @@ class EtaAnalyzer {
 		void PlotAngularYield();
 		void PlotCrossSection();
 		void PlotEmptyEtaRatio();
+		void PlotHadronicBkgdFraction();
 		void PlotEtaPionFraction();
 		void PlotBackgrounds();
+		void PlotLineshapeShift();
 		void WriteROOTFile(TString fileName="yield.root");
 		
 		TH1F* GetAngularYield(int opt=0) { 
@@ -244,7 +274,17 @@ class EtaAnalyzer {
 		TH2F *h_mggVsThetaFull, *h_mggVsThetaEmpty;
 		
 		// MC Lineshapes:
-		TH2F *h_etaLineshape, *h_omegaLineshape, *h_etaPionLineshape, *h_fdcOmegaLineshape;
+		TH2F *h_etaLineshapeCoh,   *h_etaLineshapeBGGEN;
+		TH2F *h_omegaLineshape,    *h_rhoLineshape, *h_fdcOmegaLineshape;
+		TH2F *h_eta1PionLineshape, *h_eta2PionLineshape, *h_eta3PionLineshape;
+		TH2F *h_hadronicBkgdLineshape;
+		
+		// Bkgd Fractions from bggen:
+		TH1F *h_HadronicBkgdFraction_bggen,     *h_EtaPionBkgdFraction_bggen;
+		TH1F *h_HadronicBkgdFraction_bggen_cut, *h_EtaPionBkgdFraction_bggen_cut;
+		
+		// Bkgd Fractions from fit results:
+		TH1F *h_HadronicBkgdFraction, *h_EtaPionBkgdFraction;
 		
 		// Photon flux weights:
 		TH1F *h_fluxWeights;
@@ -252,18 +292,12 @@ class EtaAnalyzer {
 		// Angular Matrix:
 		TH3F *h_matrix, *h_matrixFine;
 		
-		// Eta+Pion Fraction from bggen:
-		TH1F *h_EtaPionFraction_bggen;
-		
-		// Eta+Pion Fraction from fit result:
-		TH1F *h_EtaPionFraction;
-		
 		// Ratio of etas from empty target runs to full target runs:
 		TH1F *h_EmptyEtaRatio;
 		
 		// 
 		TH1F *h_Counts,     *h_EmptyCounts;
-		TH1F *h_EmptyYield, *h_EtaPionYield, *h_OmegaYield;
+		TH1F *h_EmptyYield, *h_HadronicBkgdYield, *h_EtaPionYield, *h_OmegaYield;
 		
 		//-----------------------------------------------------------//
 		// Run-specific numbers:
@@ -293,7 +327,8 @@ class EtaAnalyzer {
 		
 		//-----------------------------------------------------------//
 		
-		bool m_binningSet = false;
+		bool m_binningSet     = false;
+		bool m_IsMatrixLoaded;
 		
 		// Fitting options:
 		
@@ -303,6 +338,9 @@ class EtaAnalyzer {
 		int m_fitOption_bkgd, m_fitOption_poly;
 		int m_fitOption_omega;
 		int m_fitOption_etap;
+		
+		int m_lineshapeOption;
+		int m_useRawMass;
 		
 		int m_emptyFitOption_eta;
 		int m_emptyFitOption_omega;
@@ -324,11 +362,16 @@ class EtaAnalyzer {
 		vector<pair<double,double>> m_angularYieldEmpty;        // empty target background integrated within mgg cut
 		vector<pair<double,double>> m_angularYieldEmptyPeaking; // only peaking part of empty background integrated
 		
-		vector<pair<double,double>> m_angularEtaPionFraction;   // fraction parameter fit result 
-		                                                        //  (N_eta+pion/N_eta, integrated over all mgg)
-		vector<pair<double,double>> m_angularYieldEtaPion;      // Eta+Pion yield integrated between mgg cut
+		vector<pair<double,double>> m_angularHadronicBkgdFraction;
+		vector<pair<double,double>> m_angularEtaPionBkgdFraction;
+		
+		vector<pair<double,double>> m_angularYieldHadronicBkgd;
+		vector<pair<double,double>> m_angularYieldEtaPion;
 		
 		vector<pair<double,double>> m_angularYieldOmega;
+		
+		vector<pair<double,double>> m_fitResult_shift;
+		vector<pair<double,double>> m_fitResult_bkgdShift;
 		
 		// Histograms to store results:
 		
@@ -342,7 +385,7 @@ class EtaAnalyzer {
 		
 		// Objects needed for drawing:
 		
-		TCanvas *cFit, *cYield, *cCrossSection, *cAcceptance, *cEmptyRatio, *cEtaPionFraction;
+		TCanvas *cFit, *cYield, *cCrossSection, *cAcceptance, *cEmptyRatio, *cHadronicBkgdFraction, *cEtaPionFraction;
 		TCanvas *cCounts, *cBackgrounds;
 		TPad *pFit, *pRes;
 		void InitializeFitCanvas();
@@ -351,7 +394,7 @@ class EtaAnalyzer {
 		void InitializeEmptyCanvas();
 		
 		TLine *l0, *lp, *lm, *lx1, *lx2;
-		void DrawFitResult(TH1F*, TH1F*, TF1*, TF1*, TF1*, TF1*, TF1*, double minAngle, double maxAngle);
+		void DrawFitResult(TH1F*, TH1F*, TF1*, TF1*, TF1*, TF1*, TF1*, TF1*, TF1*, double minAngle, double maxAngle);
 };
 
 #endif

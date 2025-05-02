@@ -6,10 +6,11 @@ int main(int argc, char **argv) {
 	anaSettings_t locSettings;
 	locSettings.primexPhase    =     1;
 	locSettings.mcBatch        =     1;
-	locSettings.minRunNumber   = 61378;
-	locSettings.maxRunNumber   = 61956;
 	locSettings.analysisOption =     0;
+	locSettings.vetoOption     =     6;
 	locSettings.runNumber      =     0;
+	locSettings.minRunNumber   = GetMinRunNumber(locSettings.primexPhase);
+	locSettings.maxRunNumber   = GetMaxRunNumber(locSettings.primexPhase);
 	locSettings.inputFileName  = "none";
 	locSettings.outputFileName = "eta_ana.root";
 	locSettings.configFileName = "eta_ana.config";
@@ -22,24 +23,21 @@ int main(int argc, char **argv) {
 			argptr++;
 			switch(*argptr) {
 			case 'p':
-				locSettings.primexPhase = atoi(++argptr);
+				locSettings.primexPhase  = atoi(++argptr);
 				locSettings.minRunNumber = GetMinRunNumber(locSettings.primexPhase);
 				locSettings.maxRunNumber = GetMaxRunNumber(locSettings.primexPhase);
 				break;
-			case 'v':
-				locSettings.mcBatch = atoi(++argptr);
-				break;
 			case 'b':
-				locSettings.minRunNumber = atoi(++argptr);
-				break;
-			case 'e':
-				locSettings.maxRunNumber = atoi(++argptr);
+				locSettings.mcBatch = atoi(++argptr);
 				break;
 			case 'c':
 				locSettings.configFileName = ++argptr;
 				break;
 			case 'a':
 				locSettings.analysisOption = atoi(++argptr);
+				break;
+			case 'v':
+				locSettings.vetoOption = atoi(++argptr);
 				break;
 			case 'i':
 				locSettings.inputFileName = ++argptr;
@@ -49,6 +47,12 @@ int main(int argc, char **argv) {
 				break;
 			case 'r':
 				locSettings.runNumber = atoi(++argptr);
+				break;
+			case 'l':
+				locSettings.minRunNumber = atoi(++argptr);
+				break;
+			case 'u':
+				locSettings.maxRunNumber = atoi(++argptr);
 				break;
 			case 'h':
 				printUsage(locSettings,0);
@@ -62,10 +66,6 @@ int main(int argc, char **argv) {
 	}
 	printUsage(locSettings, 1);
 	
-	// Directory where input ROOT trees will be read from:
-	sprintf(rootTreePathName, "/work/halld/home/andrsmit/primex_eta_analysis/eta_gg_matrix/pass1/rootTrees/phase1/full_target_nobfield/batch%02d", 
-		locSettings.mcBatch);
-	
 	// Directory where output ROOT files will be stored:
 	sprintf(rootFilePathName, "/work/halld/home/andrsmit/primex_eta_analysis/eta_gg_matrix/analyze_trees/rootFiles");
 	
@@ -75,6 +75,7 @@ int main(int argc, char **argv) {
 	// Initialize analysis object:
 	EtaAna locAna;
 	locAna.SetFillThrown(true);
+	locAna.SetIsCohMC(true);
 	
 	TString analysisStr = "";
 	switch(locSettings.analysisOption) {
@@ -96,15 +97,27 @@ int main(int argc, char **argv) {
 		case 5:
 			analysisStr = "_TOF";
 			break;
+		case 8:
+			analysisStr = "_angular";
+			break;
+		case 9:
+			analysisStr = "_special";
+			break;
 		default:
 			std::cout << "Invalid analysis option provided." << std::endl;
 			break;
 	}
 	
+	TString vetoStr = "";
+	if(locSettings.analysisOption>0) vetoStr = Form("_VetoOption%d", locSettings.vetoOption);
+	
 	// Read cut values from config file:
 	TString locConfigFileName(locSettings.configFileName);
 	locAna.SetCuts(locConfigFileName);
 	locAna.DumpCuts();
+	
+	// Set veto option:
+	locAna.SetVetoOption(locSettings.vetoOption);
 	
 	// Initialize histograms to be filled:
 	locAna.InitHistograms(locSettings.analysisOption);
@@ -115,6 +128,10 @@ int main(int argc, char **argv) {
 	if(locPhase==1) {
 		fieldString = "nobfield";
 	}
+	
+	// Directory where input ROOT trees will be read from:
+	sprintf(rootTreePathName, "/work/halld/home/andrsmit/primex_eta_analysis/eta_gg_matrix/pass1/rootTrees/phase%d/full_target_%s/batch%02d", 
+		locPhase, fieldString.Data(), locSettings.mcBatch);
 	
 	//----------------------------------------------------//
 	// Get list of runs to process:
@@ -145,8 +162,8 @@ int main(int argc, char **argv) {
 	}
 	//----------------------------------------------------//
 	
-	TString outputFileName = Form("%s/phase%d/phase%d%s_batch%02d.root", rootFilePathName, locPhase, locPhase, 
-		analysisStr.Data(), locSettings.mcBatch);
+	TString outputFileName = Form("%s/phase%d/phase%d%s%s_batch%02d.root", rootFilePathName, locPhase, locPhase, 
+		analysisStr.Data(), vetoStr.Data(), locSettings.mcBatch);
 	
 	//if(!gSystem->AccessPathName(outputFileName.Data())) return 0;
 	locAna.SetOutputFileName(outputFileName.Data());
@@ -154,6 +171,7 @@ int main(int argc, char **argv) {
 	int nRunsProcessed = 0;
 	for(int iRun=0; iRun<locNRuns; iRun++) {
 		int locRun = runList[iRun];
+		if((locRun<locSettings.minRunNumber) || (locRun>locSettings.maxRunNumber)) continue;
 		
 		TString inputFileName = Form("%s/%d.root", rootTreePathName, locRun);
 		
@@ -191,13 +209,12 @@ void printUsage(anaSettings_t anaSettings, int goYes) {
 	if(goYes==0) {
 		fprintf(stderr,"\nSWITCHES:\n");
 		fprintf(stderr,"-h\tPrintthis message\n");
-		fprintf(stderr,"-v<arg>\tVeto Option for filling angular resolution and acceptance matrix (default=0, choose 0-7)\n");
 		fprintf(stderr,"-p<arg>\tPrimEx-eta phase number (default=1, choose between 1,2,or3)\n");
-		fprintf(stderr,"-v<arg>\tBatch number\n");
-		fprintf(stderr,"-b<arg>\tMinimum run number to process\n");
-		fprintf(stderr,"-e<arg>\tMaximum run number to process\n");
+		fprintf(stderr,"-b<arg>\tMC Batch to analyze (0-9)\n");
 		fprintf(stderr,"-c<arg>\tConfiguration file name\n");
-		fprintf(stderr,"-a<arg>\tAnalysis Option (0: default, 1: matrix, 2: FCAL cuts, 3: BCAL cuts, 4: BEAM cuts, 5: TOF cuts)\n");
+		fprintf(stderr,"-a<arg>\tAnalysis Option (0: default, 1: matrix, 2: FCAL cuts, 5: TOF cuts, 8: angular systematics)\n");
+		fprintf(stderr,"-v<arg>\tVeto Option (default: 6, shoud range between 0-8)\n");
+		fprintf(stderr,"\nFor debug/testing:\n");
 		fprintf(stderr,"-r<arg>\tRun number for specified input file\n");
 		fprintf(stderr,"-i<arg>\tInput file name (default is none)\n");
 		fprintf(stderr,"-o<arg>\tOutput file name (default is compton_ana.root)\n\n\n");
@@ -209,8 +226,8 @@ void printUsage(anaSettings_t anaSettings, int goYes) {
 				anaSettings.inputFileName.c_str());
 			std::cout << "" << std::endl;
 		} else {
-			printf("\nAnalyzing simulations for PrimEx-eta Phase %d (runs %d-%d, batch %d):\n", 
-				anaSettings.primexPhase, anaSettings.minRunNumber, anaSettings.maxRunNumber, anaSettings.mcBatch);
+			printf("\nAnalyzing simulations for PrimEx-eta Phase %d (batch %d):\n", 
+				anaSettings.primexPhase, anaSettings.mcBatch);
 			std::cout << "" << std::endl;
 		}
 	}

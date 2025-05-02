@@ -19,15 +19,17 @@ class MggFitter {
 	public:
 		MggFitter() 
 			: h_data(nullptr), h_empty(nullptr), f_fit(nullptr), f_empty(nullptr), 
-				h_etaLineshape(nullptr), f_etaLineshape(nullptr),
-				h_omegaLineshape(nullptr), f_omegaLineshape(nullptr),
-				h_etaPionLineshape(nullptr), f_etaPionLineshape(nullptr), 
-				h_fdcOmegaLineshape(nullptr), f_fdcOmegaLineshape(nullptr)
+				h_hadronicBkgdLineshape(nullptr), f_hadronicBkgdLineshape(nullptr), 
+				h_etaLineshape(nullptr),          f_etaLineshape(nullptr),
+				h_omegaLineshape(nullptr),        f_omegaLineshape(nullptr),
+				h_rhoLineshape(nullptr), 
+				h_etaPionLineshape(nullptr),      f_etaPionLineshape(nullptr), 
+				h_fdcOmegaLineshape(nullptr),     f_fdcOmegaLineshape(nullptr)
 		{
 			f_chebyshev = new TF1("chebyshev", "cheb5", 0.0, 1.0);
 		}
 		
-		double angle = 0.0;
+		double angle   = 0.0,   angleWidth = 0.0;
 		double binSize = 0.001, emptyBinSize = 0.001;
 		
 		// Fitting options:
@@ -37,6 +39,9 @@ class MggFitter {
 		int fitOption_poly   = 1;
 		int fitOption_omega  = 2;
 		int fitOption_etap   = 1;
+		
+		int useRawMass = 0;
+		int vetoOption = 6;
 		
 		// Fitting options for empty target background:
 		
@@ -51,8 +56,8 @@ class MggFitter {
 		double      minFitRange=0.300,      maxFitRange=1.100;
 		double minEmptyFitRange=0.405, maxEmptyFitRange=0.950;
 		
-		double minMggCut = 0.50;
-		double maxMggCut = 0.60;
+		double minMggCut = 0.5;
+		double maxMggCut = 0.6;
 		
 		// Set full and empty target histograms:
 		void SetData(TH1F* h1) { h_data = h1; return; }
@@ -73,7 +78,18 @@ class MggFitter {
 		void FitEtaLineshape(int drawOption=0);
 		
 		// Set/fit lineshape of eta+pion background:
+		void SetHadronicBkgdLineshape(TH1F *h1, int drawOption=0) {
+			m_hadronicBkgdYieldBGGEN = h1->Integral();
+			h_hadronicBkgdLineshape = h1;
+			h_hadronicBkgdLineshape->Scale(1.0/h_hadronicBkgdLineshape->Integral());
+			FitHadronicBkgdLineshape(drawOption);
+			return;
+		}
+		void FitHadronicBkgdLineshape(int drawOption=0);
+		
+		// Set/fit lineshape of eta+pion background:
 		void SetEtaPionLineshape(TH1F *h1, int drawOption=0) {
+			m_etaPionYieldBGGEN = h1->Integral();
 			h_etaPionLineshape = h1;
 			h_etaPionLineshape->Scale(1.0/h_etaPionLineshape->Integral());
 			FitEtaPionLineshape(drawOption);
@@ -90,6 +106,13 @@ class MggFitter {
 		}
 		void FitOmegaLineshape(int drawOption=0);
 		
+		// Set lineshape of rho background:
+		void SetRhoLineshape(TH1F *h1, int drawOption=0) { 
+			h_rhoLineshape = h1;
+			h_rhoLineshape->Scale(1.0/h_rhoLineshape->Integral());
+			return;
+		}
+		
 		// Set/fit lineshape of omegas form 1st FDC package:
 		void SetFDCOmegaLineshape(TH1F *h1, int drawOption=0) { 
 			h_fdcOmegaLineshape = h1;
@@ -99,9 +122,14 @@ class MggFitter {
 		}
 		void FitFDCOmegaLineshape(int drawOption=0);
 		
-		void SetEtaPionFraction(double frac, double fracErr) { 
-			m_etaPionFraction    = frac;
-			m_etaPionFractionErr = fracErr;
+		void SetHadronicBkgdFraction(double frac, double fracErr) { 
+			m_hadronicBkgdFrac    = frac;
+			m_hadronicBkgdFracErr = fracErr;
+			return;
+		}
+		void SetEtaPionBkgdFraction(double frac, double fracErr) { 
+			m_etaPionBkgdFrac    = frac;
+			m_etaPionBkgdFracErr = fracErr;
 			return;
 		}
 		
@@ -142,13 +170,100 @@ class MggFitter {
 			delete locf1;
 			return;
 		}
+		void GetOmegaFunction(TF1** f1, TString fname="omegaFit") {
+			TF1 *locf1;
+			InitializeFitFunction(&locf1,"locf1");
+			locf1->SetParameters(f_fit->GetParameters());
+			ZeroSignalPars(locf1);
+			switch(fitOption_bkgd) {
+				case 1:
+					for(int ipar=0; ipar<=fitOption_poly; ipar++) {
+						locf1->SetParameter(Form("p%d",ipar), 0.0);
+					}
+					break;
+				case 2:
+					for(int ipar=0; ipar<5; ipar++) {
+						locf1->SetParameter(Form("p%d",ipar), 0.0);
+					}
+					break;
+				case 3:
+					for(int ipar=0; ipar<=fitOption_poly; ipar++) {
+						locf1->SetParameter(Form("p%d",ipar), 0.0);
+					}
+					break;
+			}
+			locf1->SetParameter("N_{empty}", 0.0);
+			locf1->SetLineColor(kGreen);
+			locf1->SetLineStyle(4);
+			locf1->SetNpx(1000);
+			
+			*f1 = (TF1*)locf1->Clone(fname.Data());
+			delete locf1;
+			return;
+		}
+		void GetHadronicBkgdFunction(TF1** f1, TString fname="hadronicBkgdFit") {
+			TF1 *locf1;
+			InitializeFitFunction(&locf1,"locf1");
+			locf1->SetParameters(f_fit->GetParameters());
+			ZeroBkgdPars(locf1);
+			switch(fitOption_signal) {
+				case 6:
+					locf1->SetParameter("N_{#eta}",0.0);
+					locf1->SetParameter("N_{#eta,bkgd}", f_fit->GetParameter("N_{#eta,bkgd}"));
+					break;
+				case 7:
+					locf1->SetParameter("frac_{#eta}", 0.0);
+					locf1->SetParameter("frac_{bkgd}", f_fit->GetParameter("frac_{bkgd}"));
+					break;
+				case 8:
+					locf1->SetParameter("frac_{#eta}", 0.0);
+					locf1->SetParameter("frac_{bkgd}", f_fit->GetParameter("frac_{bkgd}"));
+					break;
+				case 9:
+					locf1->SetParameter("frac_{#eta}",    0.0);
+					locf1->SetParameter("frac_{#eta#pi}", 0.0);
+					locf1->SetParameter("frac_{bkgd}",    f_fit->GetParameter("frac_{bkgd}"));
+					break;
+				case 10:
+					locf1->SetParameter("frac_{#eta}",    0.0);
+					locf1->SetParameter("frac_{#eta#pi}", 0.0);
+					locf1->SetParameter("frac_{bkgd}",    f_fit->GetParameter("frac_{bkgd}"));
+					break;
+				case 11:
+					locf1->SetParameter("N_{#eta}",    0.0);
+					locf1->SetParameter("A_{#eta#pi}", 0.0);
+					locf1->SetParameter("A_{bkgd}",    f_fit->GetParameter("A_{bkgd}"));
+					break;
+			}
+			locf1->SetLineColor(kBlue+2);
+			locf1->SetNpx(1000);
+			
+			*f1 = (TF1*)locf1->Clone(fname.Data());
+			delete locf1;
+			return;
+		}
 		void GetEtaPionFunction(TF1** f1, TString fname="etaPionFit") {
 			TF1 *locf1;
 			InitializeFitFunction(&locf1,"locf1");
 			locf1->SetParameters(f_fit->GetParameters());
-			locf1->SetParameter("frac_{#eta}", 0.0);
 			ZeroBkgdPars(locf1);
-			locf1->SetParameter("frac_{#eta#pi}", f_fit->GetParameter("frac_{#eta#pi}"));
+			switch(fitOption_signal) {
+				case 9:
+					locf1->SetParameter("frac_{#eta}",    0.0);
+					locf1->SetParameter("frac_{#eta#pi}", f_fit->GetParameter("frac_{#eta#pi}"));
+					locf1->SetParameter("frac_{bkgd}",    0.0);
+					break;
+				case 10:
+					locf1->SetParameter("frac_{#eta}",    0.0);
+					locf1->SetParameter("frac_{#eta#pi}", f_fit->GetParameter("frac_{#eta#pi}"));
+					locf1->SetParameter("frac_{bkgd}",    0.0);
+					break;
+				case 11:
+					locf1->SetParameter("N_{#eta}",    0.0);
+					locf1->SetParameter("A_{#eta#pi}", f_fit->GetParameter("A_{#eta#pi}"));
+					locf1->SetParameter("A_{bkgd}",    0.0);
+					break;
+			}
 			locf1->SetLineColor(kCyan);
 			locf1->SetNpx(1000);
 			
@@ -181,15 +296,19 @@ class MggFitter {
 		void GetYield(double&, double&, int useSignalPars=0, int subtractEtaPion=0);
 		void GetEmptyYield(double&, double&, int excludeNonPeaking=0);
 		void GetOmegaYield(double&, double&);
+		void GetHadronicBkgdYield(double&, double&);
 		void GetEtaPionYield(double&, double&);
+		
 		void GetEmptyEtaFraction(double&, double&);
-		void GetEtaPionFraction(double&, double&);
+		void GetHadronicBkgdFraction(double&, double&);
+		void GetEtaPionBkgdFraction(double&, double&);
+		
+		void GetLineshapeShift(double&, double&);
 		
 		double IntegrateGaussian(double mu, double sigma, double x1, double x2);
 		
 		void DumpFitParameters();
 		void DumpEmptyFitParameters();
-		
 		
 		// Fit Functions:
 		double      MggFitFunction(double *x, double *par);
@@ -209,7 +328,10 @@ class MggFitter {
 		
 		double m_nEmptyEtaPar = 0.0, m_nEmptyOmegaPar = 0.0;
 		
-		double m_etaPionFraction = 0.0, m_etaPionFractionErr = 0.0;
+		double m_hadronicBkgdFrac = 0.0, m_hadronicBkgdFracErr = 0.0;
+		double m_etaPionBkgdFrac  = 0.0, m_etaPionBkgdFracErr  = 0.0;
+		
+		double m_hadronicBkgdYieldBGGEN = 0.0, m_etaPionYieldBGGEN = 0.0;
 		
 		int m_nParameters = 0, m_nEmptyParameters = 0;
 		
@@ -223,11 +345,16 @@ class MggFitter {
 		TH1F *h_etaLineshape;
 		TF1  *f_etaLineshape;
 		
+		TH1F *h_hadronicBkgdLineshape;
+		TF1  *f_hadronicBkgdLineshape;
+		
 		TH1F *h_etaPionLineshape;
 		TF1  *f_etaPionLineshape;
 		
 		TH1F *h_omegaLineshape;
 		TF1  *f_omegaLineshape;
+		
+		TH1F *h_rhoLineshape;
 		
 		TH1F *h_fdcOmegaLineshape;
 		TF1  *f_fdcOmegaLineshape;

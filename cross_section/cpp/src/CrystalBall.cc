@@ -1,5 +1,35 @@
 #include "CrossSection.h"
 
+double DoubleGausPDF(double *x, double *par)
+{
+	double mgg = x[0];
+	
+	//---------------------------------------------//
+	// First Gaussian:
+	
+	double    mu1 = par[0];
+	double sigma1 = par[1];
+	
+	double f1 = NormGaus(mgg, mu1, sigma1);
+	
+	//---------------------------------------------//
+	// Second Gaussian:
+	
+	double    mu2 = par[2] + mu1;
+	double sigma2 = par[3];
+	
+	double f2 = NormGaus(mgg, mu2, sigma2);
+	
+	//---------------------------------------------//
+	// Combine:
+	
+	double fraction = par[4];
+	double binWidth = par[5];
+	
+	double f = ((1.0-fraction)*f1 + fraction*f2) * binWidth;
+	return f;
+}
+
 double CrystalBallPDF(double *x, double *par)
 {
 	double mgg = x[0];
@@ -129,6 +159,51 @@ double DoubleCrystalBallPDF_oneflip(double *x, double *par)
 	double binWidth = par[9];
 	
 	double f = ((1.0-fraction)*f1 + fraction*f2) * binWidth;
+	return f;
+}
+
+double DoubleCrystalBallPlusGausPDF(double *x, double *par)
+{
+	double mgg = x[0];
+	
+	//---------------------------------------------//
+	// First CrystalBall:
+	
+	double    mu1 = par[0];
+	double sigma1 = par[1];
+	double alpha1 = par[2];
+	double     n1 = par[3];
+	
+	double f1 = NormCrystalBall(mgg, mu1, sigma1, alpha1, n1);
+	
+	//---------------------------------------------//
+	// Second CrystalBall:
+	
+	double    mu2 = par[4] + mu1;
+	double sigma2 = par[5];
+	double alpha2 = par[6];
+	double     n2 = par[7];
+	
+	double f2 = NormCrystalBall(mgg, mu2, sigma2, alpha2, n2, 1);
+	
+	//---------------------------------------------//
+	// Gaussian:
+	
+	double    mu3 = par[8];
+	double sigma3 = par[9];
+	
+	double f3 = NormGaus(mgg, mu3, sigma3);
+	
+	//---------------------------------------------//
+	// Combine:
+	
+	double fraction1 = par[10];
+	double fraction2 = par[11];
+	double binWidth  = par[12];
+	
+	if((fraction1+fraction2)>1.0) return -1.e9;
+	
+	double f = ((1.0-fraction1-fraction2)*f1 + fraction1*f2 + fraction2*f3) * binWidth;
 	return f;
 }
 

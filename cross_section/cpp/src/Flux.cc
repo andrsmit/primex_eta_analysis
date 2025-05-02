@@ -30,7 +30,10 @@ int EtaAnalyzer::LoadLuminosity() {
 	// So even when fitting and obtaining the pdf of the empty bkgd, I still subtract the full peak
 	// around the eta mass region and apply the correction to the target density accordingly.
 	// 
-	m_luminosity *= 0.9817;
+	m_luminosity *= 0.98;
+	
+	// apply correction based on photon absorption inside target:
+	m_luminosity *= 0.985;
 	
 	//------------------------------------------------//
 	// Store fraction of flux in each energy bin in h_fluxWeights:
