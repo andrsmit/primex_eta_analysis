@@ -61,6 +61,7 @@ EtaAna::EtaAna() {
 	// Set event number to zero on initialization:
 	
 	m_event = 0;
+	m_totalEvents = 0.0;
 	
 	// for event-by-event acceptance correction:
 	
@@ -79,6 +80,8 @@ EtaAna::EtaAna() {
 	h_AngularMatrix_TOF       = nullptr;
 	h_AngularMatrix_singleTOF = nullptr;
 	
+	h_mcVertex                = nullptr;
+	h_mcVertexAccepted        = nullptr;
 }
 
 //----------------------------------------------------------//
@@ -239,9 +242,17 @@ int EtaAna::AcceptRejectEvent() {
 	//
 	if(m_nmc==0) return 0;
 	
-	int reject = 0;
+	if(h_mcVertex==nullptr) {
+		h_mcVertex = new TH1F("vertex", "Vertex Z Position (thrown)", 1000, 0., 600.);
+		h_mcVertex->SetDirectory(0);
+		
+		h_mcVertexAccepted = new TH1F("vertex_accepted", "Vertex Z Position (filtered)", 1000, 0., 600.);
+		h_mcVertexAccepted->SetDirectory(0);
+	}
 	
 	double vertexZ = m_mcZ[0];
+	
+	h_mcVertex->Fill(vertexZ);
 	
 	// shift coordinate system so that upstream entrance of target is at z=0:
 	
@@ -260,10 +271,11 @@ int EtaAna::AcceptRejectEvent() {
 	}
 	
 	if(vertexWeight < m_random->Uniform()) {
-		reject = 1;
+		return 1;
 	}
+	h_mcVertexAccepted->Fill(vertexZ);
 	
-	return reject;
+	return 0;
 }
 
 void EtaAna::ReadEvent() {
@@ -328,6 +340,9 @@ void EtaAna::ReadEvent() {
 	}
 	
 	m_tree->GetEvent(m_event);
+	
+	m_event++;
+	m_totalEvents += 1.0;
 	
 	return;
 }
@@ -433,7 +448,7 @@ int EtaAna::GetBCALShowerList(vector<int> &goodShowers, double energyCut, double
 	return nBCALShowers;
 }
 
-int EtaAna::GetSCHitList(vector<int> &goodHits) {
+int EtaAna::GetSCHitList(vector<int> &goodHits, double dECut) {
 	
 	// Timing and dE cuts are hard coded for now
 	
@@ -443,7 +458,7 @@ int EtaAna::GetSCHitList(vector<int> &goodHits) {
 		double locT  = m_scT[ihit] - m_rfTime;
 		double locdE = 1.e3 * m_scdE[ihit];
 		
-		if((1.0 < locT) && (locT < 9.0) && (locdE > 0.2)) {
+		if((1.0 < locT) && (locT < 9.0) && (locdE > dECut)) {
 			nSCHits++;
 			goodHits.push_back(ihit);
 		}
@@ -521,7 +536,8 @@ int EtaAna::FCALFiducialCut(TVector3 pos, double cutLayer) {
 	return locFiducialCut;
 }
 
-void EtaAna::CheckTOFMatch(TVector3 pos, double &dxMin, double &dyMin, double &dtMin, double rfTimingCut) {
+void EtaAna::CheckTOFMatch(TVector3 pos, double correctedShowerTime, 
+	double &dxMin, double &dyMin, double &dtMin, double timingCut) {
 	
 	dxMin = 1000.;
 	dyMin = 1000.;
@@ -533,13 +549,19 @@ void EtaAna::CheckTOFMatch(TVector3 pos, double &dxMin, double &dyMin, double &d
 		double yt = m_tofY[itof] - m_vertex.Y();
 		double zt = m_tofZ[itof] - m_vertex.Z();
 		double rt = sqrt(xt*xt + yt*yt + zt*zt);
+		
+		// Option 1: Apply cut to TOF hit based on time difference with RF time.
 		double dt = m_tofT[itof] - (rt/m_c) - m_rfTime;
+		
+		// Option 2: Apply cut to TOF hit based on time difference with shower time.
+		//double dt = correctedShowerTime - (m_tofT[itof] - (rt/m_c));
+		
 		xt *= pos.Z() / zt;
 		yt *= pos.Z() / zt;
 		double dx = pos.X() - xt;
 		double dy = pos.Y() - yt;
 		
-		if(fabs(dt) < rfTimingCut) {
+		if(fabs(dt) < timingCut) {
 			if((dx*dx + dy*dy) < (dxMin*dxMin + dyMin*dyMin)) {
 				dxMin = dx;
 				dyMin = dy;
@@ -610,7 +632,7 @@ void EtaAna::GetThrownEnergyAndAngle(double &thrownEnergy, double &thrownAngle) 
 	return;
 }
 
-void EtaAna::GetThrownEnergyAndAngleBGGEN(double &thrownEnergy, double &thrownAngle) {
+void EtaAna::GetThrownEnergyAndAngleBGGEN(double &thrownEnergy, double &thrownAngle, double &thrownEtaEnergy) {
 	
 	// in principle all simulations should be analyzed in this way, but at the 
 	// time of writing this (2/18/25) only the BGGEN mc trees have been updated to 
@@ -618,7 +640,10 @@ void EtaAna::GetThrownEnergyAndAngleBGGEN(double &thrownEnergy, double &thrownAn
 	
 	thrownAngle  =  0.0;
 	for(int imc=0; imc<m_nmc; imc++) {
-		if(m_mcPDGType[imc]==PDGtype(Eta)) thrownAngle = m_mcTheta[imc];
+		if(m_mcPDGType[imc]==PDGtype(Eta)) {
+			thrownAngle = m_mcTheta[imc];
+			thrownEtaEnergy = m_mcE[imc];
+		}
 	}
 	thrownEnergy = m_thrownBeamEnergy;
 	return;
@@ -664,7 +689,19 @@ bool EtaAna::IsCoplanarBCAL(double deltaPhi) {
 	// locDeltaPhi = deltaPhi-180:
 	double locDeltaPhi = deltaPhi>0.0 ? (deltaPhi-180.0) : (deltaPhi+180.0);
 	
-	if(m_phaseVal>1) {
+	/*
+	8/15/2025: 
+	TEMPORARY MODIFICATION
+	I changed this code so that when analyzing the phase 1 bggen simulation, it will use the same cuts we applied for phase 3.
+	The results from this modification should not be used at when analyzing phase 1 data.
+	The only place it should be used is for extracting the lineshape for omega, rho, and other backgrounds from the phase 1 bggen simulation
+	for use in yield extraction from phase 3.
+	
+	The modification I made is to put "|| m_IsBggenMC" in the first if statement below. 
+	The same modification was made inside the 'IsCoplanarSC' function.
+	*/
+	
+	if(m_phaseVal>1 || m_IsBggenMC) {
 		if(((-1.0*m_BCALDeltaPhiCut)<locDeltaPhi) && (locDeltaPhi<(m_BCALDeltaPhiCut+20.0)))
 			return true;
 		else 
@@ -686,7 +723,7 @@ bool EtaAna::IsCoplanarSC(double deltaPhi) {
 	double locDeltaPhi = deltaPhi>0.0 ? (deltaPhi-180.0) : (deltaPhi+180.0);
 	
 	// The magnetic field creates a ~5degree shift:
-	if(m_phaseVal>1) locDeltaPhi -= 5.0;
+	if(m_phaseVal>1 || m_IsBggenMC) locDeltaPhi -= 5.0;
 	
 	if(fabs(locDeltaPhi) < m_SCDeltaPhiCut)
 		return true;
@@ -1005,9 +1042,12 @@ void EtaAna::RunAnalysis(TString inputFileName, int analysisOption) {
 		ReadEvent();
 		if(CheckEventMultiplicities()) {
 			printf("    Skipping event %d\n", m_event);
-			m_event++;
 			continue;
 		}
+		
+		// If we're analyzing MC, apply filter to distribute vertex position realistically:
+		if(AcceptRejectEvent()) continue;
+		
 		switch(analysisOption) {
 			case 0:
 				EtaggAnalysis();
@@ -1017,6 +1057,9 @@ void EtaAna::RunAnalysis(TString inputFileName, int analysisOption) {
 				break;
 			case 2:
 				EtaggAnalysis_FCAL();
+				break;
+			case 4:
+				EtaggAnalysis_beam();
 				break;
 			case 5:
 				EtaggAnalysis_TOF();
@@ -1037,10 +1080,8 @@ void EtaAna::RunAnalysis(TString inputFileName, int analysisOption) {
 				EtaggAnalysis();
 				break;
 		}
-		m_event++;
 	}
 	m_inputFile->Close();
-	
 	return;
 }
 
@@ -1065,6 +1106,11 @@ void EtaAna::InitHistograms(int analysisOption) {
 		case 2:
 		{
 			InitializeFCALHists();
+			break;
+		}
+		case 4:
+		{
+			InitializeBeamHists();
 			break;
 		}
 		case 5:
@@ -1100,6 +1146,9 @@ void EtaAna::InitHistograms(int analysisOption) {
 
 void EtaAna::ResetHistograms(int analysisOption) {
 	
+	if(h_mcVertex        !=nullptr) h_mcVertex->Reset();
+	if(h_mcVertexAccepted!=nullptr) h_mcVertexAccepted->Reset();
+	
 	switch(analysisOption) {
 		case 0:
 		{
@@ -1114,6 +1163,11 @@ void EtaAna::ResetHistograms(int analysisOption) {
 		case 2:
 		{
 			ResetFCALHists();
+			break;
+		}
+		case 4:
+		{
+			ResetBeamHists();
 			break;
 		}
 		case 5:
@@ -1154,6 +1208,9 @@ void EtaAna::WriteHistograms(int analysisOption) {
 	TFile *fOut = new TFile(m_outputFileName.c_str(), "RECREATE");
 	fOut->cd();
 	
+	if(h_mcVertex        !=nullptr) h_mcVertex->Write();
+	if(h_mcVertexAccepted!=nullptr) h_mcVertexAccepted->Write();
+	
 	switch(analysisOption) {
 		case 0:
 		{
@@ -1168,6 +1225,11 @@ void EtaAna::WriteHistograms(int analysisOption) {
 		case 2:
 		{
 			WriteFCALHists();
+			break;
+		}
+		case 4:
+		{
+			WriteBeamHists();
 			break;
 		}
 		case 5:

@@ -2,10 +2,6 @@
 
 void EtaAna::EtaggAnalysis_TOF() {
 	
-	if(m_nmc>0) {
-		if(AcceptRejectEvent()) return;
-	}
-	
 	double locThrownBeamEnergy = 0.0, locThrownAngle = 0.0;
 	if(m_FillThrown) {
 		GetThrownEnergyAndAngle(locThrownBeamEnergy, locThrownAngle);
@@ -61,6 +57,13 @@ void EtaAna::EtaggAnalysis_TOF() {
 		}
 	}
 	
+	
+	// Easy way to save time: Skip events that will obviously be rejected by BCAL veto later on:
+	
+	if(m_vetoOption>0) {
+		if(locNBCALShowers_1ns > 1) return;
+	}
+	
 	//=====================================================================================//
 	
 	for(int ishow=0; ishow<(locNFCALShowersGood-1); ishow++) {
@@ -68,6 +71,7 @@ void EtaAna::EtaggAnalysis_TOF() {
 		int show1 = locGoodFCALShowers[ishow];
 		TVector3 pos1 = GetFCALPosition(show1);
 		
+		double  t1 = m_fcalT[show1] - (pos1.Mag()/m_c);
 		double  e1 = m_fcalE[show1];
 		
 		double px1 = e1*pos1.X() / pos1.Mag();
@@ -76,7 +80,7 @@ void EtaAna::EtaggAnalysis_TOF() {
 		
 		// check the distance between this shower and the closest (if any) tof hit:
 		double tof_dx1, tof_dy1, tof_dt1;
-		CheckTOFMatch(pos1, tof_dx1, tof_dy1, tof_dt1, m_TOFRFCut);
+		CheckTOFMatch(pos1, t1, tof_dx1, tof_dy1, tof_dt1, m_TOFRFCut);
 		double tof_dr1 = sqrt(pow(tof_dx1,2.0)+pow(tof_dy1,2.0));
 		
 		for(int jshow=(ishow+1); jshow<locNFCALShowersGood; jshow++) {
@@ -84,6 +88,7 @@ void EtaAna::EtaggAnalysis_TOF() {
 			int show2 = locGoodFCALShowers[jshow];
 			TVector3 pos2 = GetFCALPosition(show2);
 			
+			double t2 = m_fcalT[show2] - (pos2.Mag()/m_c);
 			double e2 = m_fcalE[show2];
 			
 			double px2 = e2*pos2.X() / pos2.Mag();
@@ -92,7 +97,7 @@ void EtaAna::EtaggAnalysis_TOF() {
 			
 			// check the distance between this shower and the closest (if any) tof hit:
 			double tof_dx2, tof_dy2, tof_dt2;
-			CheckTOFMatch(pos2, tof_dx2, tof_dy2, tof_dt2, m_TOFRFCut);
+			CheckTOFMatch(pos2, t2, tof_dx2, tof_dy2, tof_dt2, m_TOFRFCut);
 			double tof_dr2 = sqrt(pow(tof_dx2,2.0)+pow(tof_dy2,2.0));
 			
 			//-----------------------------------------------------//
@@ -117,9 +122,9 @@ void EtaAna::EtaggAnalysis_TOF() {
 			double locTOFdx1, locTOFdy1, locTOFdt1;
 			double locTOFdx2, locTOFdy2, locTOFdt2;
 			for(int icut=0; icut<m_TOFTimingCuts.size(); icut++) {
-				CheckTOFMatch(pos1, locTOFdx1, locTOFdy1, locTOFdt1, m_TOFTimingCuts[icut]);
+				CheckTOFMatch(pos1, t1, locTOFdx1, locTOFdy1, locTOFdt1, m_TOFTimingCuts[icut]);
 				double locTOFdr1 = sqrt(pow(locTOFdx1,2.0)+pow(locTOFdy1,2.0));
-				CheckTOFMatch(pos2, locTOFdx2, locTOFdy2, locTOFdt2, m_TOFTimingCuts[icut]);
+				CheckTOFMatch(pos2, t2, locTOFdx2, locTOFdy2, locTOFdt2, m_TOFTimingCuts[icut]);
 				double locTOFdr2 = sqrt(pow(locTOFdx2,2.0)+pow(locTOFdy2,2.0));
 				if((locTOFdr1 < m_FCALTOFCut) && (locTOFdr2 < m_FCALTOFCut)) {
 					locTOFVeto_dT[icut] = true;
@@ -202,6 +207,42 @@ void EtaAna::EtaggAnalysis_TOF() {
 				
 				if(!isElastic) continue;
 				
+				
+				// Plot TOF-RF timing distribution for eta->2gamma events:
+				if(isEta) {
+					for(int itof=0; itof<m_ntof; itof++) {
+						double xt = m_tofX[itof] - m_vertex.X();
+						double yt = m_tofY[itof] - m_vertex.Y();
+						double zt = m_tofZ[itof] - m_vertex.Z();
+						double rt = sqrt(xt*xt + yt*yt + zt*zt);
+						
+						double dt = m_tofT[itof] - (rt/m_c) - m_rfTime;
+						h_tofRFdt_eta->Fill(dt, fillWeight);
+						
+						double dx1 = pos1.X() - xt*(pos1.Z()/zt);
+						double dy1 = pos1.Y() - yt*(pos1.Z()/zt);
+						double dr1 = sqrt(dx1*dx1 + dy1*dy1);
+						
+						double dx2 = pos2.X() - xt*(pos2.Z()/zt);
+						double dy2 = pos2.Y() - yt*(pos2.Z()/zt);
+						double dr2 = sqrt(dx2*dx2 + dy2*dy2);
+						
+						h_tof_xy->Fill(xt, yt, fillWeight);
+						
+						if(1.5<dt && dt<3.5) {
+							double dr = dr1 < dr2 ? dr1 : dr2;
+							h_tofFCALdr_eta->Fill(dr, fillWeight);
+							
+							// plot x-y position of TOF hit:
+							h_tof_xy_cut->Fill(xt, yt, fillWeight);
+						}
+						
+						if((dr1 < m_FCALTOFCut) || (dr2 < m_FCALTOFCut)) {
+							h_tofRFdt_eta_cut->Fill(dt, fillWeight);
+						}
+					}
+				}
+				
 				//-----------------------------------------------------//
 				// Energy constraint
 				
@@ -260,6 +301,23 @@ void EtaAna::InitializeTOFHists()
 	int nRecAngleBins    = (int)((m_maxRecAngleBin-m_minRecAngleBin)/m_recAngleBinSize);
 	int nThrownAngleBins = (int)((m_maxThrownAngleBin-m_minThrownAngleBin)/m_thrownAngleBinSize);
 	
+	h_tofRFdt_eta     = new TH1F("tof_rf_dt_eta", 
+		"#eta#rightarrow#gamma#gamma cuts applied; t_{TOF} - t_{RF} [ns]", 
+		10000, -100., 100.);
+	h_tofRFdt_eta_cut = new TH1F("tof_rf_dt_eta_cut", 
+		"#eta#rightarrow#gamma#gamma cuts applied (and spatial match); t_{TOF} - t_{RF} [ns]", 
+		10000, -100., 100.);
+	h_tofFCALdr_eta = new TH1F("tof_fcal_dr_eta",
+		"#eta#rightarrow#gamma#gamma cuts applied; #Deltar_{FCAL-TOF} [cm]",
+		2000, 0.0, 50.0);
+	
+	h_tof_xy     = new TH2F("tof_xy",
+		"#eta#rightarrow#gamma#gamma cuts applied; x_{TOF} [cm]; y_{TOF} [cm]",
+		100, -100.0, 100.0, 100, -100.0, 100.0);
+	h_tof_xy_cut = new TH2F("tof_xy_cut",
+		"#eta#rightarrow#gamma#gamma cuts applied; x_{TOF} [cm]; y_{TOF} [cm]",
+		100, -100.0, 100.0, 100, -100.0, 100.0);
+	
 	// VARY TOF CUTS:
 	
 	h_mgg_noTOF = new TH2F("mgg_noTOF", "No TOF Veto", 
@@ -290,8 +348,12 @@ void EtaAna::InitializeTOFHists()
 	// vary the timing cut used for TOF veto:
 	
 	m_TOFTimingCuts.clear();
-	for(int icut=0; icut<7; icut++) {
-		double locCut = 0.5 + 0.25*(double)(icut);
+	for(int icut=0; icut<=5; icut++) {
+		double locCut = 0.5 + 0.1*(double)(icut);
+		m_TOFTimingCuts.push_back(locCut);
+	}
+	for(int icut=1; icut<=4; icut++) {
+		double locCut = 1.0 + 0.25*(double)(icut);
 		m_TOFTimingCuts.push_back(locCut);
 	}
 	m_TOFTimingCuts.push_back(6.0);
@@ -381,6 +443,12 @@ void EtaAna::InitializeTOFHists()
 
 void EtaAna::ResetTOFHists()
 {
+	h_tofRFdt_eta->Reset();
+	h_tofRFdt_eta_cut->Reset();
+	h_tofFCALdr_eta->Reset();
+	h_tof_xy->Reset();
+	h_tof_xy_cut->Reset();
+	
 	h_mgg_noTOF->Reset();
 	if(h_AngularMatrix_noTOF!=nullptr) h_AngularMatrix_noTOF->Reset();
 	
@@ -412,6 +480,12 @@ void EtaAna::ResetTOFHists()
 void EtaAna::WriteTOFHists()
 {
 	printf("\n  Writing TOF histograms...\n");
+	
+	h_tofRFdt_eta->Write();
+	h_tofRFdt_eta_cut->Write();
+	h_tofFCALdr_eta->Write();
+	h_tof_xy->Write();
+	h_tof_xy_cut->Write();
 	
 	h_mgg_noTOF->Write();
 	if(h_AngularMatrix_noTOF!=nullptr) h_AngularMatrix_noTOF->Write();

@@ -2,10 +2,6 @@
 
 void EtaAna::EtaggAnalysis_special() {
 	
-	if(m_nmc>0) {
-		if(AcceptRejectEvent()) return;
-	}
-	
 	double locThrownBeamEnergy = 0.0, locThrownAngle = 0.0;
 	if(m_FillThrown) {
 		GetThrownEnergyAndAngle(locThrownBeamEnergy, locThrownAngle);
@@ -64,7 +60,7 @@ void EtaAna::EtaggAnalysis_special() {
 		
 		TVector3 pos1 = GetFCALPosition(ishow);
 		
-		double  t1 = m_fcalT[ishow] - (pos1.Mag()/m_c) - m_rfTime;
+		double  t1 = m_fcalT[ishow] - (pos1.Mag()/m_c);
 		double  e1 = m_fcalE[ishow];
 		
 		double px1 = e1*pos1.X() / pos1.Mag();
@@ -73,14 +69,14 @@ void EtaAna::EtaggAnalysis_special() {
 		
 		// check the distance between this shower and the closest (if any) tof hit:
 		double tof_dx1, tof_dy1, tof_dt1;
-		CheckTOFMatch(pos1, tof_dx1, tof_dy1, tof_dt1, m_TOFRFCut);
+		CheckTOFMatch(pos1, t1, tof_dx1, tof_dy1, tof_dt1, m_TOFRFCut);
 		double tof_dr1 = sqrt(pow(tof_dx1,2.0)+pow(tof_dy1,2.0));
 		
 		for(int jshow=ishow+1; jshow<m_nfcal; jshow++) {
 			
 			TVector3 pos2 = GetFCALPosition(jshow);
 			
-			double  t2 = m_fcalT[jshow] - (pos2.Mag()/m_c) - m_rfTime;
+			double  t2 = m_fcalT[jshow] - (pos2.Mag()/m_c);
 			double  e2 = m_fcalE[jshow];
 			
 			double px2 = e2*pos2.X() / pos2.Mag();
@@ -89,7 +85,7 @@ void EtaAna::EtaggAnalysis_special() {
 			
 			// check the distance between this shower and the closest (if any) tof hit:
 			double tof_dx2, tof_dy2, tof_dt2;
-			CheckTOFMatch(pos2, tof_dx2, tof_dy2, tof_dt2, m_TOFRFCut);
+			CheckTOFMatch(pos2, t2, tof_dx2, tof_dy2, tof_dt2, m_TOFRFCut);
 			double tof_dr2 = sqrt(pow(tof_dx2,2.0)+pow(tof_dy2,2.0));
 			
 			//-----------------------------------------------------//

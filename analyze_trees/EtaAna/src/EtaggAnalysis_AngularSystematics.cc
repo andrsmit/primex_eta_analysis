@@ -2,10 +2,6 @@
 
 void EtaAna::EtaggAnalysis_AngularSystematics() {
 	
-	if(m_nmc>0) {
-		if(AcceptRejectEvent()) return;
-	}
-	
 	double locThrownBeamEnergy = 0.0, locThrownAngle = 0.0;
 	if(m_FillThrown) {
 		GetThrownEnergyAndAngle(locThrownBeamEnergy, locThrownAngle);
@@ -73,11 +69,12 @@ void EtaAna::EtaggAnalysis_AngularSystematics() {
 		int show1 = locGoodFCALShowers[ishow];
 		TVector3 pos1 = GetFCALPosition(show1);
 		
+		double t1 = m_fcalT[show1] - (pos1.Mag()/m_c);
 		double e1 = m_fcalE[show1];
 		
 		// check the distance between this shower and the closest (if any) tof hit:
 		double tof_dx1, tof_dy1, tof_dt1;
-		CheckTOFMatch(pos1, tof_dx1, tof_dy1, tof_dt1, m_TOFRFCut);
+		CheckTOFMatch(pos1, t1, tof_dx1, tof_dy1, tof_dt1, m_TOFRFCut);
 		double tof_dr1 = sqrt(pow(tof_dx1,2.0)+pow(tof_dy1,2.0));
 		
 		for(int jshow=(ishow+1); jshow<locNFCALShowersGood; jshow++) {
@@ -85,11 +82,12 @@ void EtaAna::EtaggAnalysis_AngularSystematics() {
 			int show2 = locGoodFCALShowers[jshow];
 			TVector3 pos2 = GetFCALPosition(show2);
 			
+			double t2 = m_fcalT[show2] - (pos2.Mag()/m_c);
 			double e2 = m_fcalE[show2];
 			
 			// check the distance between this shower and the closest (if any) tof hit:
 			double tof_dx2, tof_dy2, tof_dt2;
-			CheckTOFMatch(pos2, tof_dx2, tof_dy2, tof_dt2, m_TOFRFCut);
+			CheckTOFMatch(pos2, t2, tof_dx2, tof_dy2, tof_dt2, m_TOFRFCut);
 			double tof_dr2 = sqrt(pow(tof_dx2,2.0)+pow(tof_dy2,2.0));
 			
 			//-----------------------------------------------------//
@@ -266,6 +264,77 @@ void EtaAna::EtaggAnalysis_AngularSystematics() {
 					}
 				}
 				
+				
+				
+				int nEnergySmears = (int)m_EnergySmears.size();
+				for(int ismear=0; ismear<nEnergySmears; ismear++)
+				{
+					double locE1 = e1 + m_random->Gaus(0.0, m_EnergySmears[ismear]*e1);
+					double locE2 = e2 + m_random->Gaus(0.0, m_EnergySmears[ismear]*e2);
+					
+					double px1 = locE1*pos1.X() / pos1.Mag();
+					double py1 = locE1*pos1.Y() / pos1.Mag();
+					double pz1 = locE1*pos1.Z() / pos1.Mag();
+					
+					double px2 = locE2*pos2.X() / pos2.Mag();
+					double py2 = locE2*pos2.Y() / pos2.Mag();
+					double pz2 = locE2*pos2.Z() / pos2.Mag();
+					
+					double Egg  = locE1 + locE2; // energy of 2-photon pair
+					double pggx =   px1 +   px2; // momentum along x-axis
+					double pggy =   py1 +   py2; // momentum along y-axis
+					double pggz =   pz1 +   pz2; // momentum along z-axis
+					
+					// transverse momentum:
+					double pggt = sqrt(pow(pggx,2.0) + pow(pggy,2.0));
+					
+					// polar angle:
+					double prodTheta = atan2(pggt,pggz) * TMath::RadToDeg();
+					
+					// opening angle:
+					double cos12   = (pos1.X()*pos2.X() + pos1.Y()*pos2.Y() + pos1.Z()*pos2.Z()) / (pos1.Mag()*pos2.Mag());
+					
+					// invariant mass:
+					double invmass = sqrt(2.0*locE1*locE2*(1.-cos12));
+					
+					// Calculate the energy of the eta meson, assuming a coherent production process:
+					double etaEnergyCoh = GetEnergyAfterRecoil(eb, prodTheta, ParticleMass(Eta), ParticleMass(m_Target));
+					
+					// Calculate the energy of the eta meson, assuming production on a free nucleon:
+					double etaEnergy = GetEnergyAfterRecoil(eb, prodTheta, ParticleMass(Eta), ParticleMass(Proton));
+					
+					// Apply a cut on the elasticity
+					//  (ratio of measured energy of 2-photons, to the calculated energy above):
+					bool isElastic = IsElasticCut(Egg, etaEnergy, prodTheta);
+					
+					//-----------------------------------------------------//
+					// Energy constraint
+					
+					// adjust the measured energies of the two-photons to exactly equal the energy of 
+					// a coherently-produced eta meson:
+					
+					double sig1 = GetFCALEnergyResolution(locE1);
+					double sig2 = GetFCALEnergyResolution(locE2);
+					double sigr = pow(sig1/sig2,2.0);
+					
+					
+					// Energy-constrained invariant mass assuming production on free nucleon:
+					double constraintEnergy = m_IsCohMC ? etaEnergyCoh : etaEnergy;
+					
+					double e1c = locE1/(1.+sigr) + (constraintEnergy-locE2)/(1.+(1./sigr));
+					double e2c = constraintEnergy - e1c;
+					double invmassConstr = sqrt(2.*e1c*e2c*(1.-cos12));
+					
+					//-----------------------------------------------------//
+					
+					h_mgg_EnergySmear[ismear]->Fill(prodTheta, invmass, fillWeight);
+					h_mggConstr_EnergySmear[ismear]->Fill(prodTheta, invmassConstr, fillWeight);
+					
+					if(m_FillThrown && IsEtaCut(invmassConstr) && isElastic) {
+						h_AngularMatrix_EnergySmear[ismear]->Fill(locThrownAngle, prodTheta, locThrownBeamEnergy, fillWeight);
+					}
+				}
+				
 			} // end loop over beam photons
 		} // end loop 2 over fcal showers
 	} // end loop 1 over fcal showers
@@ -370,6 +439,51 @@ void EtaAna::InitializeAngularHists()
 		}
 	}
 	
+	//----------------------------------------------//
+	
+	m_EnergySmears.clear();
+	m_EnergySmears.push_back( 0.000);
+	m_EnergySmears.push_back( 0.005);
+	m_EnergySmears.push_back( 0.010);
+	m_EnergySmears.push_back( 0.015);
+	m_EnergySmears.push_back( 0.020);
+	m_EnergySmears.push_back( 0.025);
+	m_EnergySmears.push_back( 0.030);
+	m_EnergySmears.push_back( 0.035);
+	m_EnergySmears.push_back( 0.040);
+	m_EnergySmears.push_back( 0.045);
+	m_EnergySmears.push_back( 0.050);
+	
+	int nEnergySmears = (int)m_EnergySmears.size();
+	for(int ismear=0; ismear<nEnergySmears; ismear++) {
+		
+		TH2F *loc_h_mgg = new TH2F(Form("mgg_energySmear_%02d",ismear), 
+			Form("E_{1,2} smeared by %.3f%; #theta_{#gamma#gamma} [#circ]; m_{#gamma#gamma} [GeV/c^{2}]", 
+				m_EnergySmears[ismear]),
+			nRecAngleBins, m_minRecAngleBin, m_maxRecAngleBin,
+			nInvmassBins, m_minInvmassBin, m_maxInvmassBin);
+		
+		TH2F *loc_h_mggConstr = new TH2F(Form("mgg_const_energySmear_%02d",ismear), 
+			Form("E_{1,2} smeared by %.3f%; #theta_{#gamma#gamma} [#circ]; m_{#gamma#gamma}^{Constr} [GeV/c^{2}]", 
+				m_EnergySmears[ismear]),
+			nRecAngleBins, m_minRecAngleBin, m_maxRecAngleBin,
+			nInvmassBins, m_minInvmassBin, m_maxInvmassBin);
+		
+		h_mgg_EnergySmear.push_back(loc_h_mgg);
+		h_mggConstr_EnergySmear.push_back(loc_h_mggConstr);
+		
+		if(m_FillThrown) {
+			TH3F *hMatrix = new TH3F(Form("AngularMatrix_EnergySmear_%02d",ismear), 
+				Form("E_{1,2} smeared by %.3f%; #theta(thrown) [#circ]; #theta(rec) [#circ]; E_{#gamma} [GeV]", 
+					m_EnergySmears[ismear]),
+				nThrownAngleBins, m_minThrownAngleBin, m_maxThrownAngleBin, 
+				nRecAngleBins,    m_minRecAngleBin,    m_maxRecAngleBin,
+				nBeamEnergyBins,  m_minBeamEnergyBin,  m_maxBeamEnergyBin);
+			hMatrix->SetDirectory(0);
+			h_AngularMatrix_EnergySmear.push_back(hMatrix);
+		}
+	}
+	
 	return;
 }
 
@@ -387,6 +501,12 @@ void EtaAna::ResetAngularHists() {
 		h_mggConstr_AngularSmear[ismear]->Reset();
 		if(m_FillThrown) h_AngularMatrix_AngularSmear[ismear]->Reset();
 	}
+	int nEnergySmears = (int)m_EnergySmears.size();
+	for(int ismear=0; ismear<nEnergySmears; ismear++) {
+		h_mgg_EnergySmear[ismear]->Reset();
+		h_mggConstr_EnergySmear[ismear]->Reset();
+		if(m_FillThrown) h_AngularMatrix_EnergySmear[ismear]->Reset();
+	}
 	return;
 }
 
@@ -403,6 +523,12 @@ void EtaAna::WriteAngularHists() {
 		h_mgg_AngularSmear[ismear]->Write();
 		h_mggConstr_AngularSmear[ismear]->Write();
 		if(m_FillThrown) h_AngularMatrix_AngularSmear[ismear]->Write();
+	}
+	int nEnergySmears = (int)m_EnergySmears.size();
+	for(int ismear=0; ismear<nEnergySmears; ismear++) {
+		h_mgg_EnergySmear[ismear]->Write();
+		h_mggConstr_EnergySmear[ismear]->Write();
+		if(m_FillThrown) h_AngularMatrix_EnergySmear[ismear]->Write();
 	}
 	return;
 }

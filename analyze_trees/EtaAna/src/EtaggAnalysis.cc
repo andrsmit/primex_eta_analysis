@@ -2,12 +2,6 @@
 
 void EtaAna::EtaggAnalysis() {
 	
-	if(m_nmc>0) {
-		h_mcVertex->Fill(m_mcZ[0]);
-		if(AcceptRejectEvent()) return;
-		h_mcVertexAccepted->Fill(m_mcZ[0]);
-	}
-	
 	double locThrownBeamEnergy = 0.0, locThrownAngle = 0.0;
 	if(m_FillThrown) {
 		GetThrownEnergyAndAngle(locThrownBeamEnergy, locThrownAngle);
@@ -29,8 +23,13 @@ void EtaAna::EtaggAnalysis() {
 	int locNFCALShowersTotal = GetFCALShowerList(locGoodFCALShowers, locNFCALShowersEnergyCut, 
 		m_FCALEnergyCut, m_FCALExtraEnergyCut, 2.0, m_FCALRFCut);
 	
-	// Apply multiplicity cut on the number of FCAL showers: 
 	int locNFCALShowersGood = (int)locGoodFCALShowers.size();
+	
+	h_nFCALTotal->Fill(locNFCALShowersTotal);
+	h_nFCALEnergyCut->Fill(locNFCALShowersEnergyCut);
+	h_nFCALGood->Fill(locNFCALShowersGood);
+	
+	// Apply multiplicity cut on the number of FCAL showers: 
 	if((locNFCALShowersEnergyCut!=2) || (locNFCALShowersGood!=2)) return;
 	
 	//-------------------------------------------//
@@ -44,6 +43,10 @@ void EtaAna::EtaggAnalysis() {
 	
 	vector<int> locGoodSCHits; locGoodSCHits.clear();
 	int locNSCHits = GetSCHitList(locGoodSCHits);
+	
+	// List of SC hits with no cut on dE:
+	vector<int> locGoodSCHits_noCut; locGoodSCHits_noCut.clear();
+	int locNSCHits_noCut = GetSCHitList(locGoodSCHits_noCut, 0.0);
 	
 	//-------------------------------------------//
 	
@@ -80,6 +83,14 @@ void EtaAna::EtaggAnalysis() {
 		h_beamRFdt->Fill(locT);
 	}
 	
+	// FCAL:
+	/*
+	for(int kshow = 0; kshow < m_nfcal; kshow++) {
+		TVector3 locPos = GetFCALPosition(kshow);
+		double locT = m_fcalT[kshow] - (locPos.Mag()/m_c) - m_rfTime;
+		h_fcalRFdt->Fill(locT);
+	}
+	*/
 	//=====================================================================================//
 	
 	for(int ishow=0; ishow<(locNFCALShowersGood-1); ishow++) {
@@ -87,6 +98,7 @@ void EtaAna::EtaggAnalysis() {
 		int show1 = locGoodFCALShowers[ishow];
 		TVector3 pos1 = GetFCALPosition(show1);
 		
+		double  t1 = m_fcalT[show1] - (pos1.Mag()/m_c);
 		double  e1 = m_fcalE[show1];
 		
 		double px1 = e1*pos1.X() / pos1.Mag();
@@ -95,14 +107,38 @@ void EtaAna::EtaggAnalysis() {
 		
 		// check the distance between this shower and the closest (if any) tof hit:
 		double tof_dx1, tof_dy1, tof_dt1;
-		CheckTOFMatch(pos1, tof_dx1, tof_dy1, tof_dt1, m_TOFRFCut);
+		CheckTOFMatch(pos1, t1, tof_dx1, tof_dy1, tof_dt1, m_TOFRFCut);
 		double tof_dr1 = sqrt(pow(tof_dx1,2.0)+pow(tof_dy1,2.0));
+		
+		// look 
+		for(int itof=0; itof<m_ntof; itof++) {
+			
+			double xt = m_tofX[itof] - m_vertex.X();
+			double yt = m_tofY[itof] - m_vertex.Y();
+			double zt = m_tofZ[itof] - m_vertex.Z();
+			double rt = sqrt(xt*xt + yt*yt + zt*zt);
+			
+			// project to same plane:
+			xt *= pos1.Z() / zt;
+			yt *= pos1.Z() / zt;
+			double dx = pos1.X() - xt;
+			double dy = pos1.Y() - yt;
+			double dr = sqrt(pow(dx,2.0)+pow(dy,2.0));
+			
+			// plot timing difference if spatially correlated:
+			if(dr < m_FCALTOFCut) {
+				double dt = t1 - (m_tofT[itof] - (rt/m_c));
+				h_fcal_tof_dt->Fill(dt);
+			}
+		}
+		
 		
 		for(int jshow=(ishow+1); jshow<locNFCALShowersGood; jshow++) {
 			
 			int show2 = locGoodFCALShowers[jshow];
 			TVector3 pos2 = GetFCALPosition(show2);
 			
+			double  t2 = m_fcalT[show2] - (pos2.Mag()/m_c);
 			double  e2 = m_fcalE[show2];
 			
 			double px2 = e2*pos2.X() / pos2.Mag();
@@ -111,7 +147,7 @@ void EtaAna::EtaggAnalysis() {
 			
 			// check the distance between this shower and the closest (if any) tof hit:
 			double tof_dx2, tof_dy2, tof_dt2;
-			CheckTOFMatch(pos2, tof_dx2, tof_dy2, tof_dt2, m_TOFRFCut);
+			CheckTOFMatch(pos2, t2, tof_dx2, tof_dy2, tof_dt2, m_TOFRFCut);
 			double tof_dr2 = sqrt(pow(tof_dx2,2.0)+pow(tof_dy2,2.0));
 			
 			//-----------------------------------------------------//
@@ -130,7 +166,7 @@ void EtaAna::EtaggAnalysis() {
 			If it is Compton where the photon is converted to e+e- downstream, 
 			then one of the showers should follow the Klein-Nishina kinematics.
 			
-			3/11/24: 
+			3/11/25: 
 			I saw no such signature of Compton, so I'm reinstating this placement of the TOF veto.
 			*/
 			if(isTOFVeto) continue;
@@ -173,11 +209,12 @@ void EtaAna::EtaggAnalysis() {
 			vector<int> locVetoOptions; locVetoOptions.clear();
 			for(int iveto=0; iveto<m_nVetos; iveto++) locVetoOptions.push_back(0);
 			
-			for(int iveto=0; iveto<m_nVetos; iveto++) {
+			for(int iveto=0; iveto<(m_nVetos-1); iveto++) {
 				if(!IsHadronicVeto(iveto, locNBCALShowers, locNBCALShowers_1ns, locNSCHits, locNSCHits_coplanar, 
 					prodPhi, locBCALPhi, locBCALTheta, locBCALRFDT)
 				) locVetoOptions[iveto] = 1;
 			}
+			if((locNSCHits_noCut==0) && (locNBCALShowers==0)) locVetoOptions[m_nVetos-1] = 1;
 			
 			//-----------------------------------------------------//
 			// Loop over Beam photons
@@ -195,6 +232,9 @@ void EtaAna::EtaggAnalysis() {
 				
 				// Calculate the energy of the eta meson, assuming production on a free nucleon:
 				double etaEnergy = GetEnergyAfterRecoil(eb, prodTheta, ParticleMass(Eta), ParticleMass(Proton));
+				
+				// apply correction for binding energy:
+				etaEnergy -= 0.0193;
 				
 				// Apply a cut on the elasticity
 				//  (ratio of measured energy of 2-photons, to the calculated energy above):
@@ -331,11 +371,13 @@ void EtaAna::EtaggAnalysis() {
 					+ 2.0*ParticleMass(Proton)*eb 
 					- 2.0*ParticleMass(Proton)*Egg 
 					- 2.0*eb*(Egg - sqrt(pow(Egg,2.0)-pow(ParticleMass(Eta),2.0))*cos(prodTheta*TMath::DegToRad()));
+				mmSq -= ParticleMass(Proton);
 				
 				double mmSqCoh = pow(ParticleMass(m_Target),2.0) + pow(ParticleMass(Eta),2.0) 
 					+ 2.0*ParticleMass(m_Target)*eb 
 					- 2.0*ParticleMass(m_Target)*Egg 
 					- 2.0*eb*(Egg - sqrt(pow(Egg,2.0)-pow(ParticleMass(Eta),2.0))*cos(prodTheta*TMath::DegToRad()));
+				mmSqCoh -= ParticleMass(m_Target);
 				
 				//-----------------------------------------------------//
 				// Hybrid Mass
@@ -367,13 +409,20 @@ void EtaAna::EtaggAnalysis() {
 				}
 				*/
 				
-				if(locVetoOptions[6]) {
+				if(locVetoOptions[4]) {
 					if(prodTheta<2.0) {
 						h_elasVSmgg_low->Fill(invmass/ParticleMass(Eta), Egg/eb, fillWeight);
 						h_elasCorrVSmgg_low->Fill(invmass/ParticleMass(Eta), Egg/etaEnergy, fillWeight);
+						
+						h_elasVSmggConstr_low->Fill(invmassConstr/ParticleMass(Eta), Egg/eb, fillWeight);
+						h_elasCorrVSmggConstr_low->Fill(invmassConstr/ParticleMass(Eta), Egg/etaEnergy, fillWeight);
 					} else {
 						h_elasVSmgg_high->Fill(invmass/ParticleMass(Eta), Egg/eb, fillWeight);
 						h_elasCorrVSmgg_high->Fill(invmass/ParticleMass(Eta), Egg/etaEnergy, fillWeight);
+						
+						h_elasVSmggConstr_high->Fill(invmassConstr/ParticleMass(Eta), Egg/eb, fillWeight);
+						h_elasCorrVSmggConstr_high->Fill(invmassConstr/ParticleMass(Eta), Egg/etaEnergy, fillWeight);
+						
 					}
 				}
 				
@@ -391,6 +440,11 @@ void EtaAna::EtaggAnalysis() {
 				*/
 				
 				if(isEta && isElastic) {
+					
+					double t1 = m_fcalT[locGoodFCALShowers[ishow]] - (pos1.Mag()/m_c) - m_rfTime;
+					double t2 = m_fcalT[locGoodFCALShowers[jshow]] - (pos2.Mag()/m_c) - m_rfTime;
+					if(tof_dr1 >= m_FCALTOFCut) h_fcalRFdt->Fill(t1, fillWeight);
+					if(tof_dr2 >= m_FCALTOFCut) h_fcalRFdt->Fill(t2, fillWeight);
 					
 					if(locVetoOptions[6]) {
 						h_xy1->Fill(pos1.X(),pos1.Y());
@@ -449,9 +503,9 @@ void EtaAna::EtaggAnalysis() {
 					// BCAL Plots:
 					
 					// Loop over all BCAL showers and plot timing:
-					for(int ishow = 0; ishow < m_nbcal; ishow++) {
-						TVector3 locPos = GetBCALPosition(ishow);
-						double locT = m_bcalT[ishow] - (locPos.Mag()/m_c) - m_rfTime;
+					for(int kshow = 0; kshow < m_nbcal; kshow++) {
+						TVector3 locPos = GetBCALPosition(kshow);
+						double locT = m_bcalT[kshow] - (locPos.Mag()/m_c) - m_rfTime;
 						h_bcalRFdt->Fill(prodTheta, locT, fillWeight);
 					}
 					
@@ -487,10 +541,10 @@ void EtaAna::EtaggAnalysis() {
 					// FCAL Plots:
 					
 					// Plot FCAL-RF dt for accepted events:
-					for(int ishow = 0; ishow < m_nfcal; ishow++) {
-						TVector3 locPos = GetFCALPosition(ishow);
-						double locT = m_fcalT[ishow] - (locPos.Mag()/m_c) - m_rfTime;
-						h_fcalRFdt->Fill(locT, fillWeight);
+					for(int kshow = 0; kshow < m_nfcal; kshow++) {
+						TVector3 locPos = GetFCALPosition(kshow);
+						double locT = m_fcalT[kshow] - (locPos.Mag()/m_c) - m_rfTime;
+						//h_fcalRFdt->Fill(locT, fillWeight);
 					}
 				}
 				
@@ -502,10 +556,10 @@ void EtaAna::EtaggAnalysis() {
 						h_elasticityConstr[iveto]->Fill(prodTheta, elasConstr, fillWeight);
 						
 						h_mm[iveto]->Fill(prodTheta, mmSq, fillWeight);
-						h_mm_coh[iveto]->Fill(prodTheta, (mmSqCoh - pow(ParticleMass(Helium),2.0)), fillWeight);
+						h_mm_coh[iveto]->Fill(prodTheta, mmSqCoh, fillWeight);
 						if(isElastic) {
 							h_mm_elas[iveto]->Fill(prodTheta, mmSq, fillWeight);
-							h_mm_elas_coh[iveto]->Fill(prodTheta, (mmSqCoh - pow(ParticleMass(Helium),2.0)), fillWeight);
+							h_mm_elas_coh[iveto]->Fill(prodTheta, mmSqCoh, fillWeight);
 						}
 						
 						h_pt[iveto]->Fill(prodTheta, pggt/pTCalc, fillWeight);
@@ -557,9 +611,6 @@ void EtaAna::InitializeDefaultHists()
 	
 	// DEFAULT ANALYSIS HISTOGRAMS:
 	
-	h_mcVertex         = new TH1F("vertex",          "Vertex Z Position (thrown)",   1000, 0., 600.);
-	h_mcVertexAccepted = new TH1F("vertex_accepted", "Vertex Z Position (filtered)", 1000, 0., 600.);
-	
 	// Timing histograms (for monitoring of calibrations):
 	
 	h_fcalRFdt     = new TH1F("fcal_rf_dt",     "t_{FCAL} - t_{RF}; [ns]", 10000, -100., 100.);
@@ -567,9 +618,22 @@ void EtaAna::InitializeDefaultHists()
 	h_beamRFdt     = new TH1F("beam_rf_dt",     "t_{CCAL} - t_{RF}; [ns]", 10000, -100., 100.);
 	h_beamRFdt_cut = new TH1F("beam_rf_dt_cut", "t_{Beam} - t_{RF}; [ns]", 10000, -100., 100.);
 	
+	// Multiplicity of FCAL showers with different cuts:
+	
+	h_nFCALTotal     = new TH1F("nFCALTotal", 
+		"Number of in-time FCAL showers", 15, -0.5, 14.5);
+	h_nFCALEnergyCut = new TH1F("nFCALEnergyCut", 
+		"Number of in-time FCAL showers (energy cut)", 15, -0.5, 14.5);
+	h_nFCALGood      = new TH1F("nFCALGood", 
+		"Number of in-time FCAL showers (energy+fiducial cut)", 15, -0.5, 14.5);
+	
 	// To study veto likelihood versus polar angle:
 	
 	h_tofMatch = new TH2F("tofMatch", "TOF Match vs. Radial Distance; r_{FCAL} [cm]", 1500, 0.0, 150.0, 2, -0.5, 1.5);
+	
+	// FCAL-TOF Timing Distribution:
+	
+	h_fcal_tof_dt = new TH1F("fcal_tof_dt", "t_{FCAL} - t_{TOF}; [ns]", 4000, -20.0, 20.0);
 	
 	// Invariant mass, elasticity, and missing mass distributions for different BCAL/SC veto options:
 	
@@ -736,6 +800,15 @@ void EtaAna::InitializeDefaultHists()
 	h_elasCorrVSmgg_high = new TH2F("elasCorrVSmgg_high", "; m_{#gamma#gamma}/m_{#eta}; E_{#gamma#gamma}/E_{#eta}",
 		500, 0.0, 2.0, 500, 0.0, 2.0);
 	
+	h_elasVSmggConstr_low = new TH2F("elasVSmggConstr_low", "; m_{#gamma#gamma}/m_{#eta}; E_{#gamma#gamma}/E_{tag}",
+		500, 0.0, 2.0, 500, 0.0, 2.0);
+	h_elasVSmggConstr_high = new TH2F("elasVSmggConstr_high", "; m_{#gamma#gamma}/m_{#eta}; E_{#gamma#gamma}/E_{tag}",
+		500, 0.0, 2.0, 500, 0.0, 2.0);
+	h_elasCorrVSmggConstr_low = new TH2F("elasCorrVSmggConstr_low", "; m_{#gamma#gamma}/m_{#eta}; E_{#gamma#gamma}/E_{#eta}",
+		500, 0.0, 2.0, 500, 0.0, 2.0);
+	h_elasCorrVSmggConstr_high = new TH2F("elasCorrVSmggConstr_high", "; m_{#gamma#gamma}/m_{#eta}; E_{#gamma#gamma}/E_{#eta}",
+		500, 0.0, 2.0, 500, 0.0, 2.0);
+	
 	// in CM frame of eta:
 	
 	//h_e_vs_theta  = new TH2F("h_e_vs_theta", "; #theta_{cm} [#circ]; E_{CM} [GeV]", 500, 0.0, 1.0, 500, 0.0, 1.0);
@@ -858,9 +931,6 @@ void EtaAna::InitializeDefaultHists()
 
 void EtaAna::ResetDefaultHists()
 {
-	h_mcVertex->Reset();
-	h_mcVertexAccepted->Reset();
-	
 	h_fcalRFdt->Reset();
 	h_bcalRFdt->Reset();
 	h_tofRFdt->Reset();
@@ -868,7 +938,12 @@ void EtaAna::ResetDefaultHists()
 	h_beamRFdt->Reset();
 	h_beamRFdt_cut->Reset();
 	
+	h_nFCALTotal->Reset();
+	h_nFCALEnergyCut->Reset();
+	h_nFCALGood->Reset();
+	
 	h_tofMatch->Reset();
+	h_fcal_tof_dt->Reset();
 	
 	for(int iveto=0; iveto<m_nVetos; iveto++) {
 		h_elasticity[iveto]->Reset();
@@ -905,6 +980,11 @@ void EtaAna::ResetDefaultHists()
 	h_elasVSmgg_high->Reset();
 	h_elasCorrVSmgg_low->Reset();
 	h_elasCorrVSmgg_high->Reset();
+	
+	h_elasVSmggConstr_low->Reset();
+	h_elasVSmggConstr_high->Reset();
+	h_elasCorrVSmggConstr_low->Reset();
+	h_elasCorrVSmggConstr_high->Reset();
 	
 	h_openAngle->Reset();
 	h_openAngleCut->Reset();
@@ -959,9 +1039,6 @@ void EtaAna::WriteDefaultHists()
 {
 	printf("  Writing default analysis option histograms...\n");
 	
-	h_mcVertex->Write();
-	h_mcVertexAccepted->Write();
-	
 	h_fcalRFdt->Write();
 	h_bcalRFdt->Write();
 	h_tofRFdt->Write();
@@ -969,7 +1046,12 @@ void EtaAna::WriteDefaultHists()
 	h_beamRFdt->Write();
 	h_beamRFdt_cut->Write();
 	
+	h_nFCALTotal->Write();
+	h_nFCALEnergyCut->Write();
+	h_nFCALGood->Write();
+	
 	h_tofMatch->Write();
+	h_fcal_tof_dt->Write();
 	
 	for(int iveto=0; iveto<m_nVetos; iveto++) {
 		
@@ -1012,6 +1094,11 @@ void EtaAna::WriteDefaultHists()
 	h_elasVSmgg_high->Write();
 	h_elasCorrVSmgg_low->Write();
 	h_elasCorrVSmgg_high->Write();
+	
+	h_elasVSmggConstr_low->Write();
+	h_elasVSmggConstr_high->Write();
+	h_elasCorrVSmggConstr_low->Write();
+	h_elasCorrVSmggConstr_high->Write();
 	
 	h_openAngle->Write();
 	h_openAngleCut->Write();

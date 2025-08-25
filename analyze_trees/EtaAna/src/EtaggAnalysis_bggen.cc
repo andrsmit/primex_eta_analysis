@@ -8,14 +8,10 @@ void EtaAna::EtaggAnalysis_bggen() {
 		return;
 	}
 	
-	// Distribute events realistically inside target:
-	
-	if(AcceptRejectEvent()) return;
-	
 	// Get thrown energy and angle:
 	
-	double locThrownBeamEnergy = 0.0, locThrownAngle = 0.0;
-	GetThrownEnergyAndAngleBGGEN(locThrownBeamEnergy, locThrownAngle);
+	double locThrownBeamEnergy = 0.0, locThrownAngle = 0.0, locThrownEtaEnergy = 0.0;
+	GetThrownEnergyAndAngleBGGEN(locThrownBeamEnergy, locThrownAngle, locThrownEtaEnergy);
 	
 	// Skip events which were generated outside our beam energy range:
 	
@@ -25,6 +21,61 @@ void EtaAna::EtaggAnalysis_bggen() {
 	
 	int locFinalState = GetFinalState_bggen();
 	h_thrown_reactions_bggen->Fill(locFinalState);
+	
+	
+	
+	//======================================================================//
+	
+	if((locFinalState==0) || (locFinalState==1)) {
+		
+		// get expected eta energy from free proton kinematics:
+		
+		double k = locThrownBeamEnergy;
+		double costh = cos(locThrownAngle*TMath::DegToRad());
+		double mp = ParticleMass(Eta);
+		double mA = ParticleMass(Proton);
+		
+		double A  = mA*k + 0.5*pow(mp,2.0);
+		double E0 = k + mA;
+		
+		double momEtaCalc = (A*k*costh + E0*sqrt(pow(A,2.0) - pow(mp,2.0)*(pow(E0,2.0) - pow(k*costh,2.0)))) / 
+			(pow(E0,2.0) - pow(k*costh,2.0));
+		double enEtaCalc = sqrt(pow(momEtaCalc,2.0) + pow(mp,2.0));
+		
+		// compare with actual energy of eta:
+		
+		h_deltaE_vs_theta_bggen->Fill(locThrownAngle, locThrownEtaEnergy-enEtaCalc);
+		
+		// plot energy difference between eta and photon beam:
+		
+		//h_deltaE_vs_theta_bggen_beam->Fill(locThrownAngle, locThrownBeamEnergy-locThrownEtaEnergy);
+		
+		
+
+		double locThrownFinalStateE = 0.0;
+		double locThrownPx = 0., locThrownPy = 0., locThrownPz = 0.;
+		for(int imc=0; imc<m_nmc; imc++) {
+			if((m_mcPDGType[imc]==PDGtype(Eta)) || (m_mcPDGType[imc]==PDGtype(Proton)) || (m_mcPDGType[imc]==PDGtype(Neutron))) {
+				double locThrownP     = m_mcP[imc];
+				double locThrownTheta = m_mcTheta[imc]*TMath::DegToRad();
+				double locThrownPhi   = m_mcPhi[imc]*TMath::DegToRad();
+				locThrownPx += (locThrownP * sin(locThrownTheta) * cos(locThrownPhi));
+				locThrownPy += (locThrownP * sin(locThrownTheta) * sin(locThrownPhi));
+				locThrownPz += (locThrownP * cos(locThrownTheta));
+				locThrownFinalStateE += m_mcE[imc];
+			}
+		}
+		double locThrown_mom = sqrt(pow(locThrownPx,2.0) + pow(locThrownPy,2.0) + pow(locThrownPz-locThrownBeamEnergy,2.0));
+		h_missing_mom_vs_theta_bggen->Fill(locThrownAngle, locThrown_mom);
+		
+		h_deltaE_vs_theta_bggen_beam->Fill(locThrownAngle, locThrownFinalStateE - locThrownBeamEnergy - ParticleMass(Proton));
+	}
+	
+	//======================================================================//
+	
+	
+	
+	
 	
 	int locIsChargedPion = 0;
 	double locPionMomentum = 0.0, locPionTheta = 0.0, locPionDeltaPhi = 0.0;
@@ -96,6 +147,7 @@ void EtaAna::EtaggAnalysis_bggen() {
 		int show1 = locGoodFCALShowers[ishow];
 		TVector3 pos1 = GetFCALPosition(show1);
 		
+		double  t1 = m_fcalT[show1] - (pos1.Mag()/m_c);
 		double  e1 = m_fcalE[show1];
 		
 		double px1 = e1*pos1.X() / pos1.Mag();
@@ -104,7 +156,7 @@ void EtaAna::EtaggAnalysis_bggen() {
 		
 		// check the distance between this shower and the closest (if any) tof hit:
 		double tof_dx1, tof_dy1, tof_dt1;
-		CheckTOFMatch(pos1, tof_dx1, tof_dy1, tof_dt1, m_TOFRFCut);
+		CheckTOFMatch(pos1, t1, tof_dx1, tof_dy1, tof_dt1, m_TOFRFCut);
 		double tof_dr1 = sqrt(pow(tof_dx1,2.0)+pow(tof_dy1,2.0));
 		
 		for(int jshow=(ishow+1); jshow<locNFCALShowersGood; jshow++) {
@@ -112,6 +164,7 @@ void EtaAna::EtaggAnalysis_bggen() {
 			int show2 = locGoodFCALShowers[jshow];
 			TVector3 pos2 = GetFCALPosition(show2);
 			
+			double t2 = m_fcalT[show2] - (pos2.Mag()/m_c);
 			double e2 = m_fcalE[show2];
 			
 			double px2 = e2*pos2.X() / pos2.Mag();
@@ -120,7 +173,7 @@ void EtaAna::EtaggAnalysis_bggen() {
 			
 			// check the distance between this shower and the closest (if any) tof hit:
 			double tof_dx2, tof_dy2, tof_dt2;
-			CheckTOFMatch(pos2, tof_dx2, tof_dy2, tof_dt2, m_TOFRFCut);
+			CheckTOFMatch(pos2, t2, tof_dx2, tof_dy2, tof_dt2, m_TOFRFCut);
 			double tof_dr2 = sqrt(pow(tof_dx2,2.0)+pow(tof_dy2,2.0));
 			
 			//-----------------------------------------------------//
@@ -184,6 +237,9 @@ void EtaAna::EtaggAnalysis_bggen() {
 				double eb    = m_beamE[ibeam];
 				double brfdt = m_beamT[ibeam] - m_rfTime;
 				
+				// Calculate the energy of the eta meson, assuming a coherent production process:
+				double etaEnergyCoh = GetEnergyAfterRecoil(eb, prodTheta, ParticleMass(Eta), ParticleMass(m_Target));
+				
 				// Calculate the energy of the eta meson, assuming production on a free nucleon:
 				double etaEnergy = GetEnergyAfterRecoil(eb, prodTheta, ParticleMass(Eta), ParticleMass(Proton));
 				
@@ -209,6 +265,11 @@ void EtaAna::EtaggAnalysis_bggen() {
 				double e2c = etaEnergy - e1c;
 				double invmassConstr = sqrt(2.*e1c*e2c*(1.-cos12));
 				
+				// Energy-constrained invariant mass assuming production on nucleus:
+				double e1cCoh = e1/(1.+sigr) + (etaEnergyCoh-e2)/(1.+(1./sigr));
+				double e2cCoh = etaEnergyCoh - e1c;
+				double invmassConstrCoh = sqrt(2.*e1cCoh*e2cCoh*(1.-cos12));
+				
 				//-----------------------------------------------------//
 				// Missing Mass
 				
@@ -223,7 +284,7 @@ void EtaAna::EtaggAnalysis_bggen() {
 				
 				//double hmass = (invmass/ParticleMass(Eta))*cos(TMath::Pi()/4.0) - (Egg/etaEnergy)*sin(TMath::Pi()/4.0);
 				
-				double hmass = (invmassConstr/ParticleMass(Eta)) - (Egg/etaEnergy);
+				double hmass = (invmass/ParticleMass(Eta))*cos(TMath::Pi()/4.0) - (Egg/etaEnergy)*sin(TMath::Pi()/4.0);
 				
 				//-----------------------------------------------------//
 				// Look at coplanarity distributions from the BCAL and SC:
@@ -262,6 +323,10 @@ void EtaAna::EtaggAnalysis_bggen() {
 					h_mgg_const_bggen_signal->Fill(prodTheta, invmassConstr, fillWeight);
 					if(isElastic) h_mgg_const_bggen_signal_cut->Fill(prodTheta, invmassConstr, fillWeight);
 					
+					// energy-constrained invariant mass:
+					h_mgg_constCoh_bggen_signal->Fill(prodTheta, invmassConstrCoh, fillWeight);
+					if(isElastic) h_mgg_constCoh_bggen_signal_cut->Fill(prodTheta, invmassConstrCoh, fillWeight);
+					
 					// elasticity:
 					h_elas_bggen_signal->Fill(prodTheta, Egg/etaEnergy, fillWeight);
 					if(isEta) h_elas_bggen_signal_cut->Fill(prodTheta, Egg/etaEnergy, fillWeight);
@@ -275,6 +340,11 @@ void EtaAna::EtaggAnalysis_bggen() {
 					if(isElastic) h_mm_bggen_signal_cut->Fill(prodTheta, mmSq, fillWeight);
 					
 					h_mgg_vs_elas_bggen_signal->Fill(Egg/etaEnergy, invmassConstr/ParticleMass(Eta), fillWeight);
+					
+					h_e1_vs_e2_bggen_signal->Fill(e2/eb, e1/eb, fillWeight);
+					if(isElastic) {
+						h_e1_vs_e2_bggen_signal_cut->Fill(e2/eb, e1/eb, fillWeight);
+					}
 				}
 				else if((locFinalState==2) || (locFinalState==3)) {
 					// gamma+N -> omega+N
@@ -282,6 +352,10 @@ void EtaAna::EtaggAnalysis_bggen() {
 					// energy-constrained invariant mass:
 					h_mgg_const_bggen_omega->Fill(prodTheta, invmassConstr, fillWeight);
 					if(isElastic) h_mgg_const_bggen_omega_cut->Fill(prodTheta, invmassConstr, fillWeight);
+					
+					// energy-constrained invariant mass:
+					h_mgg_constCoh_bggen_omega->Fill(prodTheta, invmassConstrCoh, fillWeight);
+					if(isElastic) h_mgg_constCoh_bggen_omega_cut->Fill(prodTheta, invmassConstrCoh, fillWeight);
 					
 					// elasticity:
 					h_elas_bggen_omega->Fill(prodTheta, Egg/etaEnergy, fillWeight);
@@ -296,6 +370,11 @@ void EtaAna::EtaggAnalysis_bggen() {
 					if(isElastic) h_mm_bggen_omega_cut->Fill(prodTheta, mmSq, fillWeight);
 					
 					h_mgg_vs_elas_bggen_omega->Fill(Egg/etaEnergy, invmassConstr/ParticleMass(Eta), fillWeight);
+					
+					h_e1_vs_e2_bggen_omega->Fill(e2/eb, e1/eb, fillWeight);
+					if(isElastic) {
+						h_e1_vs_e2_bggen_omega_cut->Fill(e2/eb, e1/eb, fillWeight);
+					}
 				}
 				else if((locFinalState==4) || (locFinalState==5)) {
 					// gamma+N -> rho0+N
@@ -303,6 +382,10 @@ void EtaAna::EtaggAnalysis_bggen() {
 					// energy-constrained invariant mass:
 					h_mgg_const_bggen_rho->Fill(prodTheta, invmassConstr, fillWeight);
 					if(isElastic) h_mgg_const_bggen_rho_cut->Fill(prodTheta, invmassConstr, fillWeight);
+					
+					// energy-constrained invariant mass:
+					h_mgg_constCoh_bggen_rho->Fill(prodTheta, invmassConstrCoh, fillWeight);
+					if(isElastic) h_mgg_constCoh_bggen_rho_cut->Fill(prodTheta, invmassConstrCoh, fillWeight);
 					
 					// elasticity:
 					h_elas_bggen_rho->Fill(prodTheta, Egg/etaEnergy, fillWeight);
@@ -317,6 +400,11 @@ void EtaAna::EtaggAnalysis_bggen() {
 					if(isElastic) h_mm_bggen_rho_cut->Fill(prodTheta, mmSq, fillWeight);
 					
 					h_mgg_vs_elas_bggen_rho->Fill(Egg/etaEnergy, invmassConstr/ParticleMass(Eta), fillWeight);
+					
+					h_e1_vs_e2_bggen_rho->Fill(e2/eb, e1/eb, fillWeight);
+					if(isElastic) {
+						h_e1_vs_e2_bggen_rho_cut->Fill(e2/eb, e1/eb, fillWeight);
+					}
 				}
 				else if((locFinalState>=8) && (locFinalState<=11)) {
 					// gamma+N -> eta+pion+N
@@ -324,6 +412,10 @@ void EtaAna::EtaggAnalysis_bggen() {
 					// energy-constrained invariant mass:
 					h_mgg_const_bggen_etapion->Fill(prodTheta, invmassConstr, fillWeight);
 					if(isElastic) h_mgg_const_bggen_etapion_cut->Fill(prodTheta, invmassConstr, fillWeight);
+					
+					// energy-constrained invariant mass:
+					h_mgg_constCoh_bggen_etapion->Fill(prodTheta, invmassConstrCoh, fillWeight);
+					if(isElastic) h_mgg_constCoh_bggen_etapion_cut->Fill(prodTheta, invmassConstrCoh, fillWeight);
 					
 					// elasticity:
 					h_elas_bggen_etapion->Fill(prodTheta, Egg/etaEnergy, fillWeight);
@@ -345,6 +437,11 @@ void EtaAna::EtaggAnalysis_bggen() {
 						h_recPionDeltaPhi->Fill(locThrownAngle, locPionDeltaPhi);
 						h_recPion->Fill(locPionTheta, locPionMomentum);
 					}
+					
+					h_e1_vs_e2_bggen_etapion->Fill(e2/eb, e1/eb, fillWeight);
+					if(isElastic) {
+						h_e1_vs_e2_bggen_etapion_cut->Fill(e2/eb, e1/eb, fillWeight);
+					}
 				}
 				else if((locFinalState>=12) && (locFinalState<=17)) {
 					// gamma+N -> eta+2pions+N
@@ -352,6 +449,10 @@ void EtaAna::EtaggAnalysis_bggen() {
 					// energy-constrained invariant mass:
 					h_mgg_const_bggen_eta2pion->Fill(prodTheta, invmassConstr, fillWeight);
 					if(isElastic) h_mgg_const_bggen_eta2pion_cut->Fill(prodTheta, invmassConstr, fillWeight);
+					
+					// energy-constrained invariant mass:
+					h_mgg_constCoh_bggen_eta2pion->Fill(prodTheta, invmassConstrCoh, fillWeight);
+					if(isElastic) h_mgg_constCoh_bggen_eta2pion_cut->Fill(prodTheta, invmassConstrCoh, fillWeight);
 					
 					// elasticity:
 					h_elas_bggen_eta2pion->Fill(prodTheta, Egg/etaEnergy, fillWeight);
@@ -366,6 +467,11 @@ void EtaAna::EtaggAnalysis_bggen() {
 					if(isElastic) h_mm_bggen_eta2pion_cut->Fill(prodTheta, mmSq, fillWeight);
 					
 					h_mgg_vs_elas_bggen_eta2pion->Fill(Egg/etaEnergy, invmassConstr/ParticleMass(Eta), fillWeight);
+					
+					h_e1_vs_e2_bggen_eta2pion->Fill(e2/eb, e1/eb, fillWeight);
+					if(isElastic) {
+						h_e1_vs_e2_bggen_eta2pion_cut->Fill(e2/eb, e1/eb, fillWeight);
+					}
 				}
 				else if((locFinalState>=18) && (locFinalState<=25)) {
 					// gamma+N -> eta+3pions+N
@@ -373,6 +479,10 @@ void EtaAna::EtaggAnalysis_bggen() {
 					// energy-constrained invariant mass:
 					h_mgg_const_bggen_eta3pion->Fill(prodTheta, invmassConstr, fillWeight);
 					if(isElastic) h_mgg_const_bggen_eta3pion_cut->Fill(prodTheta, invmassConstr, fillWeight);
+					
+					// energy-constrained invariant mass:
+					h_mgg_constCoh_bggen_eta3pion->Fill(prodTheta, invmassConstrCoh, fillWeight);
+					if(isElastic) h_mgg_constCoh_bggen_eta3pion_cut->Fill(prodTheta, invmassConstrCoh, fillWeight);
 					
 					// elasticity:
 					h_elas_bggen_eta3pion->Fill(prodTheta, Egg/etaEnergy, fillWeight);
@@ -387,6 +497,11 @@ void EtaAna::EtaggAnalysis_bggen() {
 					if(isElastic) h_mm_bggen_eta3pion_cut->Fill(prodTheta, mmSq, fillWeight);
 					
 					h_mgg_vs_elas_bggen_eta3pion->Fill(Egg/etaEnergy, invmassConstr/ParticleMass(Eta), fillWeight);
+					
+					h_e1_vs_e2_bggen_eta3pion->Fill(e2/eb, e1/eb, fillWeight);
+					if(isElastic) {
+						h_e1_vs_e2_bggen_eta3pion_cut->Fill(e2/eb, e1/eb, fillWeight);
+					}
 				}
 				else {
 					// Everything else
@@ -394,6 +509,10 @@ void EtaAna::EtaggAnalysis_bggen() {
 					// energy-constrained invariant mass:
 					h_mgg_const_bggen_bkgd->Fill(prodTheta, invmassConstr, fillWeight);
 					if(isElastic) h_mgg_const_bggen_bkgd_cut->Fill(prodTheta, invmassConstr, fillWeight);
+					
+					// energy-constrained invariant mass:
+					h_mgg_constCoh_bggen_bkgd->Fill(prodTheta, invmassConstrCoh, fillWeight);
+					if(isElastic) h_mgg_constCoh_bggen_bkgd_cut->Fill(prodTheta, invmassConstrCoh, fillWeight);
 					
 					// elasticity:
 					h_elas_bggen_bkgd->Fill(prodTheta, Egg/etaEnergy, fillWeight);
@@ -408,6 +527,11 @@ void EtaAna::EtaggAnalysis_bggen() {
 					if(isElastic) h_mm_bggen_bkgd_cut->Fill(prodTheta, mmSq, fillWeight);
 					
 					h_mgg_vs_elas_bggen_bkgd->Fill(Egg/etaEnergy, invmassConstr/ParticleMass(Eta), fillWeight);
+					
+					h_e1_vs_e2_bggen_bkgd->Fill(e2/eb, e1/eb, fillWeight);
+					if(isElastic) {
+						h_e1_vs_e2_bggen_bkgd_cut->Fill(e2/eb, e1/eb, fillWeight);
+					}
 				}
 				
 				//-----------------------------------------------------//
@@ -449,6 +573,16 @@ void EtaAna::EtaggAnalysis_bggen() {
 }
 
 void EtaAna::InitializeBGGENHists() {
+	
+	h_deltaE_vs_theta_bggen      = new TH2F("deltaE_vs_theta_bggen", 
+		"; #theta_{lab} [#circ]; E_{#eta}^{true} - E_{#eta}^{calc} [GeV]",
+		100, 0.0, 10.0, 1000, -0.5, 0.5);
+	h_deltaE_vs_theta_bggen_beam = new TH2F("deltaE_vs_theta_bggen_beam", 
+		"; #theta_{lab} [#circ]; E_{#gamma}^{thrown} - E_{#eta}^{thrown} [GeV]",
+		100, 0.0, 10.0, 1000, -0.5, 0.5);
+	h_missing_mom_vs_theta_bggen = new TH2F("missing_mom_vs_theta_bggen",
+		"; #theta_{lab} [#circ]; p_{final} - p_{initia} [GeV/c]",
+		100, 0.0, 10.0, 1000, 0.0, 2.0);
 	
 	int nInvmassBins     = (int)((m_maxInvmassBin-m_minInvmassBin)/m_invmassBinSize);
 	int nRecAngleBins    = (int)((m_maxRecAngleBin-m_minRecAngleBin)/m_recAngleBinSize);
@@ -548,6 +682,80 @@ void EtaAna::InitializeBGGENHists() {
 		"Other Bkgd; #theta_{rec.} [#circ]; m_{#gamma#gamma}^{Constr.} [GeV/c^{2}]",
 		nRecAngleBins, m_minRecAngleBin, m_maxRecAngleBin, nInvmassBins, m_minInvmassBin, m_maxInvmassBin);
 	h_mgg_const_bggen_bkgd_cut->Sumw2();
+	
+	//-----------------------------------------------------------------------------//
+	
+	h_mgg_constCoh_bggen_signal = new TH2F("mgg_constCoh_bggen_signal",
+		"Signal (#eta+N#rightarrow#eta+N); #theta_{rec.} [#circ]; m_{#gamma#gamma}^{Constr.} [GeV/c^{2}]",
+		nRecAngleBins, m_minRecAngleBin, m_maxRecAngleBin, nInvmassBins, m_minInvmassBin, m_maxInvmassBin);
+	h_mgg_constCoh_bggen_signal->Sumw2();
+	
+	h_mgg_constCoh_bggen_etapion = new TH2F("mgg_constCoh_bggen_etapion",
+		"Eta+Pion (#eta+N#rightarrow#eta+#pi+N'); #theta_{rec.} [#circ]; m_{#gamma#gamma}^{Constr.} [GeV/c^{2}]",
+		nRecAngleBins, m_minRecAngleBin, m_maxRecAngleBin, nInvmassBins, m_minInvmassBin, m_maxInvmassBin);
+	h_mgg_constCoh_bggen_etapion->Sumw2();
+	
+	h_mgg_constCoh_bggen_eta2pion = new TH2F("mgg_constCoh_bggen_eta2pion",
+		"Eta+Pion+Pion (#eta+N#rightarrow#eta+2#pi+N'); #theta_{rec.} [#circ]; m_{#gamma#gamma}^{Constr.} [GeV/c^{2}]",
+		nRecAngleBins, m_minRecAngleBin, m_maxRecAngleBin, nInvmassBins, m_minInvmassBin, m_maxInvmassBin);
+	h_mgg_constCoh_bggen_eta2pion->Sumw2();
+	
+	h_mgg_constCoh_bggen_eta3pion = new TH2F("mgg_constCoh_bggen_eta3pion",
+		"Eta+Pion+Pion (#eta+N#rightarrow#eta+3#pi+N'); #theta_{rec.} [#circ]; m_{#gamma#gamma}^{Constr.} [GeV/c^{2}]",
+		nRecAngleBins, m_minRecAngleBin, m_maxRecAngleBin, nInvmassBins, m_minInvmassBin, m_maxInvmassBin);
+	h_mgg_constCoh_bggen_eta3pion->Sumw2();
+	
+	h_mgg_constCoh_bggen_omega = new TH2F("mgg_constCoh_bggen_omega",
+		"#omega (#eta+N#rightarrow#omega+N'); #theta_{rec.} [#circ]; m_{#gamma#gamma}^{Constr.} [GeV/c^{2}]",
+		nRecAngleBins, m_minRecAngleBin, m_maxRecAngleBin, nInvmassBins, m_minInvmassBin, m_maxInvmassBin);
+	h_mgg_constCoh_bggen_omega->Sumw2();
+	
+	h_mgg_constCoh_bggen_rho = new TH2F("mgg_constCoh_bggen_rho",
+		"#rho^{0} (#eta+N#rightarrow#rho^{0}+N'); #theta_{rec.} [#circ]; m_{#gamma#gamma}^{Constr.} [GeV/c^{2}]",
+		nRecAngleBins, m_minRecAngleBin, m_maxRecAngleBin, nInvmassBins, m_minInvmassBin, m_maxInvmassBin);
+	h_mgg_constCoh_bggen_rho->Sumw2();
+	
+	h_mgg_constCoh_bggen_bkgd = new TH2F("mgg_constCoh_bggen_bkgd",
+		"Other Bkgd; #theta_{rec.} [#circ]; m_{#gamma#gamma}^{Constr.} [GeV/c^{2}]",
+		nRecAngleBins, m_minRecAngleBin, m_maxRecAngleBin, nInvmassBins, m_minInvmassBin, m_maxInvmassBin);
+	h_mgg_constCoh_bggen_bkgd->Sumw2();
+	
+	//-----------------------------------------------------------------------------//
+	
+	h_mgg_constCoh_bggen_signal_cut = new TH2F("mgg_constCoh_bggen_signal_cut",
+		"Signal (#eta+N#rightarrow#eta+N); #theta_{rec.} [#circ]; m_{#gamma#gamma}^{Constr.} [GeV/c^{2}]",
+		nRecAngleBins, m_minRecAngleBin, m_maxRecAngleBin, nInvmassBins, m_minInvmassBin, m_maxInvmassBin);
+	h_mgg_constCoh_bggen_signal_cut->Sumw2();
+	
+	h_mgg_constCoh_bggen_etapion_cut = new TH2F("mgg_constCoh_bggen_etapion_cut",
+		"Eta+Pion (#eta+N#rightarrow#eta+#pi+N'); #theta_{rec.} [#circ]; m_{#gamma#gamma}^{Constr.} [GeV/c^{2}]",
+		nRecAngleBins, m_minRecAngleBin, m_maxRecAngleBin, nInvmassBins, m_minInvmassBin, m_maxInvmassBin);
+	h_mgg_constCoh_bggen_etapion_cut->Sumw2();
+	
+	h_mgg_constCoh_bggen_eta2pion_cut = new TH2F("mgg_constCoh_bggen_eta2pion_cut",
+		"Eta+Pion+Pion (#eta+N#rightarrow#eta+2#pi+N'); #theta_{rec.} [#circ]; m_{#gamma#gamma}^{Constr.} [GeV/c^{2}]",
+		nRecAngleBins, m_minRecAngleBin, m_maxRecAngleBin, nInvmassBins, m_minInvmassBin, m_maxInvmassBin);
+	h_mgg_constCoh_bggen_eta2pion_cut->Sumw2();
+	
+	h_mgg_constCoh_bggen_eta3pion_cut = new TH2F("mgg_constCoh_bggen_eta3pion_cut",
+		"Eta+Pion+Pion (#eta+N#rightarrow#eta+3#pi+N'); #theta_{rec.} [#circ]; m_{#gamma#gamma}^{Constr.} [GeV/c^{2}]",
+		nRecAngleBins, m_minRecAngleBin, m_maxRecAngleBin, nInvmassBins, m_minInvmassBin, m_maxInvmassBin);
+	h_mgg_constCoh_bggen_eta3pion_cut->Sumw2();
+	
+	h_mgg_constCoh_bggen_omega_cut = new TH2F("mgg_constCoh_bggen_omega_cut",
+		"#omega (#eta+N#rightarrow#omega+N'); #theta_{rec.} [#circ]; m_{#gamma#gamma}^{Constr.} [GeV/c^{2}]",
+		nRecAngleBins, m_minRecAngleBin, m_maxRecAngleBin, nInvmassBins, m_minInvmassBin, m_maxInvmassBin);
+	h_mgg_constCoh_bggen_omega_cut->Sumw2();
+	
+	h_mgg_constCoh_bggen_rho_cut = new TH2F("mgg_constCoh_bggen_rho_cut",
+		"#rho^{0} (#eta+N#rightarrow#rho^{0}+N'); #theta_{rec.} [#circ]; m_{#gamma#gamma}^{Constr.} [GeV/c^{2}]",
+		nRecAngleBins, m_minRecAngleBin, m_maxRecAngleBin, nInvmassBins, m_minInvmassBin, m_maxInvmassBin);
+	h_mgg_constCoh_bggen_rho_cut->Sumw2();
+	
+	h_mgg_constCoh_bggen_bkgd_cut = new TH2F("mgg_constCoh_bggen_bkgd_cut",
+		"Other Bkgd; #theta_{rec.} [#circ]; m_{#gamma#gamma}^{Constr.} [GeV/c^{2}]",
+		nRecAngleBins, m_minRecAngleBin, m_maxRecAngleBin, nInvmassBins, m_minInvmassBin, m_maxInvmassBin);
+	h_mgg_constCoh_bggen_bkgd_cut->Sumw2();
 	
 	//-----------------------------------------------------------------------------//
 	
@@ -761,6 +969,38 @@ void EtaAna::InitializeBGGENHists() {
 	
 	//-----------------------------------------------------------------------------//
 	
+	h_e1_vs_e2_bggen_signal = new TH2F("e1_vs_e2_bggen_signal", 
+		"; E_{2}/E_{#gamma}; E_{1}/E_{#gamma}", 200, 0.0, 1.0, 200, 0.0, 1.0);
+	h_e1_vs_e2_bggen_etapion = new TH2F("e1_vs_e2_bggen_etapion", 
+		"; E_{2}/E_{#gamma}; E_{1}/E_{#gamma}", 200, 0.0, 1.0, 200, 0.0, 1.0);
+	h_e1_vs_e2_bggen_eta2pion = new TH2F("e1_vs_e2_bggen_eta2pion", 
+		"; E_{2}/E_{#gamma}; E_{1}/E_{#gamma}", 200, 0.0, 1.0, 200, 0.0, 1.0);
+	h_e1_vs_e2_bggen_eta3pion = new TH2F("e1_vs_e2_bggen_eta3pion", 
+		"; E_{2}/E_{#gamma}; E_{1}/E_{#gamma}", 200, 0.0, 1.0, 200, 0.0, 1.0);
+	h_e1_vs_e2_bggen_omega = new TH2F("e1_vs_e2_bggen_omega", 
+		"; E_{2}/E_{#gamma}; E_{1}/E_{#gamma}", 200, 0.0, 1.0, 200, 0.0, 1.0);
+	h_e1_vs_e2_bggen_rho = new TH2F("e1_vs_e2_bggen_rho", 
+		"; E_{2}/E_{#gamma}; E_{1}/E_{#gamma}", 200, 0.0, 1.0, 200, 0.0, 1.0);
+	h_e1_vs_e2_bggen_bkgd = new TH2F("e1_vs_e2_bggen_bkgd", 
+		"; E_{2}/E_{#gamma}; E_{1}/E_{#gamma}", 200, 0.0, 1.0, 200, 0.0, 1.0);
+	
+	h_e1_vs_e2_bggen_signal_cut = new TH2F("e1_vs_e2_bggen_signal_cut", 
+		"; E_{2}/E_{#gamma}; E_{1}/E_{#gamma}", 200, 0.0, 1.0, 200, 0.0, 1.0);
+	h_e1_vs_e2_bggen_etapion_cut = new TH2F("e1_vs_e2_bggen_etapion_cut", 
+		"; E_{2}/E_{#gamma}; E_{1}/E_{#gamma}", 200, 0.0, 1.0, 200, 0.0, 1.0);
+	h_e1_vs_e2_bggen_eta2pion_cut = new TH2F("e1_vs_e2_bggen_eta2pion_cut", 
+		"; E_{2}/E_{#gamma}; E_{1}/E_{#gamma}", 200, 0.0, 1.0, 200, 0.0, 1.0);
+	h_e1_vs_e2_bggen_eta3pion_cut = new TH2F("e1_vs_e2_bggen_eta3pion_cut", 
+		"; E_{2}/E_{#gamma}; E_{1}/E_{#gamma}", 200, 0.0, 1.0, 200, 0.0, 1.0);
+	h_e1_vs_e2_bggen_omega_cut = new TH2F("e1_vs_e2_bggen_omega_cut", 
+		"; E_{2}/E_{#gamma}; E_{1}/E_{#gamma}", 200, 0.0, 1.0, 200, 0.0, 1.0);
+	h_e1_vs_e2_bggen_rho_cut = new TH2F("e1_vs_e2_bggen_rho_cut", 
+		"; E_{2}/E_{#gamma}; E_{1}/E_{#gamma}", 200, 0.0, 1.0, 200, 0.0, 1.0);
+	h_e1_vs_e2_bggen_bkgd_cut = new TH2F("e1_vs_e2_bggen_bkgd_cut", 
+		"; E_{2}/E_{#gamma}; E_{1}/E_{#gamma}", 200, 0.0, 1.0, 200, 0.0, 1.0);
+	
+	//-----------------------------------------------------------------------------//
+	
 	for(int irea=0; irea<=nReactions; irea++) {
 		
 		TString hist_label = "", hist_title = "";
@@ -847,6 +1087,12 @@ void EtaAna::InitializeBGGENHists() {
 
 void EtaAna::ResetBGGENHists() {
 	
+	h_deltaE_vs_theta_bggen->Reset();
+	h_deltaE_vs_theta_bggen_beam->Reset();
+	h_missing_mom_vs_theta_bggen->Reset();
+	
+	// energy-constrained invariant mass (proton knockout):
+	
 	h_mgg_const_bggen_signal->Reset();
 	h_mgg_const_bggen_etapion->Reset();
 	h_mgg_const_bggen_eta2pion->Reset();
@@ -862,6 +1108,26 @@ void EtaAna::ResetBGGENHists() {
 	h_mgg_const_bggen_omega_cut->Reset();
 	h_mgg_const_bggen_rho_cut->Reset();
 	h_mgg_const_bggen_bkgd_cut->Reset();
+	
+	// energy-constrained invariant mass (coherent recoil):
+	
+	h_mgg_constCoh_bggen_signal->Reset();
+	h_mgg_constCoh_bggen_etapion->Reset();
+	h_mgg_constCoh_bggen_eta2pion->Reset();
+	h_mgg_constCoh_bggen_eta3pion->Reset();
+	h_mgg_constCoh_bggen_omega->Reset();
+	h_mgg_constCoh_bggen_rho->Reset();
+	h_mgg_constCoh_bggen_bkgd->Reset();
+	
+	h_mgg_constCoh_bggen_signal_cut->Reset();
+	h_mgg_constCoh_bggen_etapion_cut->Reset();
+	h_mgg_constCoh_bggen_eta2pion_cut->Reset();
+	h_mgg_constCoh_bggen_eta3pion_cut->Reset();
+	h_mgg_constCoh_bggen_omega_cut->Reset();
+	h_mgg_constCoh_bggen_rho_cut->Reset();
+	h_mgg_constCoh_bggen_bkgd_cut->Reset();
+	
+	// elasticity:
 	
 	h_elas_bggen_signal->Reset();
 	h_elas_bggen_etapion->Reset();
@@ -879,6 +1145,8 @@ void EtaAna::ResetBGGENHists() {
 	h_elas_bggen_rho_cut->Reset();
 	h_elas_bggen_bkgd_cut->Reset();
 	
+	// hybrid mass:
+	
 	h_hmass_bggen_signal->Reset();
 	h_hmass_bggen_etapion->Reset();
 	h_hmass_bggen_eta2pion->Reset();
@@ -894,6 +1162,8 @@ void EtaAna::ResetBGGENHists() {
 	h_hmass_bggen_omega_cut->Reset();
 	h_hmass_bggen_rho_cut->Reset();
 	h_hmass_bggen_bkgd_cut->Reset();
+	
+	// missing mass:
 	
 	h_mm_bggen_signal->Reset();
 	h_mm_bggen_etapion->Reset();
@@ -911,6 +1181,8 @@ void EtaAna::ResetBGGENHists() {
 	h_mm_bggen_rho_cut->Reset();
 	h_mm_bggen_bkgd_cut->Reset();
 	
+	// Everything else:
+	
 	h_mgg_vs_elas_bggen_signal->Reset();
 	h_mgg_vs_elas_bggen_etapion->Reset();
 	h_mgg_vs_elas_bggen_eta2pion->Reset();
@@ -918,6 +1190,22 @@ void EtaAna::ResetBGGENHists() {
 	h_mgg_vs_elas_bggen_omega->Reset();
 	h_mgg_vs_elas_bggen_rho->Reset();
 	h_mgg_vs_elas_bggen_bkgd->Reset();
+	
+	h_e1_vs_e2_bggen_signal->Reset();
+	h_e1_vs_e2_bggen_etapion->Reset();
+	h_e1_vs_e2_bggen_eta2pion->Reset();
+	h_e1_vs_e2_bggen_eta3pion->Reset();
+	h_e1_vs_e2_bggen_omega->Reset();
+	h_e1_vs_e2_bggen_rho->Reset();
+	h_e1_vs_e2_bggen_bkgd->Reset();
+	
+	h_e1_vs_e2_bggen_signal_cut->Reset();
+	h_e1_vs_e2_bggen_etapion_cut->Reset();
+	h_e1_vs_e2_bggen_eta2pion_cut->Reset();
+	h_e1_vs_e2_bggen_eta3pion_cut->Reset();
+	h_e1_vs_e2_bggen_omega_cut->Reset();
+	h_e1_vs_e2_bggen_rho_cut->Reset();
+	h_e1_vs_e2_bggen_bkgd_cut->Reset();
 	
 	h_thrown_reactions_bggen->Reset();
 	h_rec_reactions_bggen->Reset();
@@ -954,6 +1242,12 @@ void EtaAna::ResetBGGENHists() {
 void EtaAna::WriteBGGENHists() {
 	printf("\nWriting BGGEN histograms...\n");
 	
+	h_deltaE_vs_theta_bggen->Write();
+	h_deltaE_vs_theta_bggen_beam->Write();
+	h_missing_mom_vs_theta_bggen->Write();
+	
+	// energy-constrained invariant mass (nucleon recoil):
+	
 	h_mgg_const_bggen_signal->Write();
 	h_mgg_const_bggen_etapion->Write();
 	h_mgg_const_bggen_eta2pion->Write();
@@ -969,6 +1263,26 @@ void EtaAna::WriteBGGENHists() {
 	h_mgg_const_bggen_omega_cut->Write();
 	h_mgg_const_bggen_rho_cut->Write();
 	h_mgg_const_bggen_bkgd_cut->Write();
+	
+	// energy-constrained invariant mass (coherent recoil):
+	
+	h_mgg_constCoh_bggen_signal->Write();
+	h_mgg_constCoh_bggen_etapion->Write();
+	h_mgg_constCoh_bggen_eta2pion->Write();
+	h_mgg_constCoh_bggen_eta3pion->Write();
+	h_mgg_constCoh_bggen_omega->Write();
+	h_mgg_constCoh_bggen_rho->Write();
+	h_mgg_constCoh_bggen_bkgd->Write();
+	
+	h_mgg_constCoh_bggen_signal_cut->Write();
+	h_mgg_constCoh_bggen_etapion_cut->Write();
+	h_mgg_constCoh_bggen_eta2pion_cut->Write();
+	h_mgg_constCoh_bggen_eta3pion_cut->Write();
+	h_mgg_constCoh_bggen_omega_cut->Write();
+	h_mgg_constCoh_bggen_rho_cut->Write();
+	h_mgg_constCoh_bggen_bkgd_cut->Write();
+	
+	// elasticity:
 	
 	h_elas_bggen_signal->Write();
 	h_elas_bggen_etapion->Write();
@@ -986,6 +1300,8 @@ void EtaAna::WriteBGGENHists() {
 	h_elas_bggen_rho_cut->Write();
 	h_elas_bggen_bkgd_cut->Write();
 	
+	// hybrid mass:
+	
 	h_hmass_bggen_signal->Write();
 	h_hmass_bggen_etapion->Write();
 	h_hmass_bggen_eta2pion->Write();
@@ -1001,6 +1317,8 @@ void EtaAna::WriteBGGENHists() {
 	h_hmass_bggen_omega_cut->Write();
 	h_hmass_bggen_rho_cut->Write();
 	h_hmass_bggen_bkgd_cut->Write();
+	
+	// missing mass:
 	
 	h_mm_bggen_signal->Write();
 	h_mm_bggen_etapion->Write();
@@ -1018,6 +1336,8 @@ void EtaAna::WriteBGGENHists() {
 	h_mm_bggen_rho_cut->Write();
 	h_mm_bggen_bkgd_cut->Write();
 	
+	// Everything else:
+	
 	h_mgg_vs_elas_bggen_signal->Write();
 	h_mgg_vs_elas_bggen_etapion->Write();
 	h_mgg_vs_elas_bggen_eta2pion->Write();
@@ -1025,6 +1345,22 @@ void EtaAna::WriteBGGENHists() {
 	h_mgg_vs_elas_bggen_omega->Write();
 	h_mgg_vs_elas_bggen_rho->Write();
 	h_mgg_vs_elas_bggen_bkgd->Write();
+	
+	h_e1_vs_e2_bggen_signal->Write();
+	h_e1_vs_e2_bggen_etapion->Write();
+	h_e1_vs_e2_bggen_eta2pion->Write();
+	h_e1_vs_e2_bggen_eta3pion->Write();
+	h_e1_vs_e2_bggen_omega->Write();
+	h_e1_vs_e2_bggen_rho->Write();
+	h_e1_vs_e2_bggen_bkgd->Write();
+	
+	h_e1_vs_e2_bggen_signal_cut->Write();
+	h_e1_vs_e2_bggen_etapion_cut->Write();
+	h_e1_vs_e2_bggen_eta2pion_cut->Write();
+	h_e1_vs_e2_bggen_eta3pion_cut->Write();
+	h_e1_vs_e2_bggen_omega_cut->Write();
+	h_e1_vs_e2_bggen_rho_cut->Write();
+	h_e1_vs_e2_bggen_bkgd_cut->Write();
 	
 	h_thrown_reactions_bggen->Write();
 	h_rec_reactions_bggen->Write();

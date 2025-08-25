@@ -83,6 +83,10 @@ void EtaAna::Omega3gAnalysis() {
 	e3 = m_fcalE[sortedShowerList[2]];
 	TVector3 pos3 = GetFCALPosition(sortedShowerList[2]);
 	
+	double t1 = m_fcalT[sortedShowerList[0]] - (pos1.Mag()/m_c);
+	double t2 = m_fcalT[sortedShowerList[1]] - (pos2.Mag()/m_c);
+	double t3 = m_fcalT[sortedShowerList[2]] - (pos3.Mag()/m_c);
+	
 	//-------------------------------------------------------//
 	// apply Fiducial cut:
 	
@@ -95,9 +99,9 @@ void EtaAna::Omega3gAnalysis() {
 	double locTOFdx2, locTOFdy2, locTOFdt2;
 	double locTOFdx3, locTOFdy3, locTOFdt3;
 	
-	CheckTOFMatch(pos1, locTOFdx1, locTOFdy1, locTOFdt1, m_TOFRFCut);
-	CheckTOFMatch(pos2, locTOFdx2, locTOFdy2, locTOFdt2, m_TOFRFCut);
-	CheckTOFMatch(pos3, locTOFdx3, locTOFdy3, locTOFdt3, m_TOFRFCut);
+	CheckTOFMatch(pos1, t1, locTOFdx1, locTOFdy1, locTOFdt1, m_TOFRFCut);
+	CheckTOFMatch(pos2, t2, locTOFdx2, locTOFdy2, locTOFdt2, m_TOFRFCut);
+	CheckTOFMatch(pos3, t3, locTOFdx3, locTOFdy3, locTOFdt3, m_TOFRFCut);
 	
 	double locTOFdr1 = sqrt(pow(locTOFdx1,2.0)+pow(locTOFdy1,2.0));
 	double locTOFdr2 = sqrt(pow(locTOFdx2,2.0)+pow(locTOFdy2,2.0));
