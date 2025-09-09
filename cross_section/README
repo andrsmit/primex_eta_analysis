@@ -1,0 +1,17 @@
+The following subdirectories all exract the differential cross section, dsigma/dtheta, for gamma+4He->eta+X (eta->2gamma) using the histograms made from the analysis code in primex_eta_analysis/analyze_trees/EtaAna. They each have their own library of codes, most of which is exactly the same as the other versions, and should probably be changed to use a centralized version for the common parts. The primary difference between the different versions is the fitting routine to extract the eta->2gamma yield in each angular bin.
+
+Different versions include:
+
+	1.) cpp - This code (optionally) fits the empty target lineshape, and stores it in a function: f_empty. The fit function used to fit
+		the full target data includes this function: f_full(x) = A(x) + B(x) + ... + f_empty->Eval(x).
+	
+	2.) cpp_combinedFit - This code allows for f_empty and f_full to share common parameters, which are determined through a combined fit 
+		of the empty and full target data sets. The fit is designed to minimize a combined chi-squared of the two.
+		
+	3.) ll - This code allows for f_empty and f_full to share common parameters, which are determined through a combined fit of the 
+		empty and full target data sets. The fit is designed to minimize a negative log-likelihood (nll).
+		
+		In order to construct a more suitable likelihood, we use histograms in the fitting routine that have not been accidentally-subtracted.
+		Instead, the accidental background estimated from sidebands is kept in a separate histogram, and treated as an exact template
+		that goes into the fit function. Some improvement can be made here to introduce bin-by-bin nuissance parameters
+		to account for the statistical uncertainty in this accidental background.
