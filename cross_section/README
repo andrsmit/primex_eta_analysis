@@ -1,4 +1,4 @@
-The following subdirectories all exract the differential cross section, dsigma/dtheta, for gamma+4He->eta+X (eta->2gamma) using the histograms made from the analysis code in primex_eta_analysis/analyze_trees/EtaAna. They each have their own library of codes, most of which is exactly the same as the other versions, and should probably be changed to use a centralized version for the common parts. The primary difference between the different versions is the fitting routine to extract the eta->2gamma yield in each angular bin.
+The subdirectories included here provide different methods to extract the differential cross section, dsigma/dtheta, for gamma+4He->eta+X (eta->2gamma) using the histograms produced from the analysis code in primex_eta_analysis/analyze_trees/EtaAna. They each have their own library of codes, most of which is exactly the same as the other versions. This should ideally be changed so that they all use a centralized version for the common parts. The primary difference between the different versions is within the fitting routine to extract the eta->2gamma yield in each angular bin. 
 
 Different versions include:
 
