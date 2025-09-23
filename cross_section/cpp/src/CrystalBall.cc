@@ -189,7 +189,7 @@ double DoubleCrystalBallPlusGausPDF(double *x, double *par)
 	//---------------------------------------------//
 	// Gaussian:
 	
-	double    mu3 = par[8];
+	double    mu3 = par[8] + mu1;
 	double sigma3 = par[9];
 	
 	double f3 = NormGaus(mgg, mu3, sigma3);

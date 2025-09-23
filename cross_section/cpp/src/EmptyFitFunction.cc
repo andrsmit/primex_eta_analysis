@@ -68,6 +68,18 @@ int MggFitter::InitializeEmptyFitFunction(TF1 **f1, TString funcName)
 				parNames.push_back(Form("#Delta#mu_{fdc,%d}",i+1));
 			}
 			break;
+		case 4:
+			for(int i=0; i<m_muFDC_omega.size(); i++) {
+				nFDCPars += 2;
+				parNames.push_back(Form("N_{fdc,#omega,%d}",i+1));
+				parNames.push_back(Form("#mu_{fdc,#omega,%d}",i+1));
+			}
+			for(int i=0; i<m_muFDC_eta.size(); i++) {
+				nFDCPars += 2;
+				parNames.push_back(Form("N_{fdc,#eta,%d}",i+1));
+				parNames.push_back(Form("#mu_{fdc,#eta,%d}",i+1));
+			}
+			break;
 	}
 	
 	int nBkgdPars = 0;
@@ -121,8 +133,8 @@ int MggFitter::InitializeEmptyFitParameters()
 			break;
 		case 2:
 			nParameters = 2;
-			f_empty->FixParameter(0, 0.00);
-			f_empty->FixParameter(1,-0.01);
+			f_empty->FixParameter(0, 0.0);
+			f_empty->FixParameter(1, 0.0);
 			break;
 	}
 	
@@ -167,6 +179,18 @@ int MggFitter::InitializeEmptyFitParameters()
 			for(int i=0; i<m_muFDC.size(); i++) {
 				f_empty->FixParameter(nParameters+0, 0.00);
 				f_empty->FixParameter(nParameters+1, m_muFDC[i]-m_muFDC[0]);
+				nParameters += 2;
+			}
+			break;
+		case 4:
+			for(int i=0; i<m_muFDC_omega.size(); i++) {
+				f_empty->FixParameter(nParameters+0, 0.00);
+				f_empty->FixParameter(nParameters+1, m_muFDC_omega[i]);
+				nParameters += 2;
+			}
+			for(int i=0; i<m_muFDC_eta.size(); i++) {
+				f_empty->FixParameter(nParameters+0, 0.00);
+				f_empty->FixParameter(nParameters+1, m_muFDC_eta[i]);
 				nParameters += 2;
 			}
 			break;
@@ -332,6 +356,41 @@ double MggFitter::EmptyMggFitFunction(double *x, double *par)
 			}
 			break;
 		}
+		case 4:
+		{
+			// Use lineshape from simulation of omegas from 1st FDC package:
+			// In this option, separate normalization parameters are used for all peaking structures
+			
+			for(int i=0; i<m_muFDC_omega.size(); i++) {
+				double N  = par[nEtaParameters + nOmegaParameters + nFDCParameters + 0];
+				double mu = par[nEtaParameters + nOmegaParameters + nFDCParameters + 1];
+				
+				double alpha = 1.0;
+				double n     = 2.0;
+				double sigma = 0.04*mu;
+				
+				if(i==0)      sigma = 0.044*mu;
+				else if(i==1) sigma = 0.050*mu;
+				else if(i==2) sigma = 0.056*mu;
+				
+				fFDC += (N * NormCrystalBall(locMgg, mu, sigma, alpha, n));
+				nFDCParameters += 2;
+			}
+			for(int i=0; i<m_muFDC_eta.size(); i++) {
+				double N  = par[nEtaParameters + nOmegaParameters + nFDCParameters + 0];
+				double mu = par[nEtaParameters + nOmegaParameters + nFDCParameters + 1];
+				
+				double sigma = 0.013;
+				
+				if(i==0)      sigma = 0.010;
+				else if(i==1) sigma = 0.009;
+				else if(i==2) sigma = 0.008;
+				
+				fFDC += (N * NormGaus(locMgg, mu, sigma));
+				nFDCParameters += 2;
+			}
+			break;
+		}
 	}
 	
 	//-------------------------//
@@ -381,6 +440,7 @@ double MggFitter::EmptyMggFitFunction(double *x, double *par)
 			break;
 		}
 	}
+	//if(fBkgd<0.0) return -1.e6;
 	
 	//----------------------------------------------------------------------------------//
 	

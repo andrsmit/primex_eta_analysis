@@ -48,7 +48,9 @@ class MggFitter {
 		int emptyFitOption_omega = 1;
 		int emptyFitOption_fdc   = 1;
 		int emptyFitOption_bkgd  = 3;
-		int emptyFitOption_poly  = 4; 
+		int emptyFitOption_poly  = 4;
+		
+		double lineshapeOffset = 0.0;
 		
 		double      minFitRange=0.300,      maxFitRange=0.950;
 		double minEmptyFitRange=0.300, maxEmptyFitRange=0.950;

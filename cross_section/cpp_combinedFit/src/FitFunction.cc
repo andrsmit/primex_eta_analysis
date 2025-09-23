@@ -215,14 +215,14 @@ void MggFitter::GuessEtaParameters(vector<double> &parGuesses)
 		{
 			// Lineshape fit: N, deltaMu
 			parGuesses.push_back(NGuess);
-			parGuesses.push_back(0.0025);
+			parGuesses.push_back(lineshapeOffset);
 			break;
 		}
 		case 6:
 		{
 			// Lineshape + Crystal Ball: N, deltaMu, N_inc, mu_inc, sigma_inc, alpha_inc, n_inc
 			parGuesses.push_back(NGuess);
-			parGuesses.push_back(0.0025);
+			parGuesses.push_back(lineshapeOffset);
 			parGuesses.push_back(0.0);
 			parGuesses.push_back(MuGuess+0.02);
 			parGuesses.push_back(2.0*SigmaGuess);
@@ -234,7 +234,7 @@ void MggFitter::GuessEtaParameters(vector<double> &parGuesses)
 		{
 			// Lineshape (Signal fit + hadronic bkgd fit): N, deltaMu, frac_exc, frac_inc
 			parGuesses.push_back(NGuess);
-			parGuesses.push_back(0.0025);
+			parGuesses.push_back(lineshapeOffset);
 			parGuesses.push_back(1.0);
 			parGuesses.push_back(0.0);
 			break;
@@ -243,7 +243,7 @@ void MggFitter::GuessEtaParameters(vector<double> &parGuesses)
 		{
 			// Lineshape  (Signal fit + hadronic bkgd hist): N, deltaMu, frac_exc, frac_inc
 			parGuesses.push_back(NGuess);
-			parGuesses.push_back(0.0025);
+			parGuesses.push_back(lineshapeOffset);
 			parGuesses.push_back(1.0);
 			parGuesses.push_back(0.0);
 			break;
@@ -252,7 +252,7 @@ void MggFitter::GuessEtaParameters(vector<double> &parGuesses)
 		{
 			// Lineshape  (Signal fit + EtaPi fit + other hadronic bkgd hist): N, deltaMu, frac_exc, frac_etapi, frac_other
 			parGuesses.push_back(NGuess);
-			parGuesses.push_back(0.0025);
+			parGuesses.push_back(lineshapeOffset);
 			parGuesses.push_back(1.0);
 			parGuesses.push_back(0.0);
 			parGuesses.push_back(0.0);
@@ -262,7 +262,7 @@ void MggFitter::GuessEtaParameters(vector<double> &parGuesses)
 		{
 			// Lineshape  (Signal hist + EtaPi hist + other hadronic bkgd hist): N, deltaMu, frac_exc, frac_etapi, frac_other
 			parGuesses.push_back(NGuess);
-			parGuesses.push_back(0.0025);
+			parGuesses.push_back(lineshapeOffset);
 			parGuesses.push_back(1.0);
 			parGuesses.push_back(0.0);
 			parGuesses.push_back(0.0);
@@ -272,19 +272,16 @@ void MggFitter::GuessEtaParameters(vector<double> &parGuesses)
 		{
 			// Lineshape  (Signal fit + EtaPi fit + other hadronic bkgd hist): N_exc, deltaMu, A_etapi, A_other
 			parGuesses.push_back(NGuess);
-			parGuesses.push_back(0.0025);
+			parGuesses.push_back(lineshapeOffset);
 			parGuesses.push_back(0.0);
 			parGuesses.push_back(0.0);
 			break;
 		}
 		case 12:
 		{
-			double locShift = 0.0025;
-			//if(angle>1.5) locShift = 0.0035;
-			
 			// Lineshape  (Signal fit + EtaPi hist + other hadronic bkgd hist): N_exc, deltaMu, A_etapi, A_other
 			parGuesses.push_back(NGuess);
-			parGuesses.push_back(locShift);
+			parGuesses.push_back(lineshapeOffset);
 			parGuesses.push_back(0.0);
 			parGuesses.push_back(0.0);
 			break;
@@ -340,14 +337,14 @@ void MggFitter::GuessOmegaParameters(vector<double> &parGuesses)
 		{
 			// Lineshape fit: N, deltaMu
 			parGuesses.push_back(NGuess);
-			parGuesses.push_back(0.0025);
+			parGuesses.push_back(lineshapeOffset);
 			break;
 		}
 		case 3:
 		{
 			// Lineshape hist: N, deltaMu
 			parGuesses.push_back(NGuess);
-			parGuesses.push_back(0.0025);
+			parGuesses.push_back(lineshapeOffset);
 			break;
 		}
 		case 4:
@@ -355,7 +352,7 @@ void MggFitter::GuessOmegaParameters(vector<double> &parGuesses)
 			// Lineshape hist (with rho as separate fit parameter): N_omega, N_rho, deltaMu
 			parGuesses.push_back(0.88*NGuess);
 			parGuesses.push_back(0.12*NGuess);
-			parGuesses.push_back(0.0025);
+			parGuesses.push_back(lineshapeOffset);
 			break;
 		}
 		case 5:
@@ -395,8 +392,8 @@ void MggFitter::GuessBkgdParameters(vector<double> &parGuesses)
 			// Exponential:
 			double p0Guess =  h_full->GetBinContent(h_full->FindBin(minFitRange)) - f_emptyWide->Eval(minFitRange);
 			double p1Guess =  minFitRange;
-			double p2Guess = -8.0;
-			double p3Guess =  6.0;
+			double p2Guess = -9.5;
+			double p3Guess =  7.5;
 			if(p0Guess < 0.0) p0Guess = 0.0;
 			
 			parGuesses.push_back(p0Guess);
@@ -409,6 +406,12 @@ void MggFitter::GuessBkgdParameters(vector<double> &parGuesses)
 		{
 			// Chebyshev polynomial:
 			for(int ipar=0; ipar<=fitOption_poly; ipar++) parGuesses.push_back(0.0);
+			break;
+		}
+		case 4:
+		{
+			// Parametric approximation to dsigma/dM for e+e- pair production
+			parGuesses.push_back(0.0);
 			break;
 		}
 	}
@@ -672,10 +675,10 @@ double MggFitter::MggFitFunction(double *x, double *par)
 			fEta_exc = N_eta * f_etaLineshape->Eval(locMgg-dmu);
 			
 			if(m_etaPionYieldBGGEN>0.1) fEta_pi = A_etapi * m_etaPionYieldBGGEN * h_etaPionLineshape->GetBinContent(
-				h_etaPionLineshape->FindBin(locMgg-dmu-0.001)) * corrRatioEtaPi;
+				h_etaPionLineshape->FindBin(locMgg-dmu-0.0025)) * corrRatioEtaPi;
 			
 			if(m_hadronicBkgdYieldBGGEN>0.1) fEta_bkgd = A_bkgd * m_hadronicBkgdYieldBGGEN * h_hadronicBkgdLineshape->GetBinContent(
-				h_hadronicBkgdLineshape->FindBin(locMgg-dmu-0.001)) * corrRatioBkgd;
+				h_hadronicBkgdLineshape->FindBin(locMgg-dmu-0.0025)) * corrRatioBkgd;
 			
 			fEta = fEta_exc + fEta_pi + fEta_bkgd;
 			break;
@@ -815,6 +818,18 @@ double MggFitter::MggFitFunction(double *x, double *par)
 			nParameters += (fitOption_poly+1);
 			
 			fBkgd = f_chebyshev->Eval(locMgg);
+			break;
+		}
+		case 4:
+		{
+			// Parametric approximation to dsigma/dM for e+e- pair production
+			//fBkgd = (par[nParameters]/locMgg)*(log(2.0*9.5/locMgg) - 0.5);
+			
+			//fBkgd = (par[nParameters]/locMgg) * (sqrt(1.0 - 4.0*pow(0.000511/locMgg,2.0))*(1.0 + (2.0*pow(0.000511/locMgg,2.0)))) 
+			//	* log(2.0*10.0/locMgg);
+			fBkgd = (par[nParameters]/locMgg) * (1.0 + 2.0*pow(0.000511/locMgg,2.0)) * (6.0*log(10.0/locMgg) + 4.0*log(2.0));
+			
+			nParameters++;
 			break;
 		}
 	}

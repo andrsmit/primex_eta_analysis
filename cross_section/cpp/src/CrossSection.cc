@@ -56,6 +56,7 @@ int main(int argc, char **argv)
 	TApplication theApp("App", &argc, argv);
 	gStyle->SetOptStat(0);
 	gStyle->SetOptFit(111);
+	gStyle->SetOptFit(0);
 	
 	if(locEtaAna.LoadLuminosity()) {
 		printf("\n\nProblem getting integrated luminosity.\n\n");
@@ -79,11 +80,16 @@ int main(int argc, char **argv)
 		fileName = Form("output/yield_phase%d_VetoOption%d_%.1fGeV_%.1fGeV.root",
 			locEtaAna.GetPhase(),locEtaAna.GetVetoOption(), e1, e2);
 	} else {
-		fileName = Form("output/yield_phase%d_VetoOption%d.root",
+		fileName = Form("output/yield_phase%d_VetoOption%d_new.root",
 			locEtaAna.GetPhase(),locEtaAna.GetVetoOption());
+		/*
+		fileName = Form("output/mggShift/yield_phase%d_VetoOption%d_omega0_pol2_2.5MeV.root",
+			locEtaAna.GetPhase(),locEtaAna.GetVetoOption());
+		*/
 	}
 	
-	if(0) {
+	if(1) {
+		
 		if(!locEtaAna.IsMatrixLoaded()) {
 			if(locEtaAna.LoadAngularMatrix()) {
 				printf("\n\nProblem loading angular matrices.\n\n");
@@ -94,8 +100,9 @@ int main(int argc, char **argv)
 			cout << "\n\nProblem getting acceptance.\n\n" << endl;
 		}
 		
-		if(locEtaAna.LoadLineshapes()) {
-			cout << "\n\nProblem loading MC lineshapes.\n\n" << endl;
+		int loadVal = locEtaAna.LoadLineshapes();
+		if(loadVal) {
+			printf("\n\nProblem loading MC lineshapes. (error code %d)\n\n", loadVal);
 			exit(1);
 		}
 		if(locEtaAna.LoadDataHistograms()) {
@@ -114,9 +121,8 @@ int main(int argc, char **argv)
 			if(locEtaAna.GetFitOption(1)>8) locEtaAna.PlotEtaPionFraction();
 		}
 		locEtaAna.PlotBackgrounds();
+		locEtaAna.PlotOmegaFitPars();
 		
-		double de, e1, e2;
-		locEtaAna.GetBeamEnergyBinning(de, e1, e2);
 		locEtaAna.WriteROOTFile(fileName);
 		locFitter.SetYield((TH1F*)locEtaAna.GetAngularYield(1));
 		if(locEtaAna.GetFitOption(1)>=7) {
@@ -127,14 +133,25 @@ int main(int argc, char **argv)
 		
 		TFile *fIn = new TFile(fileName.Data(), "READ");
 		
+		/*TH1F *hYield = (TH1F*)fIn->Get("Counts");
+		TH1F *hEmptyYield = (TH1F*)fIn->Get("EmptyCounts");
+		hYield->Add(hEmptyYield,-1.0);*/
+		
 		TH1F *hYield = (TH1F*)fIn->Get("AngularYieldFit");
-		TH1F *hBkgd1 = (TH1F*)fIn->Get("HadronicBkgdYield");
-		TH1F *hBkgd2 = (TH1F*)fIn->Get("EtaPionYield");
+		//TH1F *hYield = (TH1F*)fIn->Get("AngularYieldInclusive");
+		
+		TH1F *hBkgd0 = (TH1F*)fIn->Get("BkgdYield");
+		TH1F *hBkgd1 = (TH1F*)fIn->Get("OmegaYield");
+		TH1F *hBkgd2 = (TH1F*)fIn->Get("HadronicBkgdYield");
+		TH1F *hBkgd3 = (TH1F*)fIn->Get("EtaPionYield");
 		
 		for(int ibin=1; ibin<=hYield->GetXaxis()->GetNbins(); ibin++) {
 			
 			double y   = hYield->GetBinContent(ibin);
 			double ye  = hYield->GetBinError(ibin);
+			
+			double b0  = hBkgd0->GetBinContent(ibin);
+			double b0e = hBkgd0->GetBinError(ibin);
 			
 			double b1  = hBkgd1->GetBinContent(ibin);
 			double b1e = hBkgd1->GetBinError(ibin);
@@ -142,13 +159,16 @@ int main(int argc, char **argv)
 			double b2  = hBkgd2->GetBinContent(ibin);
 			double b2e = hBkgd2->GetBinError(ibin);
 			
+			double b3  = hBkgd3->GetBinContent(ibin);
+			double b3e = hBkgd3->GetBinError(ibin);
+			
 			double sum, sume;
 			if(1) {
 				sum  = y;
 				sume = ye;
 			} else {
-				sum  = y+b1+b2;
-				sume = sqrt(pow(ye,2.0)+pow(b1e,2.0)+pow(b2e,2.0));
+				sum  = y+b2+b3;
+				sume = sqrt(pow(ye,2.0)+pow(b0e,2.0)+pow(b1e,2.0)+pow(b2e,2.0)+pow(b3e,2.0));
 			}
 			/*
 			if(hYield->GetXaxis()->GetBinCenter(ibin)<0.5) {
@@ -159,6 +179,27 @@ int main(int argc, char **argv)
 			*/
 			hYield->SetBinContent(ibin, sum);
 			//hYield->SetBinError(ibin, sume);
+			
+			/*
+			for(int ibin=1; ibin<=hYield->GetXaxis()->GetNbins(); ibin++) {
+				hYield->SetBinContent(ibin, 0.0);
+				hYield->SetBinError(ibin, 0.0);
+			}
+			
+			TFile *fIgalYield = new 	TFile("/work/halld/home/ijaegle/public/ForDrew/results-2022-08-inc0_im_ra_v_th_9-hist-rp-2022-08-ver00-full-skim-cut-nominal-11052025-mm022-egcor-0.99-mc01.root", "READ");
+			//TGraphErrors *gIgalYield = (TGraphErrors*)fIgalYield->Get("gr_theta_eta");
+			TGraphErrors *gIgalYield = (TGraphErrors*)fIgalYield->Get("gr_co_s_theta_eta");
+			for(int i=0; i<gIgalYield->GetN(); i++) {
+				double ang  = gIgalYield->GetX()[i];
+				double yie  = gIgalYield->GetY()[i];
+				double yieE = gIgalYield->GetEY()[i];
+				if(ang>4.5) continue;
+				int locBin = hYield->FindBin(ang);
+				hYield->SetBinContent(locBin, yie);
+				hYield->SetBinError(locBin, yieE);
+			}
+			fIgalYield->Close();
+			*/
 		}
 		
 		hYield->SetDirectory(0);
@@ -167,8 +208,10 @@ int main(int argc, char **argv)
 	}
 	
 	gStyle->SetStatX(0.50);
+	gStyle->SetOptStat(0);
+	//gStyle->SetOptFit(0);
 	
-	double minFitRange = 0.04, maxFitRange = 2.0;
+	double minFitRange = 0.0, maxFitRange = 3.5;
 	locFitter.FitAngularYield(minFitRange, maxFitRange);
 	
 	gSystem->ProcessEvents();

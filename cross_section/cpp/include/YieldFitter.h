@@ -118,6 +118,8 @@ class YieldFitter {
 		vector<TH1F*> h_PrimReal,   h_PrimImag;
 		vector<TH1F*> h_StrongReal, h_StrongImag;
 		
+		TH1F *h_TheoryTulio;
+		
 		double m_luminosity;
 		
 		vector<TString> m_components;

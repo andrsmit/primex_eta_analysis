@@ -19,7 +19,8 @@ int EtaAnalyzer::LoadLuminosity() {
 	TFile *locFluxFile = new TFile(fluxFileName.Data(), "READ");
 	TH1F  *locFluxHist = (TH1F*)locFluxFile->Get("flux_vs_egamma");
 	
-	double integratedFlux = IntegrateFluxHist(locFluxHist, m_minBeamEnergy, m_maxBeamEnergy);
+	double integratedFlux, integratedFluxErr;
+	IntegrateFluxHist(locFluxHist, m_minBeamEnergy, m_maxBeamEnergy, integratedFlux, integratedFluxErr);
 	m_luminosity = integratedFlux * targetThickness;
 	
 	//
@@ -30,7 +31,7 @@ int EtaAnalyzer::LoadLuminosity() {
 	// So even when fitting and obtaining the pdf of the empty bkgd, I still subtract the full peak
 	// around the eta mass region and apply the correction to the target density accordingly.
 	// 
-	m_luminosity *= 0.98;
+	m_luminosity *= (1.0 - 0.0205);
 	
 	// apply correction based on photon absorption inside target:
 	m_luminosity *= 0.985;
@@ -44,9 +45,11 @@ int EtaAnalyzer::LoadLuminosity() {
 		double locMinEnergy = h_fluxWeights->GetBinCenter(ibin) - 0.5*m_beamEnergyBinSize;
 		double locMaxEnergy = h_fluxWeights->GetBinCenter(ibin) + 0.5*m_beamEnergyBinSize;
 		
-		double locFlux = IntegrateFluxHist(locFluxHist, locMinEnergy, locMaxEnergy);
+		double locFlux, locFluxErr;
+		IntegrateFluxHist(locFluxHist, locMinEnergy, locMaxEnergy, locFlux, locFluxErr);
 		if(integratedFlux>0.0) {
 			h_fluxWeights->SetBinContent(ibin, locFlux/integratedFlux);
+			//h_fluxWeights->SetBinContent(ibin, 1.0/((double)h_fluxWeights->GetXaxis()->GetNbins()));
 			h_fluxWeights->SetBinError(ibin, sqrt(locFlux)/integratedFlux);
 		}
 	}
@@ -54,7 +57,7 @@ int EtaAnalyzer::LoadLuminosity() {
 	//------------------------------------------------//
 	
 	locFluxFile->Close();
-	printf("  Integrated Photon Flux: %f\n", integratedFlux);
+	printf("  Integrated Photon Flux: %e +/- %e\n", integratedFlux, integratedFluxErr);
 	printf("  Integrated Luminosity [%.2f GeV - %.2f GeV]: %f pb-1\n", m_minBeamEnergy, m_maxBeamEnergy, (1.e-6)*m_luminosity);
 	
 	return 0;
@@ -68,7 +71,7 @@ int EtaAnalyzer::LoadEmptyTargetFluxRatio() {
 	// For the 3.8% RL Helium target, roughly 3% of photons are absorbed within the target. 
 	// The ratio we use to scale our empty target data should be reduced by this factor.
 	//
-	double scaleFactor = 0.97;
+	double scaleFactor = exp(-0.038);//0.97;
 	
 	TString fluxFileNameFull  = Form("%s/phase%d/full.root",  fluxDirectory.Data(), m_phase);
 	TString fluxFileNameEmpty = Form("%s/phase%d/empty.root", fluxDirectory.Data(), m_phase);
@@ -86,17 +89,24 @@ int EtaAnalyzer::LoadEmptyTargetFluxRatio() {
 	TH1F  *hFull  = (TH1F*)fFull->Get("flux_vs_egamma")->Clone("hFull");
 	TH1F  *hEmpty = (TH1F*)fEmpty->Get("flux_vs_egamma")->Clone("hEmpty");
 	
-	double integratedFluxFull  = IntegrateFluxHist(hFull,  m_minBeamEnergy, m_maxBeamEnergy);
-	double integratedFluxEmpty = IntegrateFluxHist(hEmpty, m_minBeamEnergy, m_maxBeamEnergy);
+	double integratedFluxFull, integratedFluxFullErr;
+	IntegrateFluxHist(hFull,  m_minBeamEnergy, m_maxBeamEnergy, integratedFluxFull, integratedFluxFullErr);
+	
+	double integratedFluxEmpty, integratedFluxEmptyErr;
+	IntegrateFluxHist(hEmpty, m_minBeamEnergy, m_maxBeamEnergy, integratedFluxEmpty, integratedFluxEmptyErr);
 	
 	m_emptyTargetFluxRatio = scaleFactor * (integratedFluxFull / integratedFluxEmpty);
 	
+	printf("  Integrated Photon Flux (empty): %e +/- %e\n", integratedFluxEmpty, integratedFluxEmptyErr);
 	printf("  Photon Flux Ratio (Full/Empty): %f\n", m_emptyTargetFluxRatio);
 	
 	return 0;
 }
 
-double EtaAnalyzer::IntegrateFluxHist(TH1F *hFlux, double minEnergy, double maxEnergy) {
+void EtaAnalyzer::IntegrateFluxHist(TH1F *hFlux, double minEnergy, double maxEnergy, double &flux, double &fluxErr) {
+	
+	flux    = 0.0;
+	fluxErr = 0.0;
 	
 	// find the bin numbers to integrate flux over:
 	
@@ -117,8 +127,12 @@ double EtaAnalyzer::IntegrateFluxHist(TH1F *hFlux, double minEnergy, double maxE
 	
 	// integrate photon flux:
 	
-	double integratedFlux = hFlux->Integral(locMinimumBin, locMaximumBin);
-	return integratedFlux;
+	for(int ibin=locMinimumBin; ibin<=locMaximumBin; ibin++) {
+		flux    += hFlux->GetBinContent(ibin);
+		fluxErr += pow(hFlux->GetBinError(ibin),2.0);
+	}
+	fluxErr = sqrt(fluxErr);
+	return;
 }
 
 void EtaAnalyzer::InitializeFluxHist() {

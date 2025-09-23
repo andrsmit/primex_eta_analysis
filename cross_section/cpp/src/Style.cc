@@ -20,7 +20,7 @@ void styleMggHistogram(TH1F *h1, int lineColor, int markerStyle) {
 	h1->SetFillColor(lineColor-10);
 	h1->SetLineWidth(1);
 	
-	h1->SetMinimum(0.);
+	//h1->SetMinimum(0.);
 	
 	return;
 }

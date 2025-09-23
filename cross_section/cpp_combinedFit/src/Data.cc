@@ -49,10 +49,10 @@ int EtaAnalyzer::LoadDataHistograms()
 	
 	TString fileTypeString = m_phase==1 ? "EVIO" : "REST";
 	
-	TString fullTargetFileName  = Form("%s/phase%d/%s/%s/full_target_%s%s%s.root",  dataDirectory.Data(), m_phase, fileTypeString.Data(), 
+	TString fullTargetFileName  = Form("%s/phase%d/%s/%s/0.3percent_beamEnergy_shift/full_target_%s%s%s.root",  dataDirectory.Data(), m_phase, fileTypeString.Data(), 
 		dirString.Data(), fieldString.Data(), anaString.Data(), vetoStr.Data());
 	
-	TString emptyTargetFileName = Form("%s/phase%d/%s/%s/empty_target_%s%s%s.root", dataDirectory.Data(), m_phase, fileTypeString.Data(), 
+	TString emptyTargetFileName = Form("%s/phase%d/%s/%s/0.3percent_beamEnergy_shift/empty_target_%s%s%s.root", dataDirectory.Data(), m_phase, fileTypeString.Data(), 
 		dirString.Data(), fieldString.Data(), anaString.Data(), vetoStr.Data());
 	
 	if(gSystem->AccessPathName(fullTargetFileName.Data()) || gSystem->AccessPathName(emptyTargetFileName.Data()))

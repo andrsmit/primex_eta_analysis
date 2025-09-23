@@ -58,9 +58,14 @@ class EtaAnalyzer {
 			h_Counts(nullptr), 
 			h_EmptyCounts(nullptr), 
 			h_EmptyYield(nullptr), 
-			h_OmegaYield(nullptr),  
+			h_OmegaYield(nullptr), 
+			h_BkgdYield(nullptr), 
 			h_HadronicBkgdYield(nullptr), 
 			h_EtaPionYield(nullptr), 
+			h_omega_mu_fit(nullptr),
+			h_omega_sigma_fit(nullptr),
+			h_omega_alpha_fit(nullptr),
+			h_omega_n_fit(nullptr),
 			cFit(nullptr), 
 			cYield(nullptr), 
 			cCrossSection(nullptr), 
@@ -69,6 +74,7 @@ class EtaAnalyzer {
 			cHadronicBkgdFraction(nullptr),
 			cEtaPionFraction(nullptr),
 			cCounts(nullptr),
+			cOmegaFitPars(nullptr),
 			cBackgrounds(nullptr),
 			l0(nullptr), 
 			lp(nullptr), 
@@ -235,7 +241,7 @@ class EtaAnalyzer {
 		int    LoadLuminosity();
 		int    LoadEmptyTargetFluxRatio();
 		void   InitializeFluxHist();
-		double IntegrateFluxHist(TH1F*, double, double);
+		void IntegrateFluxHist(TH1F*, double, double, double&, double&);
 		double GetLuminosity() { return m_luminosity; }
 		TH1F* GetFluxWeights() { return h_fluxWeights; }
 		
@@ -261,11 +267,13 @@ class EtaAnalyzer {
 		void PlotEtaPionFraction();
 		void PlotBackgrounds();
 		void PlotLineshapeShift();
+		void PlotOmegaFitPars();
 		void WriteROOTFile(TString fileName="yield.root");
 		
 		TH1F* GetAngularYield(int opt=0) { 
-			if(opt==0) return h_Yield;
-			else       return h_YieldFit;
+			if(opt==0)      return h_Yield;
+			else if(opt==1) return h_YieldFit;
+			else            return h_YieldInclusive;
 		}
 	
 	private:
@@ -297,7 +305,7 @@ class EtaAnalyzer {
 		
 		// 
 		TH1F *h_Counts,     *h_EmptyCounts;
-		TH1F *h_EmptyYield, *h_HadronicBkgdYield, *h_EtaPionYield, *h_OmegaYield;
+		TH1F *h_EmptyYield, *h_HadronicBkgdYield, *h_EtaPionYield, *h_OmegaYield, *h_BkgdYield;
 		
 		//-----------------------------------------------------------//
 		// Run-specific numbers:
@@ -369,14 +377,17 @@ class EtaAnalyzer {
 		vector<pair<double,double>> m_angularYieldEtaPion;
 		
 		vector<pair<double,double>> m_angularYieldOmega;
+		vector<pair<double,double>> m_angularYieldBkgd;
+		
+		vector<pair<double,double>> m_omegaFitMu, m_omegaFitSigma, m_omegaFitAlpha, m_omegaFitN;
 		
 		vector<pair<double,double>> m_fitResult_shift;
 		vector<pair<double,double>> m_fitResult_bkgdShift;
 		
 		// Histograms to store results:
 		
-		TH1F *h_Yield,        *h_YieldFit;
-		TH1F *h_CrossSection, *h_CrossSectionFit;
+		TH1F *h_Yield,        *h_YieldFit,        *h_YieldInclusive;
+		TH1F *h_CrossSection, *h_CrossSectionFit, *h_CrossSectionInclusive;
 		TH1F *h_Acceptance;
 		
 		void IntegrateHistogram(TH1F*, double&, double&, double, double);
@@ -389,6 +400,9 @@ class EtaAnalyzer {
 		TCanvas *cCounts, *cBackgrounds;
 		TPad *pFit, *pRes;
 		void InitializeFitCanvas();
+		
+		TCanvas *cOmegaFitPars;
+		TH1F *h_omega_mu_fit, *h_omega_sigma_fit, *h_omega_alpha_fit, *h_omega_n_fit;
 		
 		TCanvas *cEmpty = NULL;
 		void InitializeEmptyCanvas();

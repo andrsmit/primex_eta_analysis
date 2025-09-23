@@ -155,7 +155,7 @@ void EtaAnalyzer::SetFitOption_signal(int option)
 }
 void EtaAnalyzer::SetFitOption_bkgd(int option) 
 {
-	if((option<0) || (option>3)) {
+	if((option<0) || (option>4)) {
 		printf("\nUnsupported background fit option provided (should be 1-5). Using default option: %d\n", m_fitOption_bkgd);
 	}
 	else {
@@ -559,6 +559,10 @@ void EtaAnalyzer::DrawFitResult(TH1F *h1, TH1F *hPull, TF1 *fFit, TF1 *fSignal, 
 	h1->GetXaxis()->SetRangeUser(m_minFitRange,m_maxFitRange);
 	hPull->GetXaxis()->SetRangeUser(m_minFitRange, m_maxFitRange);
 	
+	h1->SetMinimum(-20.);
+	h1->GetXaxis()->SetRangeUser(0.45,0.65);
+	hPull->GetXaxis()->SetRangeUser(0.45,0.65);
+	
 	//gStyle->SetOptFit(0);
 	
 	pFit->cd();
@@ -623,7 +627,7 @@ void EtaAnalyzer::ExtractAngularYield(int drawOption)
 		double locMaxAngle = locAngle + m_angularBin[iThetaBin].second;
 		
 		//if(locAngle<0.5 || locAngle>0.38) continue;
-		//if(locAngle<2.40) continue;
+		//if(locAngle<2.00) continue;
 		
 		//----------------------------------------------//
 		// Get 1-d projection of invariant mass spectrum:
@@ -667,6 +671,28 @@ void EtaAnalyzer::ExtractAngularYield(int drawOption)
 		InitializeMggFitter(locFitter, this, m_angularBin[iThetaBin].first, m_angularBin[iThetaBin].second);
 		locFitter.SetData(locHistFull);
 		
+		//=============================//
+		// Offset between simulated lineshape and data:
+		// 8/26/25: applied manual corrections in the analysis code, so this should now be fixed to 0:
+		
+		//locFitter.lineshapeOffset = 0.0;
+		double p0 =  0.00165029;
+		double p1 = -0.00429059;
+		double p2 =  0.00403517;
+		double p3 = -0.00121199;
+		double p4 = 0.000119845;
+		locFitter.lineshapeOffset = p0 + p1*locAngle + p2*pow(locAngle,2.0) 
+			+ p3*pow(locAngle,3.0) + p4*pow(locAngle,4.0);
+		/*
+		locFitter.lineshapeOffset = 0.0 +
+			(-0.000115714*pow(locAngle,1.0)) + 
+			(9.0441e-05*pow(locAngle,2.0)) +
+			(0.000121084*pow(locAngle,3.0)) +
+			(-2.84762e-05*pow(locAngle,4.0));
+		*/
+		//=============================//
+		
+		
 		double locBinSize = 0.0;
 		double lineshapeWindowSize, lineshapeAngleLow, lineshapeAngleHigh;
 		double binSizeRatio = 1.0;
@@ -706,7 +732,20 @@ void EtaAnalyzer::ExtractAngularYield(int drawOption)
 		}
 		else {
 			hEta = (TH1F*)h_etaLineshapeCoh->ProjectionY("hEta", minAngleBin, maxAngleBin, "e");
+			/*
+			lineshapeWindowSize = 1.0;
+			
+			lineshapeAngleLow  = locAngle - lineshapeWindowSize;
+			lineshapeAngleHigh = locAngle + lineshapeWindowSize;
+			if(lineshapeAngleLow < 0.0) {
+				lineshapeAngleLow  = 0.00;
+				lineshapeAngleHigh = 2.0*lineshapeWindowSize;
+			}
+			hEta = (TH1F*)h_etaLineshapeCoh->ProjectionY("hEta",
+				h_etaLineshapeCoh->GetXaxis()->FindBin(lineshapeAngleLow),
+				h_etaLineshapeCoh->GetXaxis()->FindBin(lineshapeAngleHigh)-1, "e");
 			//hEta->Rebin(m_rebinsMgg);
+			*/
 		}
 		locFitter.SetEtaLineshape(hEta);
 		
@@ -729,7 +768,7 @@ void EtaAnalyzer::ExtractAngularYield(int drawOption)
 		locFitter.SetOmegaLineshape(hOmega);
 		
 		if(m_fitOption_omega==4) {
-			lineshapeWindowSize = 1.0;
+			lineshapeWindowSize = 2.0;
 			
 			lineshapeAngleLow  = locAngle - lineshapeWindowSize;
 			lineshapeAngleHigh = locAngle + lineshapeWindowSize;
@@ -1078,7 +1117,7 @@ void EtaAnalyzer::ExtractAngularYield(int drawOption)
 				//cFit->SaveAs("full_target_fit.pdf");
 				//cEmpty->SaveAs("empty_target_fit.pdf");
 			}
-			//getchar();
+			getchar();
 			//int character = getchar();
 			//printf("The entered character is : %c", character);
 			//int input;

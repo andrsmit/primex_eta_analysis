@@ -30,8 +30,8 @@ int EtaAnalyzer::LoadDataHistograms()
 			anaString = "_BCAL";
 			break;
 		case 4:
-			dirString = "BEAM";
-			anaString = "_BEAM";
+			dirString = "beam";
+			anaString = "_beam";
 			break;
 		case 5:
 			dirString = "TOF";
@@ -47,10 +47,12 @@ int EtaAnalyzer::LoadDataHistograms()
 	if(m_analysisOption>0) vetoStr = Form("_VetoOption%d", m_vetoOption);
 	if(m_analysisOption==8) vetoStr = "";
 	
-	TString fullTargetFileName  = Form("%s/phase%d/%s/full_target_%s%s%s.root",  dataDirectory.Data(), m_phase, 
+	TString fileTypeString = m_phase==1 ? "EVIO" : "REST";
+	
+	TString fullTargetFileName  = Form("%s/phase%d/%s/CORRECTED_0.5PERCENT/%s/full_target_%s%s%s.root",  dataDirectory.Data(), m_phase, fileTypeString.Data(), 
 		dirString.Data(), fieldString.Data(), anaString.Data(), vetoStr.Data());
 	
-	TString emptyTargetFileName = Form("%s/phase%d/%s/empty_target_%s%s%s.root", dataDirectory.Data(), m_phase, 
+	TString emptyTargetFileName = Form("%s/phase%d/%s/CORRECTED_0.5PERCENT/%s/empty_target_%s%s%s.root", dataDirectory.Data(), m_phase, fileTypeString.Data(), 
 		dirString.Data(), fieldString.Data(), anaString.Data(), vetoStr.Data());
 	
 	if(gSystem->AccessPathName(fullTargetFileName.Data()) || gSystem->AccessPathName(emptyTargetFileName.Data()))
@@ -140,14 +142,14 @@ int EtaAnalyzer::LoadLineshapes()
 	printf("\nREADING LINESHAPES...\n");
 	
 	if(LoadEtaLineshape()) return 1;
-	if(LoadBGGENLineshape()) return 1;
-	if(LoadEtaPionLineshape()) return 1;
-	if(LoadOmegaLineshape()) return 1;
+	if(LoadBGGENLineshape()) return 2;
+	if(LoadEtaPionLineshape()) return 3;
+	if(LoadOmegaLineshape()) return 4;
 	
 	// Read the lineshape of omega->pi0+gamma from the first FDC package:
 	if(m_fitOption_empty==1 && m_emptyFitOption_fdc>=2)
 	{
-		if(LoadFDCOmegaLineshape()) return 1;
+		if(LoadFDCOmegaLineshape()) return 5;
 	}
 	return 0;
 }
@@ -166,7 +168,7 @@ int EtaAnalyzer::LoadEtaLineshape()
 			anaString = "_BCAL";
 			break;
 		case 4:
-			anaString = "_BEAM";
+			anaString = "_beam";
 			break;
 		case 5:
 			anaString = "_TOF";
@@ -224,7 +226,20 @@ int EtaAnalyzer::LoadEtaLineshape()
 	else if(m_analysisOption==8) {
 		TFile *mcFile = new TFile(mcFileName.Data(), "READ");
 		
-		h_etaLineshapeCoh = (TH2F*)mcFile->Get("mgg_const_angularSmear_01")->Clone("etaLineshapeCoh");
+		TString locHistName = "mgg_const_angularSmear_00";
+		if(m_matrixHistName.Contains("_AngularSmear_")) {
+			locHistName = Form("mgg_const_angularSmear_%c%c",
+				m_matrixHistName[m_matrixHistName.Length()-2], m_matrixHistName[m_matrixHistName.Length()-1]);
+		}
+		else if(m_matrixHistName.Contains("_AngularShift_")) {
+			locHistName = Form("mgg_const_angularShift_%c%c",
+				m_matrixHistName[m_matrixHistName.Length()-2], m_matrixHistName[m_matrixHistName.Length()-1]);
+		}
+		printf("\n\n\n");
+		printf("LINESHAPE HISTOGRAM: %s\n", locHistName.Data());
+		printf("\n\n\n");
+		
+		h_etaLineshapeCoh = (TH2F*)mcFile->Get(locHistName.Data())->Clone("etaLineshapeCoh");
 		h_etaLineshapeCoh->SetDirectory(0);
 		mcFile->Close();
 	}
@@ -232,7 +247,7 @@ int EtaAnalyzer::LoadEtaLineshape()
 		TFile *mcFile = new TFile(mcFileName.Data(), "READ");
 		
 		if(m_analysisOption==0) {
-			h_etaLineshapeCoh = (TH2F*)mcFile->Get(Form("VetoOption%d/mgg_const_coh_cut_veto_%d", 
+			h_etaLineshapeCoh = (TH2F*)mcFile->Get(Form("VetoOption%d/mgg_const_coh_veto_%d", 
 				m_vetoOption, m_vetoOption))->Clone("etaLineshape");
 		} else {
 			h_etaLineshapeCoh = (TH2F*)mcFile->Get(Form("%s",m_mggHistName.Data()))->Clone("etaLineshapeCoh");
@@ -246,14 +261,28 @@ int EtaAnalyzer::LoadEtaLineshape()
 
 int EtaAnalyzer::LoadBGGENLineshape()
 {
-	TString mcFileName  = Form("%s/phase%d/Helium_VetoOption%d.root",  bggenDirectory.Data(), m_phase, m_vetoOption);
+	TString anaString = "";
+	TString locMggHistName = "mgg_const_bggen_signal";
+	/*
+	if(m_analysisOption==4) {
+		int beamCutIndex = 0;
+		if(m_mggHistName.Contains("mgg_Elasticity")) {
+			int locLength = m_mggHistName.Length();
+			TString indexStr(m_mggHistName(locLength-2,locLength));
+			beamCutIndex = indexStr.Atoi();
+		}
+		anaString = "_beam";
+		locMggHistName = Form("mgg_Elasticity_signal_%02d",beamCutIndex);
+	}
+	*/
+	TString mcFileName  = Form("%s/phase%d/Helium_VetoOption%d%s.root",  bggenDirectory.Data(), m_phase, m_vetoOption, anaString.Data());
 	if(gSystem->AccessPathName(mcFileName.Data())) return 1;
 	
 	printf("  Eta lineshape from %s\n", mcFileName.Data());
 	
 	TFile *mcFile = new TFile(mcFileName.Data(), "READ");
 	
-	h_etaLineshapeBGGEN = (TH2F*)mcFile->Get("mgg_const_bggen_signal_cut")->Clone("etaLineshapeBGGEN");
+	h_etaLineshapeBGGEN = (TH2F*)mcFile->Get(Form("%s",locMggHistName.Data()))->Clone("etaLineshapeBGGEN");
 	h_etaLineshapeBGGEN->SetDirectory(0);
 	mcFile->Close();
 	return 0;
@@ -261,9 +290,24 @@ int EtaAnalyzer::LoadBGGENLineshape()
 
 int EtaAnalyzer::LoadEtaPionLineshape()
 {
-	TString cutStr = "_cut";
-	
-	TString mcFileName  = Form("%s/phase%d/Helium_VetoOption%d.root",  bggenDirectory.Data(), m_phase, m_vetoOption);
+	TString anaString = "";
+	TString locMggHistName1 = "mgg_const_bggen_";
+	TString locMggHistName2 = "_cut";
+	// histName = 'Form(%ssignal%s, locMggHistName1, locMggHistName2)', or 'Form(%setapion%s, locMggHistName1, locMggHistName2)'
+	/*
+	if(m_analysisOption==4) {
+		int beamCutIndex = 0;
+		if(m_mggHistName.Contains("mgg_Elasticity")) {
+			int locLength = m_mggHistName.Length();
+			TString indexStr(m_mggHistName(locLength-2,locLength));
+			beamCutIndex = indexStr.Atoi();
+		}
+		anaString = "_beam";
+		locMggHistName1 = "mgg_Elasticity_";
+		locMggHistName2 = Form("_%02d",beamCutIndex);
+	}
+	*/
+	TString mcFileName  = Form("%s/phase%d/Helium_VetoOption%d%s.root",  bggenDirectory.Data(), m_phase, m_vetoOption, anaString.Data());
 	if(gSystem->AccessPathName(mcFileName.Data())) return 1;
 	
 	printf("  Eta+Pion lineshape from %s\n", mcFileName.Data());
@@ -280,32 +324,36 @@ int EtaAnalyzer::LoadEtaPionLineshape()
 	
 	// eta+pion background channels:
 	
-	h_eta1PionLineshape = (TH2F*)mcFile->Get(Form("mgg_const_bggen_etapion%s",cutStr.Data()))->Clone("etapionLineshape");
+	h_eta1PionLineshape = (TH2F*)mcFile->Get(Form("%setapion%s", locMggHistName1.Data(), locMggHistName2.Data()))->Clone("etapionLineshape");
 	h_eta1PionLineshape->SetDirectory(0);
 	h_eta1PionLineshape->Scale(scaleFactor);
 	
 	// eta+2pion background channels:
 	
-	h_eta2PionLineshape = (TH2F*)mcFile->Get(Form("mgg_const_bggen_eta2pion",cutStr.Data()))->Clone("eta2pionLineshape");
+	h_eta2PionLineshape = (TH2F*)mcFile->Get(Form("%seta2pion%s", locMggHistName1.Data(), locMggHistName2.Data()))->Clone("eta2pionLineshape");
 	h_eta2PionLineshape->SetDirectory(0);
 	h_eta2PionLineshape->Scale(scaleFactor);
 	
 	// eta+3pion background channels:
 	
-	h_eta3PionLineshape = (TH2F*)mcFile->Get(Form("mgg_const_bggen_eta3pion%s",cutStr.Data()))->Clone("eta3pionLineshape");
+	h_eta3PionLineshape = (TH2F*)mcFile->Get(Form("%seta3pion%s", locMggHistName1.Data(), locMggHistName2.Data()))->Clone("eta3pionLineshape");
 	h_eta3PionLineshape->SetDirectory(0);
 	h_eta3PionLineshape->Scale(scaleFactor);
 	
 	// other hadronic background channels:
 	
-	h_hadronicBkgdLineshape = (TH2F*)mcFile->Get(Form("mgg_const_bggen_bkgd%s",cutStr.Data()))->Clone("bkgdLineshape");
+	h_hadronicBkgdLineshape = (TH2F*)mcFile->Get(Form("%sbkgd%s", locMggHistName1.Data(), locMggHistName2.Data()))->Clone("bkgdLineshape");
 	h_hadronicBkgdLineshape->SetDirectory(0);
 	h_hadronicBkgdLineshape->Scale(scaleFactor);
-	
+	/*
+	TH2F *h_rhoBkgdLineshape = (TH2F*)mcFile->Get(Form("%srho%s", locMggHistName1.Data(), locMggHistName2.Data()))->Clone("rhoBkgdLineshape");
+	h_rhoBkgdLineshape->Scale(scaleFactor);
+	h_hadronicBkgdLineshape->Add(h_rhoBkgdLineshape);
+	*/
 	//-------------------------------------------------------------------//
 	// Store fractions of each background:
 	
-	TH2F *h2_exclusive = (TH2F*)mcFile->Get("mgg_const_bggen_signal_cut");
+	TH2F *h2_exclusive = (TH2F*)mcFile->Get(Form("%ssignal%s", locMggHistName1.Data(), locMggHistName2.Data()));
 	h2_exclusive->Scale(scaleFactor);
 	
 	//----------------------//
@@ -405,9 +453,12 @@ int EtaAnalyzer::LoadOmegaLineshape()
 {
 	// Use the lineshape from bggen for the omega+other backgrounds:
 	
-	int locVetoOption = 1;//m_vetoOption;
+	int locVetoOption = 4;
+	if((m_vetoOption==1) || (m_vetoOption==6) || (m_vetoOption==7)) locVetoOption = m_vetoOption;
 	
-	TString mcFileName  = Form("%s/phase%d/Helium_VetoOption%d.root",  bggenDirectory.Data(), 1, locVetoOption);
+	TString subDirString = "";
+	//if(m_phase==3) subDirString="/phase3_cuts";
+	TString mcFileName = Form("%s/phase%d%s/Helium_VetoOption%d.root",  bggenDirectory.Data(), 1, subDirString.Data(), locVetoOption);
 	
 	if(gSystem->AccessPathName(mcFileName.Data())) return 1;
 	
@@ -421,7 +472,25 @@ int EtaAnalyzer::LoadOmegaLineshape()
 	h_rhoLineshape = (TH2F*)mcFile->Get("mgg_const_bggen_rho_cut")->Clone("rhoLineshape");
 	h_rhoLineshape->SetDirectory(0);
 	
-	if(m_fitOption_omega==3) h_omegaLineshape->Add(h_rhoLineshape);
+	// thrown histogram:
+	
+	TH1F *locThrown            = (TH1F*)mcFile->Get("thrown_reactions_bggen");
+	double nThrown             = locThrown->Integral() * 10.0;
+	double simulatedLuminosity = nThrown / 1.18673e+08; // 1.18e+08 pb/nucleon is total photoproduction cross section
+	
+	double scaleFactor = 2.0*(1.e-6)*m_luminosity / simulatedLuminosity;
+	
+	h_omegaLineshape->Scale(scaleFactor);
+	h_rhoLineshape->Scale(scaleFactor);
+	
+	if(m_fitOption_omega!=4) {
+		h_omegaLineshape->Add(h_rhoLineshape);
+		
+		TH2F *loc_h2_bkgd = (TH2F*)mcFile->Get("mgg_const_bggen_bkgd_cut")->Clone("bkgdLineshape");
+		loc_h2_bkgd->Scale(scaleFactor);
+		h_omegaLineshape->Add(loc_h2_bkgd);
+		
+	}
 	
 	mcFile->Close();
 	return 0;

@@ -145,7 +145,7 @@ void EtaAnalyzer::SetFitEmptyTarget(int option)
 
 void EtaAnalyzer::SetFitOption_signal(int option) 
 {
-	if((option<1) || (option>11)) {
+	if((option<1) || (option>12)) {
 		printf("\nUnsupported signal fit option provided (should be 1-6). Using default option: %d\n", m_fitOption_signal);
 	}
 	else {
@@ -176,7 +176,7 @@ void EtaAnalyzer::SetFitOption_bkgd(int option, int order)
 }
 void EtaAnalyzer::SetFitOption_omega(int option)
 {
-	if((option<1) || (option>5)) {
+	if((option<0) || (option>5)) {
 		printf("\nUnsupported omega fit option provided (should be 1-3). Using default option: %d\n", m_fitOption_omega);
 	}
 	else {
@@ -219,7 +219,7 @@ void EtaAnalyzer::SetEmptyFitOption_omega(int option)
 }
 void EtaAnalyzer::SetEmptyFitOption_fdc(int option) 
 {
-	if((option<0) || (option>3)) {
+	if((option<0) || (option>4)) {
 		printf("\nUnsupported fdc fit option provided (should be 0-3). Using default option: %d\n", m_emptyFitOption_fdc);
 	}
 	else {
@@ -259,6 +259,8 @@ void EtaAnalyzer::SetFitRange(double min, double max)
 	
 	m_minFitRange = min < locMin ? locMin : min;
 	m_maxFitRange = max;
+	
+	if((m_maxFitRange>0.72) && (m_fitOption_omega==0)) m_fitOption_omega = 1;
 	return;
 }
 
@@ -351,7 +353,7 @@ TString EtaAnalyzer::GetFitOptionStr(int option)
 					optString = "Simulated Lineshape";
 					break;
 				case 6:
-					optString = "Simulated Lineshape + Gaussian";
+					optString = "Simulated Lineshape + Crystal Ball";
 					break;
 				case 7:
 					optString = "Separate lineshapes for eta and eta+pion";
@@ -388,6 +390,9 @@ TString EtaAnalyzer::GetFitOptionStr(int option)
 			break;
 		case 2:
 			switch(m_fitOption_omega) {
+				case 0:
+					optString = "No fit to omega peak";
+					break;
 				case 1:
 					optString = "Crystal Ball (floating parameters)";
 					break;
@@ -470,6 +475,7 @@ void EtaAnalyzer::InitializeFitCanvas()
 	pFit->SetBottomMargin(0.015);
 	pFit->SetTickx(); pFit->SetTicky();
 	pFit->SetFrameLineWidth(2);
+	pFit->SetGrid();
 	
 	pRes = new TPad("padRes", "Mgg Res", 0.005, 0.0050, 0.995, 0.2975);
 	pRes->SetLeftMargin(0.10);
@@ -478,7 +484,7 @@ void EtaAnalyzer::InitializeFitCanvas()
 	pRes->SetBottomMargin(0.325);
 	pRes->SetTickx(); pRes->SetTicky();
 	pRes->SetFrameLineWidth(2);
-	
+	pRes->SetGrid();
 	pFit->Draw();
 	pRes->Draw();
 	return;
@@ -486,8 +492,13 @@ void EtaAnalyzer::InitializeFitCanvas()
 
 void EtaAnalyzer::InitializeEmptyCanvas()
 {
-	cEmpty = new TCanvas("cEmpty", "Empty Mgg Fit", 950, 700);
+	cEmpty = new TCanvas("cEmpty", "Empty Mgg Fit", 1200, 650);
 	styleCanvas(cEmpty);
+	cEmpty->SetLeftMargin(0.10);
+	cEmpty->SetRightMargin(0.02);
+	cEmpty->SetTopMargin(0.075);
+	cEmpty->SetBottomMargin(0.13);
+	cEmpty->SetGrid();
 	return;
 }
 
@@ -545,8 +556,11 @@ void EtaAnalyzer::DrawFitResult(TH1F *h1, TH1F *hPull, TF1 *fFit, TF1 *fSignal, 
 	
 	styleMggHistogram(h1);
 	
-	h1->SetMinimum(-10.);
-	//h1->GetXaxis()->SetRangeUser(0.4,0.95);
+	//h1->SetMinimum(-100.);
+	//h1->GetXaxis()->SetRangeUser(0.3,0.505);
+	
+	//h1->GetXaxis()->SetRangeUser(0.45,0.65);
+	//hPull->GetXaxis()->SetRangeUser(0.45,0.65);
 	
 	//gStyle->SetOptFit(0);
 	
@@ -577,7 +591,7 @@ void EtaAnalyzer::DrawFitResult(TH1F *h1, TH1F *hPull, TF1 *fFit, TF1 *fSignal, 
 	if(fEtaPi) locLeg->AddEntry(fEtaPi, "Eta+Pion Bkgd", "l");
 	if(fHadronicBkgd) locLeg->AddEntry(fHadronicBkgd, "Other Hadronic Bkgd", "l");
 	locLeg->AddEntry(fBkgd, Form("Additional Bkgd (%s)", GetBkgdFitName().Data()), "l");
-	locLeg->Draw();
+	//locLeg->Draw();
 	
 	TLatex locLatex;
 	locLatex.DrawLatexNDC(0.137, 0.834, 
@@ -594,7 +608,7 @@ void EtaAnalyzer::DrawFitResult(TH1F *h1, TH1F *hPull, TF1 *fFit, TF1 *fSignal, 
 	pRes->Update();
 	cFit->Update();
 	cFit->Modified();
-	cFit->SaveAs("example_fit.pdf");
+	//cFit->SaveAs(Form("fit_result_%.2fdeg_%.2fdeg.pdf",minAngle,maxAngle));
 	
 	return;
 }
@@ -610,7 +624,7 @@ void EtaAnalyzer::ExtractAngularYield(int drawOption)
 		double locMaxAngle = locAngle + m_angularBin[iThetaBin].second;
 		
 		//if(locAngle<0.5 || locAngle>0.38) continue;
-		if(locAngle<0.25) continue;
+		if(locAngle<1.10) continue;
 		
 		//----------------------------------------------//
 		// Get 1-d projection of invariant mass spectrum:
@@ -682,7 +696,7 @@ void EtaAnalyzer::ExtractAngularYield(int drawOption)
 		}
 		
 		TH1F *hEta;
-		if(!m_useRawMass && (m_lineshapeOption==1 || locAngle>5.0)) {
+		if(!m_useRawMass && ((m_lineshapeOption==1) || (m_lineshapeOption==2 && locAngle>1.5))) {
 			
 			lineshapeWindowSize = 1.0;
 			
@@ -695,7 +709,7 @@ void EtaAnalyzer::ExtractAngularYield(int drawOption)
 			hEta = (TH1F*)h_etaLineshapeBGGEN->ProjectionY("hEta",
 				h_etaLineshapeBGGEN->GetXaxis()->FindBin(lineshapeAngleLow),
 				h_etaLineshapeBGGEN->GetXaxis()->FindBin(lineshapeAngleHigh)-1, "e");
-			hEta->Rebin(m_rebinsMgg);
+			//hEta->Rebin(m_rebinsMgg);
 		}
 		else {
 			hEta = (TH1F*)h_etaLineshapeCoh->ProjectionY("hEta", minAngleBin, maxAngleBin, "e");
@@ -718,6 +732,7 @@ void EtaAnalyzer::ExtractAngularYield(int drawOption)
 			h_omegaLineshape->GetXaxis()->FindBin(lineshapeAngleLow),
 			h_omegaLineshape->GetXaxis()->FindBin(lineshapeAngleHigh)-1, "e");
 		hOmega->Rebin(m_rebinsMgg);
+		hOmega->Scale((locMaxAngle-locMinAngle)/(2.0*lineshapeWindowSize));
 		locFitter.SetOmegaLineshape(hOmega);
 		
 		if(m_fitOption_omega==4) {
@@ -733,6 +748,7 @@ void EtaAnalyzer::ExtractAngularYield(int drawOption)
 				h_rhoLineshape->GetXaxis()->FindBin(lineshapeAngleLow),
 				h_rhoLineshape->GetXaxis()->FindBin(lineshapeAngleHigh)-1, "e");
 			hRho->Rebin(m_rebinsMgg);
+			hRho->Scale((locMaxAngle-locMinAngle)/(2.0*lineshapeWindowSize));
 			locFitter.SetRhoLineshape(hRho);
 		}
 		
@@ -758,8 +774,9 @@ void EtaAnalyzer::ExtractAngularYield(int drawOption)
 			minAngleBin, maxAngleBin, "e");
 		double nHadronicNarrow = lochHadronicBkgd->Integral();
 		double nHadronicWide   = hHadronicBkgd->Integral();
-		if(nHadronicWide>0.0) hHadronicBkgd->Scale(nHadronicNarrow/nHadronicWide);
-		
+		if(nHadronicWide>=1.0) {
+			hHadronicBkgd->Scale(nHadronicNarrow/nHadronicWide);
+		}
 		locFitter.SetHadronicBkgdLineshape(hHadronicBkgd);
 		
 		double locHadronicBkgdFrac    = h_HadronicBkgdFraction_bggen->GetBinContent(h_HadronicBkgdFraction_bggen->FindBin(locAngle));
@@ -824,7 +841,9 @@ void EtaAnalyzer::ExtractAngularYield(int drawOption)
 			
 			// To get the pdf of the empty target background, we need to combine a wider angular range.
 			
-			double emptyWindowSize = m_phase==1 ? 0.25 : 0.15;
+			double emptyWindowSize = m_phase==1 ? 0.225 : 0.125;
+			
+			if((locMaxAngle-locMinAngle) > (2.0*emptyWindowSize)) emptyWindowSize = 0.5*(locMaxAngle-locMinAngle);
 			
 			emptyAngleLow  = locAngle - emptyWindowSize;
 			emptyAngleHigh = locAngle + emptyWindowSize;
@@ -850,8 +869,9 @@ void EtaAnalyzer::ExtractAngularYield(int drawOption)
 			
 			locHistEmptyWide->Scale(locEmptyRatio);
 			//printf("  empty fraction uncertainty: %f\n", locEmptyRatioErr);
-			locFitter.SetEmpty(locHistEmptyWide, 1.0, locEmptyRatioErr);
+			locFitter.SetEmpty(locHistEmptyWide, 1.0, 0.05);
 			locFitter.FitEmpty();
+			locFitter.DumpEmptyFitParameters();
 		}
 		
 		locFitter.FitData();
@@ -945,12 +965,39 @@ void EtaAnalyzer::ExtractAngularYield(int drawOption)
 		locFitter.GetOmegaYield(locYieldOmega, locYieldOmegaErr);
 		m_angularYieldOmega[iThetaBin] = {locYieldOmega, locYieldOmegaErr};
 		
+		// Get Omega fit parameters to monitor variation across all angular bins:
+		
+		double locOmegaMu,    locOmegaMuErr,    locOmegaSigma, locOmegaSigmaErr;
+		double locOmegaAlpha, locOmegaAlphaErr, locOmegaN,     locOmegaNErr;
+		locFitter.GetOmegaFitPars(locOmegaMu, locOmegaMuErr, locOmegaSigma, locOmegaSigmaErr, 
+			locOmegaAlpha, locOmegaAlphaErr, locOmegaN, locOmegaNErr);
+		m_omegaFitMu[iThetaBin]    = {locOmegaMu,    locOmegaMuErr};
+		m_omegaFitSigma[iThetaBin] = {locOmegaSigma, locOmegaSigmaErr};
+		m_omegaFitAlpha[iThetaBin] = {locOmegaAlpha, locOmegaAlphaErr};
+		m_omegaFitN[iThetaBin]     = {locOmegaN,     locOmegaNErr};
+		
+		// Yield of remaining background (polynomial, exponential, chebyshev,...), integrated between mgg cut:
+		
+		double locYieldBkgd, locYieldBkgdErr;
+		locFitter.GetBkgdYield(locYieldBkgd, locYieldBkgdErr);
+		m_angularYieldBkgd[iThetaBin] = {locYieldBkgd, locYieldBkgdErr};
+		
 		// Shift of invariant mass lineshape fitted to the data:
 		double locShift, locShiftErr;
 		locFitter.GetLineshapeShift(locShift, locShiftErr);
 		m_fitResult_shift[iThetaBin] = {locShift, locShiftErr};
 		
 		//----------------------------------------------//
+		
+		//printf(" angle, yield1,  yield2 = %.2f,  %f,  %f\n", m_angularBin[iThetaBin].first, locYield, locYieldFit);
+		printf(" angle: %f\n", m_angularBin[iThetaBin].first);
+		printf("   integrated counts (full): %f\n", locCounts);
+		printf("   integrated counts (empty): %f\n", locCountsEmpty);
+		printf("   integrated counts (sub): %f\n", (locCounts-locCountsEmpty));
+		printf("   yield from signal fit function integration: %f\n", locYieldFit);
+		printf("   yield from background fit function integration: %f\n", locYield);
+		printf("   hadronic background yield: %f\n", (m_angularYieldHadronicBkgd[iThetaBin].first+m_angularYieldEtaPion[iThetaBin].first));
+		printf("\n");
 		
 		if(drawOption)
 		{
@@ -995,34 +1042,54 @@ void EtaAnalyzer::ExtractAngularYield(int drawOption)
 				TF1 *locfEmptyDraw = nullptr;
 				locFitter.GetEmptyFitFunction(&locfEmptyDraw, "locfEmptyDraw", locHistEmptyWide->GetBinWidth(1));
 				
+				TF1 *locfEmptyBkgdDraw = nullptr;
+				locFitter.GetEmptyBGFitFunction(&locfEmptyBkgdDraw, "locfEmptyBkgdDraw", locHistEmptyWide->GetBinWidth(1));
+				locfEmptyBkgdDraw->SetLineColor(kMagenta);
+				
 				styleMggHistogram(locHistEmpty, kBlue);
 				styleMggHistogram(locHistEmptyWide, kCyan);
 				
 				cEmpty->cd();
-				//locHistEmpty->Draw("PE");
 				locHistEmptyWide->Draw("PE");
 				locfEmptyDraw->Draw("same");
+				locfEmptyBkgdDraw->Draw("same");
+				//locHistEmpty->Draw("PE same");
 				
 				TLegend *locLeg = new TLegend(0.60, 0.60, 0.95, 0.89);
 				locLeg->AddEntry(locHistEmpty,     Form("Empty Bkgd from %.2f#circ - %.2f#circ", locMinAngle,   locMaxAngle));
 				locLeg->AddEntry(locHistEmptyWide, Form("Empty Bkgd from %.2f#circ - %.2f#circ", emptyAngleLow, emptyAngleHigh));
 				//locLeg->Draw();
 				
+				TLatex latEmpty;
+				latEmpty.SetTextColor(kBlack);
+				latEmpty.SetTextFont(52);
+				
+				double emptyWindowSize = m_phase==1 ? 0.225 : 0.125;
+				double minEmptyFitAngle = locAngle - emptyWindowSize;
+				double maxEmptyFitAngle = locAngle + emptyWindowSize;
+				if(minEmptyFitAngle < 0.0) {
+					minEmptyFitAngle = 0.00;
+					maxEmptyFitAngle = 2.0*emptyWindowSize;
+				}
+				latEmpty.DrawLatexNDC(0.635,0.85,Form("%.2f#circ < #theta_{#gamma#gamma}< %.2f#circ", minEmptyFitAngle, maxEmptyFitAngle));
+				
 				cEmpty->Update();
 				cEmpty->Modified();
+				//cEmpty->SaveAs("empty_fit.pdf");
 			}
-			getchar();
+			//getchar();
 		}
-		printf(" angle, yield1,  yield2 = %.2f,  %f,  %f\n", m_angularBin[iThetaBin].first, locYield, locYieldFit);
 	}
 	return;
 }
 
 void EtaAnalyzer::PlotAngularYield()
 {
-	h_Yield    = new TH1F("AngularYield", "", 
+	h_Yield          = new TH1F("AngularYield", "", 
 		m_angularBin.size(), 0.0, m_reconAngleBinSize*(double)(m_angularBin.size()));
-	h_YieldFit = new TH1F("AngularYieldFit", "", 
+	h_YieldFit       = new TH1F("AngularYieldFit", "", 
+		m_angularBin.size(), 0.0, m_reconAngleBinSize*(double)(m_angularBin.size()));
+	h_YieldInclusive = new TH1F("AngularYieldInclusive", "", 
 		m_angularBin.size(), 0.0, m_reconAngleBinSize*(double)(m_angularBin.size()));
 	
 	h_Yield->GetXaxis()->SetTitle("Polar Angle, #theta_{#eta} [#circ]");
@@ -1055,6 +1122,21 @@ void EtaAnalyzer::PlotAngularYield()
 	h_YieldFit->SetLineColor(kRed);
 	h_YieldFit->SetLineWidth(2);
 	
+	h_YieldInclusive->GetXaxis()->SetTitle("Polar Angle, #theta_{#eta} [#circ]");
+	h_YieldInclusive->GetXaxis()->SetTitleSize(0.05);
+	h_YieldInclusive->GetXaxis()->SetTitleOffset(1.0);
+	h_YieldInclusive->GetXaxis()->CenterTitle("");
+	h_YieldInclusive->GetYaxis()->SetTitle(Form("N#left(#eta#rightarrow#gamma#gamma#right) [counts / %.02f#circ]", m_reconAngleBinSize));
+	h_YieldInclusive->GetYaxis()->SetTitleSize(0.05);
+	h_YieldInclusive->GetYaxis()->SetTitleOffset(1.0);
+	h_YieldInclusive->GetYaxis()->CenterTitle("");
+	h_YieldInclusive->SetTitle("");
+	h_YieldInclusive->SetMarkerStyle(4);
+	h_YieldInclusive->SetMarkerSize(0.7);
+	h_YieldInclusive->SetMarkerColor(kBlack);
+	h_YieldInclusive->SetLineColor(kBlack);
+	h_YieldInclusive->SetLineWidth(2);
+	
 	double locMaxYield = 0.0;
 	for(int ibin=0; ibin<m_angularBin.size(); ibin++) {
 		
@@ -1064,16 +1146,24 @@ void EtaAnalyzer::PlotAngularYield()
 		h_YieldFit->SetBinContent(ibin+1, m_angularYieldFit[ibin].first);
 		h_YieldFit->SetBinError(ibin+1, m_angularYieldFit[ibin].second);
 		
-		if(m_angularYield[ibin].first>locMaxYield) {
-			locMaxYield = m_angularYield[ibin].first;
-		}
-		if(m_angularYieldFit[ibin].first>locMaxYield) {
-			locMaxYield = m_angularYieldFit[ibin].first;
+		double locYieldInclusive = m_angularYieldFit[ibin].first 
+			+ m_angularYieldEtaPion[ibin].first 
+			+ m_angularYieldHadronicBkgd[ibin].first;
+		double locYieldInclusiveErr = sqrt(pow(m_angularYieldFit[ibin].second,2.0)
+			+ pow(m_angularYieldEtaPion[ibin].second,2.0)
+			+ pow(m_angularYieldHadronicBkgd[ibin].second,2.0));
+		
+		h_YieldInclusive->SetBinContent(ibin+1, locYieldInclusive);
+		h_YieldInclusive->SetBinError(ibin+1, locYieldInclusiveErr);
+		
+		if(locYieldInclusive>locMaxYield) {
+			locMaxYield = locYieldInclusive;
 		}
 	}
 	
 	h_Yield->GetYaxis()->SetRangeUser(0.0, 1.2*locMaxYield);
 	h_YieldFit->GetYaxis()->SetRangeUser(0.0, 1.2*locMaxYield);
+	h_YieldInclusive->GetYaxis()->SetRangeUser(0.0, 1.2*locMaxYield);
 	
 	if(cYield==NULL) {
 		cYield = new TCanvas("cYield", "Angular Yield", 950, 700);
@@ -1081,7 +1171,8 @@ void EtaAnalyzer::PlotAngularYield()
 	}
 	
 	cYield->cd();
-	h_Yield->Draw("PE1X0");
+	h_YieldInclusive->Draw("PE1X0");
+	h_Yield->Draw("PE1X0 same");
 	h_YieldFit->Draw("PE1X0 same");
 	cYield->Update();
 	cYield->Modified();
@@ -1091,9 +1182,11 @@ void EtaAnalyzer::PlotAngularYield()
 
 void EtaAnalyzer::PlotCrossSection()
 {
-	h_CrossSection    = new TH1F("CrossSection",    "", 
+	h_CrossSection          = new TH1F("CrossSection", "", 
 		m_angularBin.size(), 0.0, m_reconAngleBinSize*(double)(m_angularBin.size()));
-	h_CrossSectionFit = new TH1F("CrossSectionFit", "", 
+	h_CrossSectionFit       = new TH1F("CrossSectionFit", "", 
+		m_angularBin.size(), 0.0, m_reconAngleBinSize*(double)(m_angularBin.size()));
+	h_CrossSectionInclusive = new TH1F("CrossSectionInclusive", "", 
 		m_angularBin.size(), 0.0, m_reconAngleBinSize*(double)(m_angularBin.size()));
 	
 	h_CrossSection->GetXaxis()->SetTitle("Polar Angle, #theta_{#eta} [#circ]");
@@ -1126,13 +1219,39 @@ void EtaAnalyzer::PlotCrossSection()
 	h_CrossSectionFit->SetLineColor(kRed);
 	h_CrossSectionFit->SetLineWidth(2);
 	
+	h_CrossSectionInclusive->GetXaxis()->SetTitle("Polar Angle, #theta_{#eta} [#circ]");
+	h_CrossSectionInclusive->GetXaxis()->SetTitleSize(0.05);
+	h_CrossSectionInclusive->GetXaxis()->SetTitleOffset(1.0);
+	h_CrossSectionInclusive->GetXaxis()->CenterTitle("");
+	h_CrossSectionInclusive->GetYaxis()->SetTitle("d#sigma/d#theta [#mub / rad.]");
+	h_CrossSectionInclusive->GetYaxis()->SetTitleSize(0.05);
+	h_CrossSectionInclusive->GetYaxis()->SetTitleOffset(1.0);
+	h_CrossSectionInclusive->GetYaxis()->CenterTitle("");
+	h_CrossSectionInclusive->SetTitle("");
+	h_CrossSectionInclusive->SetMarkerStyle(4);
+	h_CrossSectionInclusive->SetMarkerSize(0.7);
+	h_CrossSectionInclusive->SetMarkerColor(kBlack);
+	h_CrossSectionInclusive->SetLineColor(kBlack);
+	h_CrossSectionInclusive->SetLineWidth(2);
+	
 	double locMaxCS = 1.65;
 	for(int ibin=0; ibin<m_angularBin.size(); ibin++) {
+		
+		// Yield from integrated counts minus background:
 		double locYield    = h_Yield->GetBinContent(ibin+1);
 		double locYieldErr = h_Yield->GetBinError(ibin+1);
 		
+		// Yield from integrating signal component of fit function:
 		double locYieldFit    = h_YieldFit->GetBinContent(ibin+1);
 		double locYieldFitErr = h_YieldFit->GetBinError(ibin+1);
+		
+		// Yield from integration of signal+etapi+eta2pi components of fit function
+		double locYieldInclusive = m_angularYieldFit[ibin].first 
+			+ m_angularYieldEtaPion[ibin].first 
+			+ m_angularYieldHadronicBkgd[ibin].first;
+		double locYieldInclusiveErr = sqrt(pow(m_angularYieldFit[ibin].second,2.0)
+			+ pow(m_angularYieldEtaPion[ibin].second,2.0)
+			+ pow(m_angularYieldHadronicBkgd[ibin].second,2.0));
 		
 		double locAcc      = h_Acceptance->GetBinContent(ibin+1);
 		double locAccErr   = h_Acceptance->GetBinError(ibin+1);
@@ -1160,6 +1279,17 @@ void EtaAnalyzer::PlotCrossSection()
 		
 		//-------------------//
 		
+		double locCSInclusive    = locYieldInclusive    / (locAcc * m_luminosity * m_branchingRatio * locBinSize);
+		double locCSInclusiveErr = locYieldInclusiveErr / (locAcc * m_luminosity * m_branchingRatio * locBinSize);
+		
+		double locCSInclusive_upper = (locYieldInclusive + locYieldInclusiveErr) 
+			/ ((locAcc-locAccErr) * m_luminosity * m_branchingRatio * locBinSize);
+		double locCSInclusive_lower = (locYieldInclusive - locYieldInclusiveErr) 
+			/ ((locAcc+locAccErr) * m_luminosity * m_branchingRatio * locBinSize);
+		double locCSInclusive_error = (locCSInclusive_upper - locCSInclusive_lower) / 2.0;
+		
+		//-------------------//
+		
 		if(0) {
 			double locTheta = h_CrossSection->GetBinCenter(ibin+1);
 			locCS          /= (2.0*TMath::Pi()*sin(locTheta*TMath::DegToRad()));
@@ -1167,6 +1297,9 @@ void EtaAnalyzer::PlotCrossSection()
 			
 			locCSFit       /= (2.0*TMath::Pi()*sin(locTheta*TMath::DegToRad()));
 			locCSFit_error /= (2.0*TMath::Pi()*sin(locTheta*TMath::DegToRad()));
+			
+			locCSInclusive       /= (2.0*TMath::Pi()*sin(locTheta*TMath::DegToRad()));
+			locCSInclusive_error /= (2.0*TMath::Pi()*sin(locTheta*TMath::DegToRad()));
 		}
 		
 		h_CrossSection->SetBinContent(ibin+1, locCS);
@@ -1175,16 +1308,17 @@ void EtaAnalyzer::PlotCrossSection()
 		h_CrossSectionFit->SetBinContent(ibin+1, locCSFit);
 		h_CrossSectionFit->SetBinError(ibin+1, locCSFit_error);
 		
-		if(locCS>locMaxCS) {
-			locMaxCS = locCS;
-		}
-		if(locCSFit>locMaxCS) {
-			locMaxCS = locCSFit;
+		h_CrossSectionInclusive->SetBinContent(ibin+1, locCSInclusive);
+		h_CrossSectionInclusive->SetBinError(ibin+1, locCSInclusive_error);
+		
+		if(locCSInclusive>locMaxCS) {
+			locMaxCS = locCSInclusive;
 		}
 	}
 	
 	h_CrossSection->GetYaxis()->SetRangeUser(0.0, 1.2*locMaxCS);
 	h_CrossSectionFit->GetYaxis()->SetRangeUser(0.0, 1.2*locMaxCS);
+	h_CrossSectionInclusive->GetYaxis()->SetRangeUser(0.0, 1.2*locMaxCS);
 	
 	if(cCrossSection==NULL) {
 		cCrossSection = new TCanvas("cCrossSection", "Cross Section", 950, 700);
@@ -1192,7 +1326,9 @@ void EtaAnalyzer::PlotCrossSection()
 	}
 	
 	cCrossSection->cd();
-	h_CrossSection->Draw("PE1X0");
+	cCrossSection->SetGrid();
+	h_CrossSectionInclusive->Draw("PE1X0");
+	h_CrossSection->Draw("PE1X0 same");
 	h_CrossSectionFit->Draw("PE1X0 same");
 	cCrossSection->Update();
 	cCrossSection->Modified();
@@ -1223,6 +1359,8 @@ void EtaAnalyzer::PlotEmptyEtaRatio()
 	double locMaxRatio = 0.0;
 	for(int ibin=0; ibin<m_angularBin.size(); ibin++) {
 		
+		//double num    = m_angularYieldEmpty[ibin].first;
+		//double numErr = m_angularYieldEmpty[ibin].second;
 		double num    = m_angularYieldEmptyPeaking[ibin].first;
 		double numErr = m_angularYieldEmptyPeaking[ibin].second;
 		
@@ -1279,6 +1417,13 @@ void EtaAnalyzer::PlotHadronicBkgdFraction()
 	h_HadronicBkgdFraction_bggen->SetMarkerStyle(4);
 	h_HadronicBkgdFraction_bggen->SetMarkerSize(0.7);
 	h_HadronicBkgdFraction_bggen->SetLineWidth(2);
+	
+	if(m_fitOption_signal>=11) {
+		for(int ibin=1; ibin<=h_HadronicBkgdFraction_bggen->GetXaxis()->GetNbins(); ibin++) {
+			h_HadronicBkgdFraction_bggen->SetBinContent(ibin, 1.0);
+			h_HadronicBkgdFraction_bggen->SetBinError(ibin, 0.0);
+		}
+	}
 	
 	double locMaxRatio = 0.0;
 	for(int ibin=0; ibin<m_angularBin.size(); ibin++) {
@@ -1341,6 +1486,13 @@ void EtaAnalyzer::PlotEtaPionFraction()
 	h_EtaPionBkgdFraction_bggen->SetMarkerSize(0.7);
 	h_EtaPionBkgdFraction_bggen->SetLineWidth(2);
 	
+	if(m_fitOption_signal>=11) {
+		for(int ibin=1; ibin<=h_EtaPionBkgdFraction_bggen->GetXaxis()->GetNbins(); ibin++) {
+			h_EtaPionBkgdFraction_bggen->SetBinContent(ibin, 1.0);
+			h_EtaPionBkgdFraction_bggen->SetBinError(ibin, 0.0);
+		}
+	}
+	
 	double locMaxRatio = 0.0;
 	for(int ibin=0; ibin<m_angularBin.size(); ibin++) {
 		
@@ -1382,16 +1534,78 @@ void EtaAnalyzer::StyleYieldHistogram(TH1F *h1, int markerStyle, int markerColor
 	h1->GetXaxis()->SetTitle("Polar Angle, #theta_{#eta} [#circ]");
 	h1->GetXaxis()->SetTitleSize(0.05);
 	h1->GetXaxis()->SetTitleOffset(1.0);
-	h1->GetXaxis()->CenterTitle("");
+	h1->GetXaxis()->CenterTitle(true);
 	h1->GetYaxis()->SetTitleSize(0.05);
 	h1->GetYaxis()->SetTitleOffset(1.0);
-	h1->GetYaxis()->CenterTitle("");
+	h1->GetYaxis()->CenterTitle(true);
 	h1->SetTitle("");
 	h1->SetMarkerStyle(markerStyle);
 	h1->SetMarkerSize(0.7);
 	h1->SetMarkerColor(markerColor);
 	h1->SetLineColor(markerColor);
 	h1->SetLineWidth(2);
+}
+
+void EtaAnalyzer::PlotOmegaFitPars()
+{
+	if(m_fitOption_omega!=1) return;
+	
+	h_omega_mu_fit    = new TH1F("omega_mu_fit", "",
+		m_angularBin.size(), 0.0, m_reconAngleBinSize*(double)(m_angularBin.size()));
+	h_omega_sigma_fit = new TH1F("omega_sigma_fit", "",
+		m_angularBin.size(), 0.0, m_reconAngleBinSize*(double)(m_angularBin.size()));
+	h_omega_alpha_fit = new TH1F("omega_alpha_fit", "",
+		m_angularBin.size(), 0.0, m_reconAngleBinSize*(double)(m_angularBin.size()));
+	h_omega_n_fit     = new TH1F("omega_n_fit", "",
+		m_angularBin.size(), 0.0, m_reconAngleBinSize*(double)(m_angularBin.size()));
+	
+	StyleYieldHistogram(h_omega_mu_fit,    4);
+	StyleYieldHistogram(h_omega_sigma_fit, 4);
+	StyleYieldHistogram(h_omega_alpha_fit, 4);
+	StyleYieldHistogram(h_omega_n_fit,     4);
+	
+	h_omega_mu_fit->GetYaxis()->SetTitle("#mu_{#omega} [GeV/c^{2}]");
+	h_omega_sigma_fit->GetYaxis()->SetTitle("#sigma_{#omega} [GeV/c^{2}]");
+	h_omega_alpha_fit->GetYaxis()->SetTitle("#alpha_{#omega}");
+	h_omega_n_fit->GetYaxis()->SetTitle("n_{#omega}");
+	
+	for(int ibin=0; ibin<m_angularBin.size(); ibin++) 
+	{
+		h_omega_mu_fit->SetBinContent(ibin+1, m_omegaFitMu[ibin].first);
+		h_omega_mu_fit->SetBinError(ibin+1, m_omegaFitMu[ibin].second);
+		
+		h_omega_sigma_fit->SetBinContent(ibin+1, m_omegaFitSigma[ibin].first);
+		h_omega_sigma_fit->SetBinError(ibin+1, m_omegaFitSigma[ibin].second);
+		
+		h_omega_alpha_fit->SetBinContent(ibin+1, m_omegaFitAlpha[ibin].first);
+		h_omega_alpha_fit->SetBinError(ibin+1, m_omegaFitAlpha[ibin].second);
+		
+		h_omega_n_fit->SetBinContent(ibin+1, m_omegaFitN[ibin].first);
+		h_omega_n_fit->SetBinError(ibin+1, m_omegaFitN[ibin].second);
+	}
+	
+	h_omega_mu_fit->GetYaxis()->SetRangeUser(0.750, 0.790);
+	h_omega_sigma_fit->GetYaxis()->SetRangeUser(0.024, 0.040);
+	h_omega_alpha_fit->GetYaxis()->SetRangeUser(0.0, 2.0);
+	h_omega_n_fit->GetYaxis()->SetRangeUser(0.0, 10.0);
+	
+	cOmegaFitPars = new TCanvas("cOmegaFitPars", "Omega Fit Pars", 1000, 750);
+	cOmegaFitPars->Divide(2,2);
+	
+	cOmegaFitPars->cd(1);
+	h_omega_mu_fit->Draw("PE1X0");
+	
+	cOmegaFitPars->cd(2);
+	h_omega_sigma_fit->Draw("PE1X0");
+	
+	cOmegaFitPars->cd(3);
+	h_omega_alpha_fit->Draw("PE1X0");
+	
+	cOmegaFitPars->cd(4);
+	h_omega_n_fit->Draw("PE1X0");
+	
+	cOmegaFitPars->Update();
+	cOmegaFitPars->Modified();
 }
 
 void EtaAnalyzer::PlotBackgrounds()
@@ -1413,18 +1627,22 @@ void EtaAnalyzer::PlotBackgrounds()
 		m_angularBin.size(), 0.0, m_reconAngleBinSize*(double)(m_angularBin.size()));
 	h_OmegaYield = new TH1F("OmegaYield", "", 
 		m_angularBin.size(), 0.0, m_reconAngleBinSize*(double)(m_angularBin.size()));
+	h_BkgdYield = new TH1F("BkgdYield", "", 
+		m_angularBin.size(), 0.0, m_reconAngleBinSize*(double)(m_angularBin.size()));
 	h_HadronicBkgdYield = new TH1F("HadronicBkgdYield", "", 
 		m_angularBin.size(), 0.0, m_reconAngleBinSize*(double)(m_angularBin.size()));
 	h_EtaPionYield = new TH1F("EtaPionYield", "", 
 		m_angularBin.size(), 0.0, m_reconAngleBinSize*(double)(m_angularBin.size()));
 	
 	StyleYieldHistogram(h_EmptyYield,        4, kRed);
-	StyleYieldHistogram(h_OmegaYield,        4, kMagenta);
-	StyleYieldHistogram(h_HadronicBkgdYield, 4, kGreen);
+	StyleYieldHistogram(h_OmegaYield,        4, kGreen);
+	StyleYieldHistogram(h_BkgdYield,         4, kMagenta);
+	StyleYieldHistogram(h_HadronicBkgdYield, 4, kTeal);
 	StyleYieldHistogram(h_EtaPionYield,      4, kCyan);
 	
 	h_EmptyYield->GetYaxis()->SetTitle(Form("counts / %.2f#circ", 2.0*m_angularBin[0].second));
 	h_OmegaYield->GetYaxis()->SetTitle(Form("counts / %.2f#circ", 2.0*m_angularBin[0].second));
+	h_BkgdYield->GetYaxis()->SetTitle(Form("counts / %.2f#circ", 2.0*m_angularBin[0].second));
 	h_HadronicBkgdYield->GetYaxis()->SetTitle(Form("counts / %.2f#circ", 2.0*m_angularBin[0].second));
 	h_EtaPionYield->GetYaxis()->SetTitle(Form("counts / %.2f#circ", 2.0*m_angularBin[0].second));
 	
@@ -1443,6 +1661,9 @@ void EtaAnalyzer::PlotBackgrounds()
 		
 		h_OmegaYield->SetBinContent(ibin+1, m_angularYieldOmega[ibin].first);
 		h_OmegaYield->SetBinError(ibin+1, m_angularYieldOmega[ibin].second);
+		
+		h_BkgdYield->SetBinContent(ibin+1, m_angularYieldBkgd[ibin].first);
+		h_BkgdYield->SetBinError(ibin+1, m_angularYieldBkgd[ibin].second);
 		
 		h_HadronicBkgdYield->SetBinContent(ibin+1, m_angularYieldHadronicBkgd[ibin].first);
 		h_HadronicBkgdYield->SetBinError(ibin+1, m_angularYieldHadronicBkgd[ibin].second);
@@ -1467,15 +1688,31 @@ void EtaAnalyzer::PlotBackgrounds()
 		styleCanvas(cBackgrounds);
 	}
 	
+	TH1F *locCounts = (TH1F*)h_Counts->Clone("locCounts");
+	locCounts->Add(h_EmptyCounts,-1.0);
+	
+	h_HadronicBkgdYield->SetLineColor(kRed);
+	h_HadronicBkgdYield->SetMarkerColor(kRed);
+	
 	cBackgrounds->cd();
-	h_Counts->Draw("PE1X0");
+	locCounts->Draw("PE1X0");
 	if(h_Yield) h_Yield->Draw("PE1X0 same");
-	h_EmptyYield->Draw("PE1X0 same");
+	//h_EmptyYield->Draw("PE1X0 same");
 	h_OmegaYield->Draw("PE1X0 same");
+	h_BkgdYield->Draw("PE1X0 same");
 	h_HadronicBkgdYield->Draw("PE1X0 same");
 	h_EtaPionYield->Draw("PE1X0 same");
 	cBackgrounds->Update();
 	cBackgrounds->Modified();
+	
+	TLegend *legBg = new TLegend(0.6, 0.6, 0.8, 0.9);
+	legBg->AddEntry(locCounts, "Integrated Counts (full-empty)", "PE1X0");
+	legBg->AddEntry(h_Yield, "Extracted Yield", "PE1X0");
+	legBg->AddEntry(h_OmegaYield, "Omega Bkgd", "PE1X0");
+	legBg->AddEntry(h_BkgdYield, "Smooth Bkgd", "PE1X0");
+	legBg->AddEntry(h_EtaPionYield, "Eta+Pion Bkgd", "PE1X0");
+	legBg->AddEntry(h_HadronicBkgdYield, "Other Hadronic Bkgd", "PE1X0");
+	legBg->Draw();
 	
 	return;
 }
@@ -1571,6 +1808,12 @@ void EtaAnalyzer::InitializeBinning()
 		m_angularYieldEtaPion.push_back({0.0, 0.0});
 		
 		m_angularYieldOmega.push_back({0.0, 0.0});
+		m_angularYieldBkgd.push_back({0.0, 0.0});
+		
+		m_omegaFitMu.push_back({0.0, 0.0});
+		m_omegaFitSigma.push_back({0.0, 0.0});
+		m_omegaFitAlpha.push_back({0.0, 0.0});
+		m_omegaFitN.push_back({0.0, 0.0});
 		
 		m_fitResult_shift.push_back({0.0, 0.0});
 		m_fitResult_bkgdShift.push_back({0.0, 0.0});
@@ -1615,16 +1858,32 @@ void EtaAnalyzer::WriteROOTFile(TString fileName)
 {
 	TFile *fOut = new TFile(fileName.Data(), "RECREATE");
 	fOut->cd();
+	
+	// Angular Yield:
 	if(h_Yield) h_Yield->Write();
 	if(h_YieldFit) h_YieldFit->Write();
+	if(h_YieldInclusive) h_YieldInclusive->Write();
+	
+	// Cross Section:
 	if(h_CrossSection) h_CrossSection->Write();
 	if(h_CrossSectionFit) h_CrossSectionFit->Write();
+	if(h_CrossSectionInclusive) h_CrossSectionInclusive->Write();
+	
+	// Counts:
 	if(h_Counts) h_Counts->Write();
 	if(h_EmptyCounts) h_EmptyCounts->Write();
+	
+	// Fitted empty yield:
 	if(h_EmptyYield) h_EmptyYield->Write();
-	if(h_OmegaYield) h_OmegaYield->Write();
+	
+	// Fitted background Yields:
+	if(h_OmegaYield) h_OmegaYield->Write(); // omega peaking background
+	if(h_BkgdYield) h_BkgdYield->Write(); // smooth (e.g. polynomial, expo, cheb)
 	if(h_EtaPionYield) h_EtaPionYield->Write();
 	if(h_HadronicBkgdYield) h_HadronicBkgdYield->Write();
+	
+	if(h_Acceptance) h_Acceptance->Write();
+	
 	fOut->Write();
 	fOut->Close();
 	

@@ -34,7 +34,7 @@ int EtaAnalyzer::LoadLuminosity() {
 	m_luminosity *= (1.0 - 0.0205);
 	
 	// apply correction based on photon absorption inside target:
-	m_luminosity *= 0.985;
+	m_luminosity *= (1.0 - 0.5*(1.0 - exp(-0.038))); // ~0.981
 	
 	//------------------------------------------------//
 	// Store fraction of flux in each energy bin in h_fluxWeights:

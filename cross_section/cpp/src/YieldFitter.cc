@@ -50,17 +50,53 @@ void YieldFitter::FitAngularYield(double minFitRange, double maxFitRange)
 		f_yield->SetParLimits(4, 0.1, 5.0);
 	}
 	
+	
+	f_yield->FixParameter(0, 0.5);
+	//f_yield->FixParameter(1, 0.1);
+	f_yield->FixParameter(2, 140.0);
+	
+	
+	
 	if(0) {
 		// Fix incoherent normalization in fit:
-		f_yield->FixParameter(3, 0.533);
-		//f_yield->FixParameter(3, 0.725);
+		f_yield->FixParameter(3, 0.552842);
+		
+		
+		
+		// veto option 6 and shift fixed from gaussian fits to data and mc:
+		//f_yield->FixParameter(3, 0.5672);
+		
+		// veto option 6 and shift fixed to 3.5 MeV/c^2:
+		//f_yield->FixParameter(3, 0.5669);
+		
+		// veto option 6 and shift fixed to 2.5 MeV/c^2:
+		//f_yield->FixParameter(3, 0.5442);
+		
+		// veto option 6 and shift fixed to 1.5 MeV/c^2:
+		//f_yield->FixParameter(3, 0.4771);
+		
+		
+		// veto option 4 and shift fixed from gaussian fits to data and mc:
+		//f_yield->FixParameter(3, 0.6189);
+		
+		// veto option 4 and shift fixed to 3.5 MeV/c^2:
+		//f_yield->FixParameter(3, 0.6197);
+		
+		// veto option 4 and shift fixed to 2.5 MeV/c^2:
+		//f_yield->FixParameter(3, 0.5870);
+		
+		// veto option 4 and shift fixed to 1.5 MeV/c^2:
+		//f_yield->FixParameter(3, 0.4873);
+		
+		
+		
+		//f_yield->FixParameter(3, 0.68);
 		//f_yield->FixParameter(3, 1.0);
 		if(m_components.size()>3) {
 			f_yield->FixParameter(4, 0.6);
 		}
 	}
-	
-	f_yield->SetParameter(2, 90.0);
+	//f_yield->SetParameter(2, 90.0);
 	
 	f_yield->SetRange(minFitRange, maxFitRange);
 	
@@ -98,6 +134,29 @@ void YieldFitter::FitAngularYield(double minFitRange, double maxFitRange)
 	//f_yield->SetParameters(0.4143, 0.3717, -0.2302, 0.5777);
 	
 	DrawFitResult(0.0, maxFitRange);
+	
+	/*
+	f_yield->SetNpx();
+	
+	TFile *fOut = new TFile("primakoff_yield_theory.root", "RECREATE");
+	fOut->cd();
+	
+	TF1 *f_yield_fine;
+	InitializeDrawFunction(&f_yield_fine, "f_Draw");
+	f_yield_fine->SetParameters(f_yield->GetParameters());
+	
+	TH1F *h_yield_fit = new TH1F("h_yield_fit","",450,0.0,4.5);
+	for(int ibin=1; ibin<=h_yield_fit->GetXaxis()->GetNbins(); ibin++) {
+		double locAngle = h_yield_fit->GetBinCenter(ibin);
+		double locYield = f_yield_fine->Eval(locAngle);
+		h_yield_fit->SetBinContent(ibin, locYield);
+	}
+	
+	h_yield_fit->Write();
+	fOut->Write();
+	fOut->Close();
+	*/
+	
 	return;
 }
 
@@ -141,6 +200,26 @@ void YieldFitter::DrawFitResult(double min, double max)
 	fCoh->Draw("same");
 	fPrim->Draw("same");
 	fDraw->Draw("same");
+	
+	TLegend *locLeg = new TLegend(0.154, 0.657, 0.454, 0.907);
+	locLeg->AddEntry(fDraw, "Total Fit", "l");
+	locLeg->AddEntry(fPrim, "Primakoff", "l");
+	locLeg->AddEntry(fCoh, "Nuclear Coherent", "l");
+	locLeg->AddEntry(fInt, "Interference", "l");
+	locLeg->AddEntry(fQFP, "Nuclear Incoherent", "l");
+	//locLeg->Draw();
+	
+	
+	TH1F *h_diff = (TH1F*)h_yield->Clone("diff");
+	for(int ibin=1; ibin<=h_diff->GetXaxis()->GetNbins(); ibin++) {
+		h_diff->SetBinContent(ibin, h_yield->GetBinContent(ibin) - f_yield->Eval(h_yield->GetBinCenter(ibin)));
+	}
+	
+	h_diff->SetLineColor(kCyan);
+	h_diff->SetMarkerColor(kCyan);
+	h_diff->Draw("same");
+	
+	
 	/*
 	TPaveStats *ps = (TPaveStats*)h_yield->GetPrimitive("stats");
 	if(ps) {
@@ -409,6 +488,18 @@ int YieldFitter::LoadTheoryHists()
 		fTheory->Close();
 	}
 	
+	h_TheoryTulio = new TH1F("TulioInc", "; #theta_{#eta} [#circ]; d#sigma/d#theta_{#eta} [#mub/rad]", 51, 0.0, 5.1);
+	
+	ifstream inf("/work/halld/home/andrsmit/primex_eta_analysis/theory/sgevorkyan/farm/rootFiles/NI_ETA_4He_MCMC_Preliminary.dat");
+	double aa, bb, cc;
+	for(int iline=0; iline<51; iline++) {
+		inf >> aa >> bb >> cc;
+		int locBin = h_TheoryTulio->FindBin(aa);
+		h_TheoryTulio->SetBinContent(locBin, cc);
+	}
+	inf.close();
+	
+	
 	return 0;
 }
 
@@ -495,8 +586,8 @@ double YieldFitter::YieldFitFunction(double *x, double *par)
 	double reconAngle = x[0];
 	
 	if(reconAngle>0.08 && reconAngle<0.12) {
-		TF1::RejectPoint();
-		return 0.;
+		//TF1::RejectPoint();
+		//return 0.;
 	}
 	
 	int reconAngleBin = h_matrix->GetYaxis()->FindBin(reconAngle);
@@ -602,6 +693,10 @@ double YieldFitter::GetCrossSection(int energyBin, int thetaBin,
 	if(m_components.size()>3) {
 		locInc += (AincN * h_Theory[3][energyBin]->GetBinContent(thetaBin));
 	}
+	
+	// use tulio's incoherent:
+	//int locTulioBin = h_TheoryTulio->FindBin(h_Theory[0][energyBin]->GetXaxis()->GetBinCenter(thetaBin));
+	//locInc = AincP * h_TheoryTulio->GetBinContent(locTulioBin);
 	
 	// TEST:
 	//locCoh /= pow(beamEnergy,0.2);

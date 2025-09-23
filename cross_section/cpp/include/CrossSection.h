@@ -6,6 +6,7 @@
 #include "YieldFitter.h"
 #include "MyReadConfig.h"
 #include "TApplication.h"
+#include "TGraphErrors.h"
 
 struct configSettings_t {
 	int primexPhase    = -1;

@@ -260,7 +260,8 @@ void MggFitter::FitData()
 	
 	// Fix parameters that were floating in previous step:
 	
-	ROOT::Fit::DataRange fittingRange3(minFitRange, maxFitRange);
+	//ROOT::Fit::DataRange fittingRange3(minFitRange, maxFitRange);
+	ROOT::Fit::DataRange fittingRange3(0.65, maxFitRange);
 	
 	ROOT::Fit::BinData dataFull3(locOpts, fittingRange3);
 	ROOT::Fit::FillData(dataFull3,  h_full);
@@ -303,9 +304,15 @@ void MggFitter::FitData()
 	// setup parameter settings based on previous fit:
 	SetFitParameters(locFitter4, locFitter3);
 	
+	
+	// for this step, use the integral of bin content instead of central value
+	//locOpts.fIntegral = true;
+	
+	
 	// Reconfigure fitter:
 	
-	ROOT::Fit::DataRange fittingRange4(minFitRange, maxFitRange);
+	//ROOT::Fit::DataRange fittingRange4(minFitRange, maxFitRange);
+	ROOT::Fit::DataRange fittingRange4(0.5, 0.6);
 	
 	ROOT::Fit::BinData dataFull4(locOpts, fittingRange4);
 	ROOT::Fit::FillData(dataFull4,  h_full);
@@ -370,8 +377,7 @@ void MggFitter::FitData()
 	if(angle<2.0) ReleaseEmptyParameters(locFitter5);
 	
 	locFitter5.SetFCN(locNPars, locChi2FCN5, nullptr, dataFull5.Size() + dataEmpty5.Size(), 3);
-	//locFitter5.MinFCN();
-	
+	/*
 	if(debug) printf("Performing fit...\n");
 	bool ok = locFitter5.FitFCN();
 	
@@ -380,6 +386,69 @@ void MggFitter::FitData()
 	if (!ok) std::cerr << "Fit did not converge!" << std::endl;
 	
 	UpdateFitFunctions(result);
+	*/
+	
+	
+	
+	
+	locFitter5.FitFCN();
+	
+	auto result5 = locFitter5.Result();
+	if(debug) {
+		printf("\n\nFit Results (5th fit):\n");
+		result5.Print(std::cout);
+	}
+	
+	
+	//=======================================================================================================//
+	// Now, just fine tune the fit around the mass cut:
+	
+	ROOT::Fit::Fitter locFitter6;
+	locFitter6.Config().MinimizerOptions().SetPrintLevel(0);
+	locFitter6.Config().SetMinimizer("Minuit", "Migrad");
+	
+	// setup parameter settings based on previous fit:
+	SetFitParameters(locFitter6, locFitter5);
+	
+	// Reconfigure fitter:
+	
+	locOpts.fIntegral = true;
+	
+	ROOT::Fit::DataRange fittingRange6(minMggCut, maxMggCut);
+	
+	ROOT::Fit::BinData dataFull6(locOpts, fittingRange6);
+	ROOT::Fit::FillData(dataFull6,  h_full);
+	
+	ROOT::Fit::BinData dataEmpty6(locOpts, fittingRange6);
+	ROOT::Fit::FillData(dataEmpty6, h_emptyWide);
+	
+	ROOT::Math::WrappedMultiTF1 wfFull6(*f_full, f_full->GetNdim());
+	ROOT::Math::WrappedMultiTF1 wfEmpty6(*f_empty, f_empty->GetNdim());
+	
+	ROOT::Fit::Chi2Function locChi2Full6(dataFull6,  wfFull6);
+	ROOT::Fit::Chi2Function locChi2Empty6(dataEmpty6, wfEmpty6);
+	
+	GlobalChi2 locChi2FCN6(locChi2Full6, locChi2Empty6, m_parIndexFull, m_parIndexEmpty);
+	
+	FixOmegaParameters(locFitter6);
+	FixBkgdParameters(locFitter6);
+	FixEmptyParameters(locFitter6);
+	
+	int offsetPar = (int)(find(m_parametersFull.begin(), m_parametersFull.end(), "#Delta#mu_{#eta}") - m_parametersFull.begin());
+	locFitter6.Config().ParSettings(offsetPar).Release();
+	locFitter6.Config().ParSettings(offsetPar).SetLimits(-0.002, 0.002);
+	
+	locFitter6.SetFCN(locNPars, locChi2FCN6, nullptr, dataFull6.Size() + dataEmpty6.Size(), 1);
+	
+	if(debug) printf("Performing fit...\n");
+	bool ok = locFitter6.FitFCN();
+	
+	auto result = locFitter6.Result();
+	result.Print(std::cout);
+	if (!ok) std::cerr << "Fit did not converge!" << std::endl;
+	
+	UpdateFitFunctions(result);
+	
 	
 	return;
 }
@@ -484,8 +553,8 @@ void MggFitter::ReleaseBkgdParameters(ROOT::Fit::Fitter &fitter) {
 			fitter.Config().ParSettings(p2Par).Release();
 			fitter.Config().ParSettings(p2Par).SetLimits(-1.e3, 1.e3);
 			
-			fitter.Config().ParSettings(p3Par).Release();
-			fitter.Config().ParSettings(p3Par).SetLimits(-1.e3, 1.e3);
+			//fitter.Config().ParSettings(p3Par).Release();
+			//fitter.Config().ParSettings(p3Par).SetLimits(-1.e3, 1.e3);
 			
 			break;
 		}
@@ -496,6 +565,14 @@ void MggFitter::ReleaseBkgdParameters(ROOT::Fit::Fitter &fitter) {
 				fitter.Config().ParSettings(pPar).Release();
 				fitter.Config().ParSettings(pPar).SetLimits(-1.e6, 1.e6);
 			}
+			break;
+		}
+		case 4:
+		{
+			// Parametric approximation to dsigma/dM for e+e- pair production
+			int pPar = (int)(find(m_parametersFull.begin(), m_parametersFull.end(), "p0") - m_parametersFull.begin());
+			fitter.Config().ParSettings(pPar).Release();
+			fitter.Config().ParSettings(pPar).SetLimits(0., 1.e6);
 			break;
 		}
 	}
@@ -535,6 +612,12 @@ void MggFitter::FixBkgdParameters(ROOT::Fit::Fitter &fitter)
 				int pPar = (int)(find(m_parametersFull.begin(), m_parametersFull.end(), Form("p%d",ipar)) - m_parametersFull.begin());
 				fitter.Config().ParSettings(pPar).Fix();
 			}
+			break;
+		}
+		case 4:
+		{
+			int pPar = (int)(find(m_parametersFull.begin(), m_parametersFull.end(), "p0") - m_parametersFull.begin());
+			fitter.Config().ParSettings(pPar).Fix();
 			break;
 		}
 	}
@@ -919,6 +1002,10 @@ void MggFitter::ReleaseEtaParameters(ROOT::Fit::Fitter &fitter) {
 			break;
 		case 12:
 		{
+			//int offsetPar = (int)(find(m_parametersFull.begin(), m_parametersFull.end(), "#Delta#mu_{#eta}") - m_parametersFull.begin());
+			//fitter.Config().ParSettings(offsetPar).Release();
+			//fitter.Config().ParSettings(offsetPar).SetLimits(-0.002, 0.002);
+			
 			int NPar = (int)(find(m_parametersFull.begin(), m_parametersFull.end(), "N_{#eta}") - m_parametersFull.begin());
 			fitter.Config().ParSettings(NPar).Release();
 			fitter.Config().ParSettings(NPar).SetLimits(0.0, 1.e6);
@@ -1535,8 +1622,8 @@ void MggFitter::GetYield(double &yield, double &yieldErr, int useFitPars, int su
 	
 	//-----------------------------------------------//
 	
-	int minMggBin = h_full->FindBin(minMggCut+0.001*binSize);
-	int maxMggBin = h_full->FindBin(maxMggCut-0.001*binSize);
+	int minMggBin = h_full->FindBin(minMggCut+0.0001*binSize);
+	int maxMggBin = h_full->FindBin(maxMggCut-0.0001*binSize);
 	
 	double locMinMggCut = h_full->GetBinCenter(minMggBin) - 0.5*binSize;
 	double locMaxMggCut = h_full->GetBinCenter(maxMggBin) + 0.5*binSize;
@@ -1564,7 +1651,7 @@ void MggFitter::GetYield(double &yield, double &yieldErr, int useFitPars, int su
 			fitCounts  += locFit;
 			dataCounts += locData;
 			yield    += locData - locBkgd;
-			yieldErr += pow(h_full->GetBinError(ibin),2.0) + locBkgd;
+			yieldErr += pow(h_full->GetBinError(ibin),2.0);
 			//printf("  mgg, data, fit: %f %f %f\n", h_full->GetBinCenter(ibin), locData, locFit);
 		}
 		yieldErr = sqrt(yieldErr);
@@ -2443,6 +2530,9 @@ void MggFitter::ZeroBkgdPars(TF1 *f1)
 				f1->SetParameter(Form("p%d",ipar), 0.0);
 			}
 			break;
+		case 4:
+			f1->SetParameter("p0", 0.0);
+			break;
 	}
 	return;
 }
@@ -2883,6 +2973,9 @@ int MggFitter::GetBkgdParameters(vector<TString> &parameters)
 {
 	int nParameters = 0;
 	switch(fitOption_bkgd) {
+		case 0:
+			nParameters = 0;
+			break;
 		case 1:
 			nParameters = fitOption_poly + 1;
 			break;
@@ -2893,7 +2986,7 @@ int MggFitter::GetBkgdParameters(vector<TString> &parameters)
 			nParameters = fitOption_poly + 1;
 			break;
 		case 4:
-			nParameters = 0;
+			nParameters = 1;
 			break;
 	}
 	for(int ipar=0; ipar<nParameters; ipar++) parameters.push_back(Form("p%d",ipar));

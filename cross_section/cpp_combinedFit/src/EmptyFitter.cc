@@ -6,7 +6,7 @@ void MggFitter::FitEmptyWide()
 	
 	emptyBinSize = h_emptyWide->GetBinWidth(1);
 	
-	Option_t *locFitOption = "R0Q";
+	Option_t *locFitOption = "R0QL";
 	
 	InitializeEmptyWideFitParameters();
 	excludeRegions.clear();

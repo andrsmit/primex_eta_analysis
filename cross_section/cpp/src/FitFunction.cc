@@ -95,12 +95,21 @@ int MggFitter::InitializeFitFunction(TF1 **f1, TString funcName)
 			parNames.push_back("N_{#eta}");
 			parNames.push_back("#Delta#mu_{#eta}");
 			parNames.push_back("A_{#eta#pi}");
-			parNames.push_back("A_{bkgd}");
+			parNames.push_back("A_{#eta#pi#pi}");
+			nParameters += 4;
+			break;
+		case 12:
+			parNames.push_back("N_{#eta}");
+			parNames.push_back("#Delta#mu_{#eta}");
+			parNames.push_back("A_{#eta#pi}");
+			parNames.push_back("A_{#eta#pi#pi}");
 			nParameters += 4;
 			break;
 	}
 	
 	switch(fitOption_omega) {
+		case 0:
+			break;
 		case 1:
 			parNames.push_back("N_{#omega}");
 			parNames.push_back("#mu_{#omega}");
@@ -168,7 +177,8 @@ int MggFitter::InitializeFitFunction(TF1 **f1, TString funcName)
 	// Empty Target PDF:
 	if(fitOption_empty==1) {
 		parNames.push_back("N_{empty}");
-		nParameters += 1;
+		parNames.push_back("shift_{empty}");
+		nParameters += 2;
 	}
 	
 	// initialize fit function for each angular bin:
@@ -281,9 +291,18 @@ int MggFitter::InitializeFitParameters()
 			f_fit->FixParameter(nParameters+3, 1.0);
 			nParameters += 4;
 			break;
+		case 12:
+			f_fit->FixParameter(nParameters+0, 0.0);
+			f_fit->FixParameter(nParameters+1, 0.000);
+			f_fit->FixParameter(nParameters+2, 1.0);
+			f_fit->FixParameter(nParameters+3, 1.0);
+			nParameters += 4;
+			break;
 	}
 	
 	switch(fitOption_omega) {
+		case 0:
+			break;
 		case 1:
 			f_fit->FixParameter(nParameters+0, 0.0);
 			f_fit->FixParameter(nParameters+1, EtaAnalyzer::m_massOmega);
@@ -347,22 +366,28 @@ int MggFitter::InitializeFitParameters()
 	}
 	
 	// eta-prime fit parameters:
-	f_fit->FixParameter(nParameters+0, 0.0);
-	f_fit->FixParameter(nParameters+1, EtaAnalyzer::m_massEtap);
-	f_fit->FixParameter(nParameters+2, 0.02);
-	nParameters += 3;
+	if(fitOption_etap) {
+		f_fit->FixParameter(nParameters+0, 0.0);
+		f_fit->FixParameter(nParameters+1, EtaAnalyzer::m_massEtap);
+		f_fit->FixParameter(nParameters+2, 0.02);
+		nParameters += 3;
+	}
 	
 	// A free parameter for the normalization of the empty target background:
 	if(fitOption_empty==1) {
-		f_fit->FixParameter(nParameters, 1.0);
+		f_fit->FixParameter(nParameters,   1.000);
+		f_fit->FixParameter(nParameters+1, 0.000);
 		
 		// Change the 'binWidth' parameter in the empty target fit function to 1, as the bin size correction
 		// will be applied separately in the full fit funciton.
 		// Just need to remember to re-set this parameter when plotting the empty target background.
 		f_empty->SetParameter(f_empty->GetNpar()-1, 1.0);
 	}
-	else f_fit->FixParameter(nParameters, 0.0);
-	nParameters += 1;
+	else {
+		f_fit->FixParameter(nParameters,   0.0);
+		f_fit->FixParameter(nParameters+1, 0.0);
+	}
+	nParameters += 2;
 	
 	return nParameters;
 }
@@ -511,16 +536,13 @@ double MggFitter::MggFitFunction(double *x, double *par)
 			double frac_bkgd  = par[nParameters+4];
 			nParameters       += 5;
 			
-			double corrRatioEta     = binSize / h_etaLineshape->GetBinWidth(1);
-			double corrRatioEtaPion = binSize / h_etaPionLineshape->GetBinWidth(1);
-			double corrRatioBkgd    = binSize / h_hadronicBkgdLineshape->GetBinWidth(1);
+			double corrRatioBkgd = 1.0 / h_hadronicBkgdLineshape->GetBinWidth(1);
 			
 			fEta = N * (
-				frac_eta   * h_etaLineshape->GetBinContent(h_etaLineshape->FindBin(locMgg-dmu)) * corrRatioEta + 
-				frac_etapi * h_etaPionLineshape->GetBinContent(h_etaPionLineshape->FindBin(locMgg-dmu)) * corrRatioEtaPion + 
+				frac_eta   * f_etaLineshape->Eval(locMgg-dmu) + 
+				frac_etapi * f_etaPionLineshape->Eval(locMgg-dmu) + 
 				frac_bkgd  * h_hadronicBkgdLineshape->GetBinContent(h_hadronicBkgdLineshape->FindBin(locMgg-dmu)) * corrRatioBkgd
 			);
-			fEta /= binSize;
 			break;
 		}
 		case 10:
@@ -534,11 +556,19 @@ double MggFitter::MggFitFunction(double *x, double *par)
 			double frac_bkgd  = par[nParameters+4];
 			nParameters       += 5;
 			
-			double corrRatioBkgd = 1.0 / h_hadronicBkgdLineshape->GetBinWidth(1);
-			
+			double corrRatioEta   = 1.0 / h_etaLineshape->GetBinWidth(1);
+			double corrRatioEtaPi = 1.0 / h_etaPionLineshape->GetBinWidth(1);
+			double corrRatioBkgd  = 1.0 / h_hadronicBkgdLineshape->GetBinWidth(1);
+			/*
 			fEta = N * (
 				frac_eta   * f_etaLineshape->Eval(locMgg-dmu) + 
-				frac_etapi * f_etaPionLineshape->Eval(locMgg-dmu) + 
+				frac_etapi * h_etaPionLineshape->GetBinContent(h_etaPionLineshape->FindBin(locMgg-dmu)) * corrRatioEtaPi + 
+				frac_bkgd  * h_hadronicBkgdLineshape->GetBinContent(h_hadronicBkgdLineshape->FindBin(locMgg-dmu)) * corrRatioBkgd
+			);
+			*/
+			fEta = N * (
+				frac_eta   * h_etaLineshape->GetBinContent(h_etaLineshape->FindBin(locMgg-dmu)) * corrRatioEta + 
+				frac_etapi * h_etaPionLineshape->GetBinContent(h_etaPionLineshape->FindBin(locMgg-dmu)) * corrRatioEtaPi + 
 				frac_bkgd  * h_hadronicBkgdLineshape->GetBinContent(h_hadronicBkgdLineshape->FindBin(locMgg-dmu)) * corrRatioBkgd
 			);
 			break;
@@ -554,11 +584,38 @@ double MggFitter::MggFitFunction(double *x, double *par)
 			nParameters   += 4;
 			
 			double corrRatioBkgd = 1.0 / h_hadronicBkgdLineshape->GetBinWidth(1);
-			
 			double fEta_exc = 0., fEta_pi = 0., fEta_bkgd = 0.;
+			
 			fEta_exc = N_eta * f_etaLineshape->Eval(locMgg-dmu);
-			if(m_etaPionYieldBGGEN>0.1) fEta_pi   = A_etapi * m_etaPionYieldBGGEN * f_etaPionLineshape->Eval(locMgg-dmu);
-			if(m_hadronicBkgdYieldBGGEN>0.1) fEta_bkgd = A_bkgd  * m_hadronicBkgdYieldBGGEN * h_hadronicBkgdLineshape->GetBinContent(
+			
+			if(m_etaPionYieldBGGEN>0.1) fEta_pi = A_etapi * m_etaPionYieldBGGEN * f_etaPionLineshape->Eval(locMgg-dmu);
+			
+			if(m_hadronicBkgdYieldBGGEN>0.1) fEta_bkgd = A_bkgd * m_hadronicBkgdYieldBGGEN * h_hadronicBkgdLineshape->GetBinContent(
+				h_hadronicBkgdLineshape->FindBin(locMgg-dmu)) * corrRatioBkgd;
+			
+			fEta = fEta_exc + fEta_pi + fEta_bkgd;
+			break;
+		}
+		case 12:
+		{
+			// Line shape from simulation:
+			
+			double N_eta   = par[nParameters+0];
+			double dmu     = par[nParameters+1];
+			double A_etapi = par[nParameters+2];
+			double A_bkgd  = par[nParameters+3];
+			nParameters   += 4;
+			
+			double corrRatioEtaPi = 1.0 / h_etaPionLineshape->GetBinWidth(1);
+			double corrRatioBkgd  = 1.0 / h_hadronicBkgdLineshape->GetBinWidth(1);
+			double fEta_exc = 0., fEta_pi = 0., fEta_bkgd = 0.;
+			
+			fEta_exc = N_eta * f_etaLineshape->Eval(locMgg-dmu);
+			
+			if(m_etaPionYieldBGGEN>0.1) fEta_pi = A_etapi * m_etaPionYieldBGGEN * h_etaPionLineshape->GetBinContent(
+				h_etaPionLineshape->FindBin(locMgg-dmu)) * corrRatioEtaPi;
+			
+			if(m_hadronicBkgdYieldBGGEN>0.1) fEta_bkgd = A_bkgd * m_hadronicBkgdYieldBGGEN * h_hadronicBkgdLineshape->GetBinContent(
 				h_hadronicBkgdLineshape->FindBin(locMgg-dmu)) * corrRatioBkgd;
 			
 			fEta = fEta_exc + fEta_pi + fEta_bkgd;
@@ -574,6 +631,8 @@ double MggFitter::MggFitFunction(double *x, double *par)
 	
 	double fOmega = 0.;
 	switch(fitOption_omega) {
+		case 0:
+			break;
 		case 1:
 		{
 			double N     = par[nParameters+0];
@@ -583,7 +642,8 @@ double MggFitter::MggFitFunction(double *x, double *par)
 			double n     = par[nParameters+4];
 			nParameters += 5;
 			
-			fOmega = N * NormCrystalBall(locMgg, mu, sigma, alpha, n);
+			if(N==0) fOmega = 0;
+			else fOmega = N * NormCrystalBall(locMgg, mu, sigma, alpha, n);
 			break;
 		}
 		case 2:
@@ -592,29 +652,32 @@ double MggFitter::MggFitFunction(double *x, double *par)
 			double dmu   = par[nParameters+1];
 			nParameters += 2;
 			
-			fOmega = N * f_omegaLineshape->Eval(locMgg-dmu);
+			if(N==0) fOmega = 0;
+			else fOmega = N * f_omegaLineshape->Eval(locMgg-dmu);
 			break;
 		}
 		case 3:
 		{
-			double N     = par[nParameters+0];
+			double A     = par[nParameters+0];
 			double dmu   = par[nParameters+1];
 			nParameters += 2;
 			
-			fOmega = N * h_omegaLineshape->GetBinContent(h_omegaLineshape->FindBin(locMgg-dmu))
+			if(A==0) fOmega = 0;
+			else fOmega = A * h_omegaLineshape->GetBinContent(h_omegaLineshape->FindBin(locMgg-dmu))
 				/ h_omegaLineshape->GetBinWidth(1);
 			break;
 		}
 		case 4:
 		{
-			double N_omega = par[nParameters+0];
-			double N_rho   = par[nParameters+1];
+			double A_omega = par[nParameters+0];
+			double A_rho   = par[nParameters+1];
 			double dmu     = par[nParameters+2];
 			nParameters += 3;
 			
-			fOmega = N_omega * h_omegaLineshape->GetBinContent(h_omegaLineshape->FindBin(locMgg-dmu))
+			if(A_omega==0) fOmega = 0;
+			else fOmega = A_omega * h_omegaLineshape->GetBinContent(h_omegaLineshape->FindBin(locMgg-dmu))
 				/ h_omegaLineshape->GetBinWidth(1) +
-					N_rho * h_rhoLineshape->GetBinContent(h_rhoLineshape->FindBin(locMgg-dmu)) / h_rhoLineshape->GetBinWidth(1);
+					A_rho * h_rhoLineshape->GetBinContent(h_rhoLineshape->FindBin(locMgg-dmu)) / h_rhoLineshape->GetBinWidth(1);
 			break;
 		}
 		case 5:
@@ -631,7 +694,8 @@ double MggFitter::MggFitFunction(double *x, double *par)
 			double frac    = par[nParameters+9];
 			nParameters += 10;
 			
-			fOmega = N * ((1.0-frac)*NormCrystalBall(locMgg, mu1, sigma1, alpha1, n1) 
+			if(N==0) fOmega = 0;
+			else fOmega = N * ((1.0-frac)*NormCrystalBall(locMgg, mu1, sigma1, alpha1, n1) 
 				+ frac*NormCrystalBall(locMgg, mu2, sigma2, alpha2, n2));
 			break;
 		}
@@ -702,9 +766,18 @@ double MggFitter::MggFitFunction(double *x, double *par)
 	
 	double fEmpty = 0.0;
 	if(fitOption_empty==1) {
-		double N = par[nParameters];
-		nParameters += 1;
-		fEmpty = N * m_emptyRatio * f_empty->Eval(locMgg);
+		double N     = par[nParameters];
+		double shift = par[nParameters+1];
+		nParameters += 2;
+		
+		/*
+		8/15/2025: There seems to be a calibration mismatch between empty and full target runs.
+		Comparing the elasticity peak with veto option 7, empty is shifted down by ~2% (more like 1.8%). 
+		Assuming symmetric decays, this would translate
+		to (approximately) a 1.5% shift to the mggConstr distribution, or an average shift of 0.008 GeV/c2.
+		*/
+		
+		fEmpty = N * m_emptyRatio * f_empty->Eval(locMgg + shift);
 	}
 	
 	//==================================================================================//

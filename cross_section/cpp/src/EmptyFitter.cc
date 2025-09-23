@@ -14,15 +14,26 @@ void MggFitter::FitEmpty()
 	excludeRegions.push_back({0.50,0.59});
 	excludeRegions.push_back({0.70,0.85});
 	GuessEmptyBkgdParameters();
+	
 	f_empty->SetRange(minEmptyFitRange, maxEmptyFitRange);
 	h_empty->Fit(f_empty, locFitOption);
+	
+	excludeRegions.clear();
+	
+	//------------------------------//
+	// now try to fit peaking structures from FDC:
+	
+	if(emptyFitOption_fdc>0) {
+		excludeRegions.clear();
+		GuessEmptyFDCParameters();
+		h_empty->Fit(f_empty, locFitOption);
+	}
 	
 	//------------------------------//
 	// now try to fit eta peak:
 	
 	if(emptyFitOption_eta>0) {
 		excludeRegions.clear();
-		FixEmptyBkgdParameters();
 		
 		GuessEmptyEtaParameters();
 		f_empty->SetRange(0.5,0.6);
@@ -41,6 +52,7 @@ void MggFitter::FitEmpty()
 		excludeRegions.clear();
 		FixEmptyBkgdParameters();
 		FixEmptyEtaParameters();
+		FixEmptyFDCParameters();
 		GuessEmptyOmegaParameters();
 		f_empty->SetRange(0.7,0.85);
 		h_empty->Fit(f_empty, locFitOption);
@@ -51,21 +63,8 @@ void MggFitter::FitEmpty()
 	}
 	
 	//------------------------------//
-	// now try to fit peaking structures from FDC:
-	
-	if(emptyFitOption_fdc>0) {
-		excludeRegions.clear();
-		FixEmptyBkgdParameters();
-		FixEmptyEtaParameters();
-		FixEmptyOmegaParameters();
-		GuessEmptyFDCParameters();
-		h_empty->Fit(f_empty, locFitOption);
-		
-		ReleaseEmptyBkgdParameters();
-		h_empty->Fit(f_empty, locFitOption);
-	}
-	
-	//------------------------------//
+	ReleaseEmptyFDCParameters();
+	ReleaseEmptyEtaParameters();
 	
 	f_empty->SetRange(minEmptyFitRange, maxEmptyFitRange);
 	h_empty->Fit(f_empty, locFitOption);
@@ -91,17 +90,17 @@ void MggFitter::GuessEmptyBkgdParameters()
 	double p1Guess = 0., p2Guess = 0., p3Guess = 0., p4Guess = 0.;
 	
 	if(emptyFitOption_bkgd==2) {
-		p0Guess = h_empty->GetBinContent(h_empty->FindBin(minFitRange)) - f_empty->Eval(minFitRange);
-		p1Guess =  0.0;
-		p2Guess = -1.0;
+		p0Guess =  (h_empty->GetBinContent(h_empty->FindBin(minEmptyFitRange)) - f_empty->Eval(minEmptyFitRange))/emptyBinSize;
+		p1Guess =  minEmptyFitRange;
+		p2Guess =  0.0;
 		p3Guess =  0.0;
-		p4Guess = minFitRange;
+		p4Guess =  0.0;
 	}
 	
 	switch(emptyFitOption_bkgd) {
 		case 1:
 		{
-			// 3rd-order polynomial:
+			// polynomial:
 			for(int ipar=0; ipar<=emptyFitOption_poly; ipar++) {
 				int locParIndex = f_empty->GetParNumber(Form("p%d",ipar));
 				f_empty->SetParameter(locParIndex, 0.0);
@@ -115,12 +114,12 @@ void MggFitter::GuessEmptyBkgdParameters()
 			int p4Par = f_empty->GetParNumber("p4");
 			
 			f_empty->SetParameter(p0Par, p0Guess);
-			f_empty->SetParameter(p1Par, p1Guess);
+			f_empty->FixParameter(p1Par, p1Guess);
 			f_empty->SetParameter(p2Par, p2Guess);
 			f_empty->SetParameter(p3Par, p3Guess);
 			
-			f_empty->SetParLimits(p0Par,  0.00, 1.e5);
-			f_empty->SetParLimits(p1Par,  0.00, 1.00);
+			f_empty->SetParLimits(p0Par,  0.00, 1.e6);
+			//f_empty->SetParLimits(p1Par,  0.00, 1.00);
 			f_empty->SetParLimits(p2Par, -1.e3, 1.e3);
 			f_empty->SetParLimits(p3Par, -1.e3, 1.e3);
 			break;
@@ -131,7 +130,7 @@ void MggFitter::GuessEmptyBkgdParameters()
 			for(int ipar=0; ipar<=emptyFitOption_poly; ipar++) {
 				int locParIndex = f_empty->GetParNumber(Form("p%d",ipar));
 				f_empty->SetParameter(locParIndex, 0.0001);
-				f_empty->SetParLimits(locParIndex, -1.e4, 1.e4);
+				f_empty->SetParLimits(locParIndex, -1.e6, 1.e6);
 			}
 			break;
 		}
@@ -199,12 +198,12 @@ void MggFitter::ReleaseEmptyBkgdParameters() {
 			int p3Par = f_empty->GetParNumber("p3");
 			
 			f_empty->ReleaseParameter(p0Par);
-			f_empty->ReleaseParameter(p1Par);
+			//f_empty->ReleaseParameter(p1Par);
 			f_empty->ReleaseParameter(p2Par);
 			f_empty->ReleaseParameter(p3Par);
 			
-			f_empty->SetParLimits(p0Par,  0.00, 1.e5);
-			f_empty->SetParLimits(p1Par,  0.00, 1.00);
+			f_empty->SetParLimits(p0Par,  0.00, 1.e6);
+			//f_empty->SetParLimits(p1Par,  0.00, 1.00);
 			f_empty->SetParLimits(p2Par, -1.e3, 1.e3);
 			f_empty->SetParLimits(p3Par, -1.e3, 1.e3);
 			break;
@@ -215,7 +214,7 @@ void MggFitter::ReleaseEmptyBkgdParameters() {
 			for(int ipar=0; ipar<=emptyFitOption_poly; ipar++) {
 				int locParIndex = f_empty->GetParNumber(Form("p%d",ipar));
 				f_empty->ReleaseParameter(locParIndex);
-				f_empty->SetParLimits(locParIndex, -1.e4, 1.e4);
+				f_empty->SetParLimits(locParIndex, -1.e6, 1.e6);
 			}
 			break;
 		}
@@ -264,10 +263,10 @@ void MggFitter::GuessEmptyEtaParameters() {
 			int dmuPar = f_empty->GetParNumber("#Delta#mu_{#eta}");
 			
 			f_empty->SetParameter(  NPar, NGuess);
-			f_empty->FixParameter(dmuPar, 0.002);
+			f_empty->FixParameter(dmuPar, 0.0025);
 			
-			f_empty->SetParLimits(  NPar,  0.00, 1.e5);
-			//f_empty->SetParLimits(dmuPar, -0.05, 0.02);
+			f_empty->SetParLimits(  NPar,  0.000, 1.e5);
+			//f_empty->SetParLimits(dmuPar,  0.002, 0.01);
 			break;
 		}
 	}
@@ -303,6 +302,47 @@ void MggFitter::FixEmptyEtaParameters() {
 			
 			f_empty->FixParameter(  NPar, f_empty->GetParameter(  NPar));
 			f_empty->FixParameter(dmuPar, f_empty->GetParameter(dmuPar));
+			break;
+		}
+	}
+	return;
+}
+
+void MggFitter::ReleaseEmptyEtaParameters() {
+	
+	switch(emptyFitOption_eta) {
+		case 0:
+		{
+			break;
+		}
+		case 1:
+		{
+			// single Gaussian:
+			
+			int     NPar = f_empty->GetParNumber("N_{#eta}");
+			int    muPar = f_empty->GetParNumber("#mu_{#eta}");
+			int sigmaPar = f_empty->GetParNumber("#sigma_{#eta}");
+			
+			f_empty->SetParameter(    NPar, f_empty->GetParameter(    NPar));
+			f_empty->SetParameter(   muPar, f_empty->GetParameter(   muPar));
+			f_empty->SetParameter(sigmaPar, f_empty->GetParameter(sigmaPar));
+			
+			f_empty->SetParLimits(    NPar, 0.00, 1.e5);
+			f_empty->SetParLimits(   muPar, 0.52, 0.57);
+			f_empty->SetParLimits(sigmaPar, 0.01, 0.03);
+			break;
+		}
+		case 2:
+		{
+			// Lineshape fit:
+			
+			int   NPar = f_empty->GetParNumber("N_{#eta}");
+			int dmuPar = f_empty->GetParNumber("#Delta#mu_{#eta}");
+			
+			f_empty->SetParameter(NPar, f_empty->GetParameter(NPar));
+			f_empty->SetParLimits(NPar, 0.00, 1.e5);
+			
+			//f_empty->SetParameter(dmuPar, f_empty->GetParameter(dmuPar));
 			break;
 		}
 	}
@@ -407,14 +447,30 @@ void MggFitter::GuessEmptyFDCParameters() {
 				int locNPar   = f_empty->GetParNumber(Form("N_{fdc,%d}",i+1));
 				int locMuPar  = f_empty->GetParNumber(Form("#mu_{fdc,%d}",i+1));
 				int locSigPar = f_empty->GetParNumber(Form("#sigma_{fdc,%d}",i+1));
+				
+				// only let the parameters float if they fall within our fitting range:
+				if(m_muFDC[i] < minEmptyFitRange) continue;
+				
 				f_empty->SetParameter(locNPar, 0.0);
 				f_empty->SetParameter(locMuPar, m_muFDC[i]);
-				f_empty->SetParameter(locSigPar, 0.02);
+				f_empty->SetParameter(locSigPar, 0.015);
 				
 				f_empty->SetParLimits(locNPar,   0.0, 1.e5);
 				f_empty->SetParLimits(locMuPar,  m_muFDC[i]-0.02, m_muFDC[i]+0.02);
-				f_empty->SetParLimits(locSigPar, 0.010, 0.035);
+				f_empty->SetParLimits(locSigPar, 0.0075, 0.035);
 			}
+			
+			f_empty->SetParameter(f_empty->GetParNumber("#mu_{fdc,1}"),    0.619179);
+			f_empty->FixParameter(f_empty->GetParNumber("#sigma_{fdc,1}"), 0.007974);
+			f_empty->SetParameter(f_empty->GetParNumber("#mu_{fdc,2}"),    0.531688);
+			f_empty->FixParameter(f_empty->GetParNumber("#sigma_{fdc,2}"), 0.008677);
+			f_empty->SetParameter(f_empty->GetParNumber("#mu_{fdc,3}"),    0.453992);
+			f_empty->FixParameter(f_empty->GetParNumber("#sigma_{fdc,3}"), 0.017433);
+			f_empty->SetParameter(f_empty->GetParNumber("#mu_{fdc,4}"),    0.398570);
+			f_empty->FixParameter(f_empty->GetParNumber("#sigma_{fdc,4}"), 0.008740);
+			f_empty->SetParameter(f_empty->GetParNumber("#mu_{fdc,5}"),    0.338665);
+			f_empty->FixParameter(f_empty->GetParNumber("#sigma_{fdc,5}"), 0.008873);
+			
 			break;
 		}
 		case 2:
@@ -438,6 +494,132 @@ void MggFitter::GuessEmptyFDCParameters() {
 				
 				int locDeltaMuPar = f_empty->GetParNumber(Form("#Delta#mu_{fdc,%d}",i+1));
 				f_empty->SetParameter(locDeltaMuPar, m_muFDC[i]-m_muFDC[0]);
+				f_empty->SetParLimits(locDeltaMuPar, m_muFDC[i]-m_muFDC[0]-0.02, m_muFDC[i]-m_muFDC[0]+0.02);
+			}
+			break;
+		}
+		case 4:
+		{
+			for(int i=0; i<m_muFDC_omega.size(); i++) {
+				int locNPar = f_empty->GetParNumber(Form("N_{fdc,#omega,%d}",i+1));
+				f_empty->SetParameter(locNPar, 0.0);
+				f_empty->SetParLimits(locNPar, 0.0, 1.e5);
+				
+				int locMuPar = f_empty->GetParNumber(Form("#mu_{fdc,#omega,%d}",i+1));
+				f_empty->SetParameter(locMuPar, m_muFDC_omega[i]);
+				f_empty->SetParLimits(locMuPar, m_muFDC_omega[i]-0.03, m_muFDC_omega[i]+0.03);
+			}
+			for(int i=0; i<m_muFDC_eta.size(); i++) {
+				int locNPar = f_empty->GetParNumber(Form("N_{fdc,#eta,%d}",i+1));
+				f_empty->SetParameter(locNPar, 0.0);
+				f_empty->SetParLimits(locNPar, 0.0, 1.e5);
+				
+				int locMuPar = f_empty->GetParNumber(Form("#mu_{fdc,#eta,%d}",i+1));
+				f_empty->SetParameter(locMuPar, m_muFDC_eta[i]);
+				f_empty->SetParLimits(locMuPar, m_muFDC_eta[i]-0.03, m_muFDC_eta[i]+0.03);
+			}
+			f_empty->FixParameter(f_empty->GetParNumber("#mu_{fdc,#eta,1}"), m_muFDC_eta[0]);
+			f_empty->FixParameter(f_empty->GetParNumber("#mu_{fdc,#eta,2}"), m_muFDC_eta[1]);
+			//f_empty->FixParameter(f_empty->GetParNumber("#mu_{fdc,#eta,3}"), m_muFDC_eta[2]);
+			
+			f_empty->FixParameter(f_empty->GetParNumber("#mu_{fdc,#omega,1}"), m_muFDC_omega[0]);
+			f_empty->FixParameter(f_empty->GetParNumber("#mu_{fdc,#omega,2}"), m_muFDC_omega[1]);
+			f_empty->FixParameter(f_empty->GetParNumber("#mu_{fdc,#omega,3}"), m_muFDC_omega[2]);
+			break;
+		}
+	}
+	return;
+}
+
+void MggFitter::FixEmptyFDCParameters() {
+	
+	switch(emptyFitOption_fdc) {
+		case 0:
+			break;
+		case 1:
+		{
+			for(int i=0; i<m_muFDC.size(); i++) {
+				int locNPar   = f_empty->GetParNumber(Form("N_{fdc,%d}",i+1));
+				int locMuPar  = f_empty->GetParNumber(Form("#mu_{fdc,%d}",i+1));
+				int locSigPar = f_empty->GetParNumber(Form("#sigma_{fdc,%d}",i+1));
+				
+				f_empty->FixParameter(locNPar,   f_empty->GetParameter(locNPar));
+				f_empty->FixParameter(locMuPar,  f_empty->GetParameter(locMuPar));
+				f_empty->FixParameter(locSigPar, f_empty->GetParameter(locSigPar));
+			}
+			break;
+		}
+		case 2:
+		{
+			int locNPar = f_empty->GetParNumber("N_{fdc}");
+			f_empty->FixParameter(locNPar, f_empty->GetParameter(locNPar));
+			for(int i=0; i<m_muFDC.size(); i++) {
+				int locDeltaMuPar = f_empty->GetParNumber(Form("#Delta#mu_{fdc,%d}",i+1));
+				f_empty->FixParameter(locDeltaMuPar, f_empty->GetParameter(locDeltaMuPar));
+			}
+			break;
+		}
+		case 3:
+		{
+			for(int i=0; i<m_muFDC.size(); i++) {
+				int locNPar = f_empty->GetParNumber(Form("N_{fdc,%d}",i+1));
+				f_empty->FixParameter(locNPar, f_empty->GetParameter(locNPar));
+				
+				int locDeltaMuPar = f_empty->GetParNumber(Form("#Delta#mu_{fdc,%d}",i+1));
+				f_empty->FixParameter(locDeltaMuPar, f_empty->GetParameter(locDeltaMuPar));
+			}
+			break;
+		}
+	}
+	return;
+}
+
+void MggFitter::ReleaseEmptyFDCParameters() {
+	
+	switch(emptyFitOption_fdc) {
+		case 0:
+			break;
+		case 1:
+		{
+			for(int i=0; i<m_muFDC.size(); i++) {
+				int locNPar   = f_empty->GetParNumber(Form("N_{fdc,%d}",i+1));
+				int locMuPar  = f_empty->GetParNumber(Form("#mu_{fdc,%d}",i+1));
+				int locSigPar = f_empty->GetParNumber(Form("#sigma_{fdc,%d}",i+1));
+				
+				f_empty->SetParameter(locNPar,   f_empty->GetParameter(locNPar));
+				f_empty->SetParameter(locMuPar,  f_empty->GetParameter(locMuPar));
+				//f_empty->SetParameter(locSigPar, f_empty->GetParameter(locSigPar));
+				
+				f_empty->SetParLimits(locNPar,   0.0, 1.e5);
+				f_empty->SetParLimits(locMuPar,  m_muFDC[i]-0.02, m_muFDC[i]+0.02);
+				//f_empty->SetParLimits(locSigPar, 0.0075, 0.030);
+			}
+			f_empty->FixParameter(f_empty->GetParNumber("#mu_{fdc,1}"),    0.615);
+			f_empty->FixParameter(f_empty->GetParNumber("#sigma_{fdc,1}"), 0.020);
+			f_empty->FixParameter(f_empty->GetParNumber("#sigma_{fdc,3}"), 0.018);
+			break;
+		}
+		case 2:
+		{
+			int locNPar = f_empty->GetParNumber("N_{fdc}");
+			f_empty->SetParameter(locNPar, f_empty->GetParameter(locNPar));
+			f_empty->SetParLimits(locNPar, 0.0, 1.e5);
+			for(int i=0; i<m_muFDC.size(); i++) {
+				int locDeltaMuPar = f_empty->GetParNumber(Form("#Delta#mu_{fdc,%d}",i+1));
+				f_empty->SetParameter(locDeltaMuPar, f_empty->GetParameter(locDeltaMuPar));
+				f_empty->SetParLimits(locDeltaMuPar, m_muFDC[i]-m_muFDC[0]-0.02, m_muFDC[i]-m_muFDC[0]+0.02);
+			}
+			break;
+		}
+		case 3:
+		{
+			for(int i=0; i<m_muFDC.size(); i++) {
+				int locNPar = f_empty->GetParNumber(Form("N_{fdc,%d}",i+1));
+				f_empty->SetParameter(locNPar, f_empty->GetParameter(locNPar));
+				f_empty->SetParLimits(locNPar, 0.0, 1.e5);
+				
+				int locDeltaMuPar = f_empty->GetParNumber(Form("#Delta#mu_{fdc,%d}",i+1));
+				f_empty->SetParameter(locDeltaMuPar, f_empty->GetParameter(locDeltaMuPar));
 				f_empty->SetParLimits(locDeltaMuPar, m_muFDC[i]-m_muFDC[0]-0.02, m_muFDC[i]-m_muFDC[0]+0.02);
 			}
 			break;

@@ -54,7 +54,7 @@ class MggFitter {
 		int emptyFitOption_poly  = 3; 
 		
 		double      minFitRange=0.300,      maxFitRange=1.100;
-		double minEmptyFitRange=0.405, maxEmptyFitRange=0.950;
+		double minEmptyFitRange=0.305, maxEmptyFitRange=0.950;
 		
 		double minMggCut = 0.5;
 		double maxMggCut = 0.6;
@@ -81,7 +81,9 @@ class MggFitter {
 		void SetHadronicBkgdLineshape(TH1F *h1, int drawOption=0) {
 			m_hadronicBkgdYieldBGGEN = h1->Integral();
 			h_hadronicBkgdLineshape = h1;
-			h_hadronicBkgdLineshape->Scale(1.0/h_hadronicBkgdLineshape->Integral());
+			if(m_hadronicBkgdYieldBGGEN>1.0) {
+				h_hadronicBkgdLineshape->Scale(1.0/m_hadronicBkgdYieldBGGEN);
+			}
 			FitHadronicBkgdLineshape(drawOption);
 			return;
 		}
@@ -91,7 +93,9 @@ class MggFitter {
 		void SetEtaPionLineshape(TH1F *h1, int drawOption=0) {
 			m_etaPionYieldBGGEN = h1->Integral();
 			h_etaPionLineshape = h1;
-			h_etaPionLineshape->Scale(1.0/h_etaPionLineshape->Integral());
+			if(m_etaPionYieldBGGEN>1.0) {
+				h_etaPionLineshape->Scale(1.0/m_etaPionYieldBGGEN);
+			}
 			FitEtaPionLineshape(drawOption);
 			return;
 		}
@@ -100,8 +104,10 @@ class MggFitter {
 		// Set/fit lineshape of omega background:
 		void SetOmegaLineshape(TH1F *h1, int drawOption=0) { 
 			h_omegaLineshape = h1;
-			h_omegaLineshape->Scale(1.0/h_omegaLineshape->Integral());
-			FitOmegaLineshape(drawOption);
+			if((fitOption_omega<3) || (fitOption_omega>4)) {
+				h_omegaLineshape->Scale(1.0/h_omegaLineshape->Integral());
+				FitOmegaLineshape(drawOption);
+			}
 			return;
 		}
 		void FitOmegaLineshape(int drawOption=0);
@@ -232,7 +238,12 @@ class MggFitter {
 				case 11:
 					locf1->SetParameter("N_{#eta}",    0.0);
 					locf1->SetParameter("A_{#eta#pi}", 0.0);
-					locf1->SetParameter("A_{bkgd}",    f_fit->GetParameter("A_{bkgd}"));
+					locf1->SetParameter("A_{#eta#pi#pi}",    f_fit->GetParameter("A_{#eta#pi#pi}"));
+					break;
+				case 12:
+					locf1->SetParameter("N_{#eta}",    0.0);
+					locf1->SetParameter("A_{#eta#pi}", 0.0);
+					locf1->SetParameter("A_{#eta#pi#pi}",    f_fit->GetParameter("A_{#eta#pi#pi}"));
 					break;
 			}
 			locf1->SetLineColor(kBlue+2);
@@ -261,7 +272,12 @@ class MggFitter {
 				case 11:
 					locf1->SetParameter("N_{#eta}",    0.0);
 					locf1->SetParameter("A_{#eta#pi}", f_fit->GetParameter("A_{#eta#pi}"));
-					locf1->SetParameter("A_{bkgd}",    0.0);
+					locf1->SetParameter("A_{#eta#pi#pi}",    0.0);
+					break;
+				case 12:
+					locf1->SetParameter("N_{#eta}",    0.0);
+					locf1->SetParameter("A_{#eta#pi}", f_fit->GetParameter("A_{#eta#pi}"));
+					locf1->SetParameter("A_{#eta#pi#pi}",    0.0);
 					break;
 			}
 			locf1->SetLineColor(kCyan);
@@ -273,8 +289,27 @@ class MggFitter {
 		}
 		void GetEmptyFitFunction(TF1** f1, TString fname="emptyFit", double binWidth=0.0) {
 			TF1 *locf1;
-			InitializeEmptyFitFunction(&locf1,"locf1");
-			locf1->SetParameters(f_empty->GetParameters());
+			InitializeFitFunction(&locf1,"locf1");
+			locf1->SetParameters(f_fit->GetParameters());
+			ZeroSignalPars(locf1);
+			switch(fitOption_bkgd) {
+				case 1:
+					for(int ipar=0; ipar<=fitOption_poly; ipar++) {
+						locf1->SetParameter(Form("p%d",ipar), 0.0);
+					}
+					break;
+				case 2:
+					for(int ipar=0; ipar<5; ipar++) {
+						locf1->SetParameter(Form("p%d",ipar), 0.0);
+					}
+					break;
+				case 3:
+					for(int ipar=0; ipar<=fitOption_poly; ipar++) {
+						locf1->SetParameter(Form("p%d",ipar), 0.0);
+					}
+					break;
+			}
+			locf1->SetParameter("N_{#omega}", 0.0);
 			locf1->SetLineColor(kRed);
 			locf1->SetLineStyle(4);
 			locf1->SetLineWidth(2);
@@ -287,6 +322,30 @@ class MggFitter {
 			delete locf1;
 			return;
 		}
+		void GetEmptyBGFitFunction(TF1** f1, TString fname="emptyFit", double binWidth=0.0) {
+			TF1 *locf1;
+			InitializeEmptyFitFunction(&locf1,"locf1");
+			locf1->SetParameters(f_empty->GetParameters());
+			locf1->SetLineColor(kMagenta);
+			locf1->SetLineStyle(4);
+			locf1->SetLineWidth(2);
+			locf1->SetNpx(1000);
+			
+			if(binWidth==0.0) locf1->SetParameter(locf1->GetNpar()-1, binSize);
+			else              locf1->SetParameter(locf1->GetNpar()-1, binWidth);
+			
+			locf1->SetParameter("N_{#eta}", 0.0);
+			locf1->SetParameter("N_{#omega}", 0.0);
+			locf1->SetParameter("N_{fdc}", 0.0);
+			for(int ifdc=0; ifdc<m_muFDC.size();       ifdc++) locf1->SetParameter(Form("N_{fdc,%d}",       ifdc+1), 0.0);
+			for(int ifdc=0; ifdc<m_muFDC_omega.size(); ifdc++) locf1->SetParameter(Form("N_{fdc,#omega,%d}",ifdc+1), 0.0);
+			for(int ifdc=0; ifdc<m_muFDC_eta.size();   ifdc++) locf1->SetParameter(Form("N_{fdc,#eta,%d}",  ifdc+1), 0.0);
+			
+			*f1 = (TF1*)locf1->Clone(fname.Data());
+			delete locf1;
+			return;
+		}
+		
 		double GetEmptyEtaFitPar() { return m_nEmptyEtaPar; }
 		double GetEmptyOmegaFitPar() { return m_nEmptyOmegaPar; }
 		
@@ -296,8 +355,11 @@ class MggFitter {
 		void GetYield(double&, double&, int useSignalPars=0, int subtractEtaPion=0);
 		void GetEmptyYield(double&, double&, int excludeNonPeaking=0);
 		void GetOmegaYield(double&, double&);
+		void GetBkgdYield(double&, double&);
 		void GetHadronicBkgdYield(double&, double&);
 		void GetEtaPionYield(double&, double&);
+		
+		void GetOmegaFitPars(double&, double&, double&, double&, double&, double&, double&, double&);
 		
 		void GetEmptyEtaFraction(double&, double&);
 		void GetHadronicBkgdFraction(double&, double&);
@@ -338,8 +400,9 @@ class MggFitter {
 		Option_t *fitOption = "R0Q";
 		
 		vector<pair<double,double>> excludeRegions;
-		vector<double> m_muFDC = {0.61, 0.55, 0.45};
-		
+		vector<double> m_muFDC       = {0.619, 0.532, 0.454, 0.399, 0.339};
+		vector<double> m_muFDC_omega = {0.613, 0.535, 0.462};
+		vector<double> m_muFDC_eta   = {0.445, 0.406, 0.367};
 		// Lineshapes:
 		
 		TH1F *h_etaLineshape;
@@ -402,12 +465,14 @@ class MggFitter {
 		
 		void    GuessEmptyEtaParameters();
 		void      FixEmptyEtaParameters();
+		void  ReleaseEmptyEtaParameters();
 		
 		void  GuessEmptyOmegaParameters();
 		void    FixEmptyOmegaParameters();
 		
 		void    GuessEmptyFDCParameters();
-		
+		void      FixEmptyFDCParameters();
+		void  ReleaseEmptyFDCParameters();
 };
 
 #endif
