@@ -82,7 +82,7 @@ int main(int argc, char **argv)
 		fileName = Form("output/yield_phase%d_VetoOption%d_%.1fGeV_%.1fGeV.root",
 			locEtaAna.GetPhase(),locEtaAna.GetVetoOption(), e1, e2);
 	} else {
-		fileName = Form("output/yield_phase%d_VetoOption%d_new.root",
+		fileName = Form("output/yield_phase%d_VetoOption%d_hist.root",
 			locEtaAna.GetPhase(),locEtaAna.GetVetoOption());
 		/*
 		fileName = Form("output/mggShift/yield_phase%d_VetoOption%d_omega0_pol2_2.5MeV.root",
@@ -90,7 +90,7 @@ int main(int argc, char **argv)
 		*/
 	}
 	
-	if(1) {
+	if(0) {
 		
 		if(!locEtaAna.IsMatrixLoaded()) {
 			if(locEtaAna.LoadAngularMatrix()) {
@@ -115,24 +115,19 @@ int main(int argc, char **argv)
 		
 		locEtaAna.PlotAngularYield();
 		locEtaAna.PlotCrossSection();
-		if(locEtaAna.GetEmptyFitOption(0) && locEtaAna.GetEmptyFitOption(1)) {
-			locEtaAna.PlotEmptyEtaRatio();
-		}
-		if(locEtaAna.GetFitOption(1)>=7) {
-			locEtaAna.PlotHadronicBkgdFraction();
-			if(locEtaAna.GetFitOption(1)>8) locEtaAna.PlotEtaPionFraction();
-		}
+		
+		locEtaAna.PlotEmptyEtaRatio();
+		
+		locEtaAna.PlotHadronicBkgdFraction();
+		locEtaAna.PlotEtaPionFraction();
+		
 		locEtaAna.PlotBackgrounds();
 		locEtaAna.PlotOmegaFitPars();
 		
 		locEtaAna.WriteROOTFile(fileName);
 		locYieldFitter.SetYield((TH1F*)locEtaAna.GetAngularYield(1));
-		if(locEtaAna.GetFitOption(1)>=7) {
-			locEtaAna.PlotLineshapeShift();
-		}
-		if(locEtaAna.GetFitOption(1)>=11) {
-			locEtaAna.PlotQFFraction();
-		}
+		locEtaAna.PlotLineshapeShift();
+		locEtaAna.PlotQFFraction();
 	}
 	else {
 		
@@ -157,7 +152,7 @@ int main(int argc, char **argv)
 	gStyle->SetOptStat(0);
 	//gStyle->SetOptFit(0);
 	
-	double minFitRange = 0.0, maxFitRange = 3.5;
+	double minFitRange = 0.0, maxFitRange = 1.0;
 	locYieldFitter.FitAngularYield(minFitRange, maxFitRange);
 	
 	gSystem->ProcessEvents();

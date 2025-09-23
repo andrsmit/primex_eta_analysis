@@ -189,9 +189,9 @@ void MggFitter::GuessEtaParameters(vector<double> &parGuesses)
 	}
 	
 	switch(fitOption_signal) {
-		case 11:
+		case 1:
 		{
-			// Lineshape  (Signal fit + EtaPi fit + other hadronic bkgd hist): N_exc, deltaMu, A_etapi, A_other
+			// Lineshape  (Signal hist + EtaPi hist + other hadronic bkgd hist): N_exc, deltaMu, A_etapi, A_other
 			parGuesses.push_back(NGuess);
 			parGuesses.push_back(lineshapeOffset);
 			parGuesses.push_back(1.0); // fraction of quasifree lineshape
@@ -200,7 +200,7 @@ void MggFitter::GuessEtaParameters(vector<double> &parGuesses)
 			parGuesses.push_back(0.0); // eta+pi+pi yield
 			break;
 		}
-		case 12:
+		case 2:
 		{
 			// Lineshape  (Signal fit + EtaPi hist + other hadronic bkgd hist): N_exc, deltaMu, A_etapi, A_other
 			parGuesses.push_back(NGuess);

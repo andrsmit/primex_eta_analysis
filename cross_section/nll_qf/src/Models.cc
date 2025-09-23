@@ -6,7 +6,43 @@ double MggFitter::model_eta(double locMgg, double *par) {
 	double fEta = 0.0;
 	int nParameters = 0;
 	switch(fitOption_signal) {
-		case 12:
+		case 1:
+		{
+			// Use simulated histograms as lineshape:
+			
+			nParameters = 6;
+			
+			// (Quasi)elastic eta production:
+			double N_eta   = par[0];
+			double dmu     = par[1];
+			double z_qf    = par[2];
+			
+			double corrRatioCoh = 1.0 / h_cohLineshape->GetBinWidth(1);
+			double corrRatioQF  = 1.0 /  h_qfLineshape->GetBinWidth(1);
+			
+			double fEtaCoh = N_eta * (1.0 - z_qf) * h_cohLineshape->GetBinContent(
+				h_cohLineshape->FindBin(locMgg-dmu)) * corrRatioCoh;
+			
+			double fEtaQF = N_eta * z_qf * h_qfLineshape->GetBinContent(
+				h_qfLineshape->FindBin(locMgg-dmu)) * corrRatioQF;
+			
+			// Non-single-eta Background:
+			double N_etapi   = par[3] * par[4];
+			double N_etapipi = par[3] * par[5];
+			
+			double corrRatioEtaPi = 1.0 / h_etaPionLineshape->GetBinWidth(1);
+			double corrRatioBkgd  = 1.0 / h_hadronicBkgdLineshape->GetBinWidth(1);
+			
+			double fEtaPi = N_etapi * h_etaPionLineshape->GetBinContent(
+				h_etaPionLineshape->FindBin(locMgg-dmu-0.002)) * corrRatioEtaPi;
+			
+			double fEtaPiPi = N_etapipi * h_hadronicBkgdLineshape->GetBinContent(
+				h_hadronicBkgdLineshape->FindBin(locMgg-dmu-0.002)) * corrRatioBkgd;
+			
+			fEta = fEtaCoh + fEtaQF + fEtaPi + fEtaPiPi;
+			break;
+		}
+		case 2:
 		{
 			// Line shape from simulation:
 			
@@ -18,8 +54,8 @@ double MggFitter::model_eta(double locMgg, double *par) {
 			double z_qf    = par[2];
 			
 			double fEta_exc = N_eta * (
-				(1.0-z_qf)*f_cohLineshape->Eval(locMgg) +
-				     z_qf * f_qfLineshape->Eval(locMgg));
+				(1.0-z_qf)*f_cohLineshape->Eval(locMgg-dmu) +
+				     z_qf * f_qfLineshape->Eval(locMgg-dmu));
 			
 			// Hadronic Background:
 			double N_etapi   = par[3] * par[4];

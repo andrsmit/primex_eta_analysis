@@ -34,7 +34,7 @@ class MggFitter {
 		
 		// Fitting options:
 		
-		int fitOption_signal = 12;
+		int fitOption_signal =  2;
 		int fitOption_bkgd   =  2;
 		int fitOption_poly   =  2;
 		int fitOption_omega  =  1;
@@ -73,13 +73,21 @@ class MggFitter {
 		void SetEmptyWide(TH1F *h1) { h_emptyWide = h1; }
 		
 		// Set/Fit lineshape of eta signal:
-		void SetEtaLineshape(TH1F *h1, int drawOption=0) { 
-			h_etaLineshape = h1;
-			h_etaLineshape->Scale(1.0/h_etaLineshape->Integral());
-			FitEtaLineshape(drawOption);
+		void SetCohLineshape(TH1F *h1, int drawOption=0) { 
+			h_cohLineshape = h1;
+			h_cohLineshape->Scale(1.0/h_cohLineshape->Integral());
+			FitCohLineshape(drawOption);
 			return;
 		}
-		void FitEtaLineshape(int drawOption=0);
+		void FitCohLineshape(int drawOption=0);
+		
+		void SetQFLineshape(TH1F *h1, int drawOption=0) { 
+			h_qfLineshape = h1;
+			h_qfLineshape->Scale(1.0/h_qfLineshape->Integral());
+			FitQFLineshape(drawOption);
+			return;
+		}
+		void FitQFLineshape(int drawOption=0);
 		
 		// Set/fit lineshape of eta+pion background:
 		void SetHadronicBkgdLineshape(TH1F *h1, int drawOption=0) {
@@ -238,15 +246,7 @@ class MggFitter {
 			ZeroEmptyPars(locf1);
 			//ZeroAccPars(locf1);
 			locf1->SetParameter("#alpha_{acc,switch}",0.0);
-			
-			if(fitOption_signal>9) {
-				if(fitOption_signal>10) {
-					locf1->SetParameter("A_{#eta#pi}",0.0);
-				}
-				else {
-					locf1->SetParameter("frac_{#eta#pi}",0.0);
-				}
-			}
+			locf1->SetParameter("A_{#eta#pi}",0.0);
 			
 			locf1->SetLineColor(kBlue+2);
 			locf1->SetNpx(1000);
@@ -256,8 +256,6 @@ class MggFitter {
 			return;
 		}
 		void GetEtaPionFunction(TF1** f1, TString fname="etaPionFit") {
-			if(fitOption_signal<9) return;
-			
 			TF1 *locf1;
 			InitializeFitFunction(&locf1,"locf1");
 			locf1->SetParameters(f_full->GetParameters());
@@ -269,13 +267,7 @@ class MggFitter {
 			ZeroEmptyPars(locf1);
 			//ZeroAccPars(locf1);
 			locf1->SetParameter("#alpha_{acc,switch}",0.0);
-			
-			if(fitOption_signal>10) {
-				locf1->SetParameter("A_{#eta#pi#pi}",0.0);
-			}
-			else {
-				locf1->SetParameter("frac_{bkgd}",0.0);
-			}
+			locf1->SetParameter("A_{#eta#pi#pi}",0.0);
 			
 			locf1->SetLineColor(kCyan);
 			locf1->SetNpx(1000);
@@ -410,7 +402,7 @@ class MggFitter {
 		
 		// MC Lineshapes:
 		
-		TH1F *h_etaLineshape;
+		TH1F *h_cohLineshape, *h_qfLineshape;
 		TF1  *f_cohLineshape, *f_qfLineshape;
 		TF1  *f_etaLineshape;
 		

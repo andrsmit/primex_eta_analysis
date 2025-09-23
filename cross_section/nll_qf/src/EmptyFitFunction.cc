@@ -34,7 +34,19 @@ int MggFitter::InitializeEmptyWideFitParameters()
 	
 	// Eta + Hadronic Bkgd from residual gas:
 	switch(fitOption_signal) {
-		case 12:
+		case 1:
+		{
+			// Line shape from simulation:
+			f_emptyWide->FixParameter(nParameters+0, 0.000);
+			f_emptyWide->FixParameter(nParameters+1, 0.000);
+			f_emptyWide->FixParameter(nParameters+2, 0.000);
+			f_emptyWide->FixParameter(nParameters+3, 0.000);
+			f_emptyWide->FixParameter(nParameters+4, 1.000);
+			f_emptyWide->FixParameter(nParameters+5, 0.000);
+			nParameters += 6;
+			break;
+		}
+		case 2:
 		{
 			// Line shape from simulation:
 			f_emptyWide->FixParameter(nParameters+0, 0.000);

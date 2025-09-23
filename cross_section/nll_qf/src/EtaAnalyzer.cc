@@ -145,8 +145,8 @@ void EtaAnalyzer::SetFitEmptyTarget(int option)
 
 void EtaAnalyzer::SetFitOption_signal(int option) 
 {
-	if((option<1) || (option>12)) {
-		printf("\nUnsupported signal fit option provided (should be 1-6). Using default option: %d\n", m_fitOption_signal);
+	if((option<1) || (option>2)) {
+		printf("\nUnsupported signal fit option provided (should be 1-2). Using default option: %d\n", m_fitOption_signal);
 	}
 	else {
 		m_fitOption_signal = option;
@@ -338,34 +338,10 @@ TString EtaAnalyzer::GetFitOptionStr(int option)
 		case 0:
 			switch(m_fitOption_signal) {
 				case 1:
-					optString = "single Gaussian";
+					optString = "histogram as lineshape";
 					break;
 				case 2:
-					optString = "double Gaussian";
-					break;
-				case 3:
-					optString = "Crystal Ball";
-					break;
-				case 4:
-					optString = "Crystal Ball + Gaussian";
-					break;
-				case 5:
-					optString = "Simulated Lineshape";
-					break;
-				case 6:
-					optString = "Simulated Lineshape + Crystal Ball";
-					break;
-				case 7:
-					optString = "Separate lineshapes for eta and eta+pion";
-					break;
-				case 8:
-					optString = "Separate lineshapes for eta and eta+pion";
-					break;
-				case 9:
-					optString = "Separate lineshapes for eta, eta+pion, and other hadronic backgrounds";
-					break;
-				case 10:
-					optString = "Separate lineshapes for eta, eta+pion, and other hadronic backgrounds";
+					optString = "function-parameterized lineshape";
 					break;
 			}
 			break;
@@ -627,7 +603,7 @@ void EtaAnalyzer::ExtractAngularYield(MggFitter& locFitter, int drawOption)
 		double locMaxAngle = locAngle + m_angularBin[iThetaBin].second;
 		
 		//if(locAngle<0.5 || locAngle>0.38) continue;
-		if(locAngle<4.0) continue;
+		//if(locAngle<0.8) continue;
 		
 		//----------------------------------------------//
 		// Get 1-d projection of invariant mass spectrum:
@@ -712,41 +688,11 @@ void EtaAnalyzer::ExtractAngularYield(MggFitter& locFitter, int drawOption)
 			printf("  Histogram bin range: %f-%f\n", locMinAngleHist, locMaxAngleHist);
 		}
 		
-		TH1F *hEta;
-		if(!m_useRawMass && ((m_lineshapeOption==1) || (m_lineshapeOption==2 && locAngle>1.5))) {
-			
-			lineshapeWindowSize = 1.0;
-			
-			lineshapeAngleLow  = locAngle - lineshapeWindowSize;
-			lineshapeAngleHigh = locAngle + lineshapeWindowSize;
-			if(lineshapeAngleLow < 0.0) {
-				lineshapeAngleLow  = 0.00;
-				lineshapeAngleHigh = 2.0*lineshapeWindowSize;
-			}
-			hEta = (TH1F*)h_etaLineshapeBGGEN->ProjectionY("hEta",
-				h_etaLineshapeBGGEN->GetXaxis()->FindBin(lineshapeAngleLow),
-				h_etaLineshapeBGGEN->GetXaxis()->FindBin(lineshapeAngleHigh)-1, "e");
-			//hEta->Rebin(m_rebinsMgg);
-		}
-		else {
-			hEta = (TH1F*)h_etaLineshapeCoh->ProjectionY("hEta", minAngleBin, maxAngleBin, "e");
-			//hEta->Rebin(m_rebinsMgg);
-			/*
-			lineshapeWindowSize = 1.0;
-			
-			lineshapeAngleLow  = locAngle - lineshapeWindowSize;
-			lineshapeAngleHigh = locAngle + lineshapeWindowSize;
-			if(lineshapeAngleLow < 0.0) {
-				lineshapeAngleLow  = 0.00;
-				lineshapeAngleHigh = 2.0*lineshapeWindowSize;
-			}
-			hEta = (TH1F*)h_etaLineshapeCoh->ProjectionY("hEta",
-				h_etaLineshapeCoh->GetXaxis()->FindBin(lineshapeAngleLow),
-				h_etaLineshapeCoh->GetXaxis()->FindBin(lineshapeAngleHigh)-1, "e");
-			//hEta->Rebin(m_rebinsMgg);
-			*/
-		}
-		locFitter.SetEtaLineshape(hEta,1);
+		TH1F *hEtaCoh = (TH1F*)h_etaLineshapeCoh->ProjectionY("hEtaCoh", minAngleBin, maxAngleBin, "e");
+		locFitter.SetCohLineshape(hEtaCoh);
+		
+		TH1F *hEtaQF  = (TH1F*)h_etaLineshapeQF->ProjectionY("hEtaQF", minAngleBin, maxAngleBin, "e");
+		locFitter.SetQFLineshape(hEtaQF);
 		
 		//----------------------------------------------//
 		// Omega Lineshape
@@ -814,28 +760,22 @@ void EtaAnalyzer::ExtractAngularYield(MggFitter& locFitter, int drawOption)
 		double locHadronicBkgdFracErr = h_HadronicBkgdFraction_bggen->GetBinError(h_HadronicBkgdFraction_bggen->FindBin(locAngle));
 		locFitter.SetHadronicBkgdFraction(locHadronicBkgdFrac, locHadronicBkgdFracErr);
 		
-		TH1F *hEtaPionBkgd;
-		if(m_fitOption_signal>8) {
-			
-			// Eta+Pion background is treated independently from other hadronic backgrounds:
-			
-			hEtaPionBkgd = (TH1F*)h_eta1PionLineshape->ProjectionY("hEtaPionBkgd",
-				h_eta1PionLineshape->GetXaxis()->FindBin(lineshapeAngleLow),
-				h_eta1PionLineshape->GetXaxis()->FindBin(lineshapeAngleHigh)-1, "e");
-			hEtaPionBkgd->Rebin(m_rebinsMgg);
-			
-			TH1F *lochEtaPionBkgd = (TH1F*)h_eta1PionLineshape->ProjectionY("hNarrowEtaPionBkgd",
-				minAngleBin, maxAngleBin, "e");
-			double nEtaPiNarrow = lochEtaPionBkgd->Integral();
-			double nEtaPiWide   = hEtaPionBkgd->Integral();
-			if(nEtaPiWide>0.0) hEtaPionBkgd->Scale(nEtaPiNarrow/nEtaPiWide);
-			
-			locFitter.SetEtaPionLineshape(hEtaPionBkgd);
-			
-			double locEtaPionFrac    = h_EtaPionBkgdFraction_bggen->GetBinContent(h_EtaPionBkgdFraction_bggen->FindBin(locAngle));
-			double locEtaPionFracErr = h_EtaPionBkgdFraction_bggen->GetBinError(h_EtaPionBkgdFraction_bggen->FindBin(locAngle));
-			locFitter.SetEtaPionBkgdFraction(locEtaPionFrac, locEtaPionFracErr);
-		}
+		TH1F *hEtaPionBkgd = (TH1F*)h_eta1PionLineshape->ProjectionY("hEtaPionBkgd",
+			h_eta1PionLineshape->GetXaxis()->FindBin(lineshapeAngleLow),
+			h_eta1PionLineshape->GetXaxis()->FindBin(lineshapeAngleHigh)-1, "e");
+		hEtaPionBkgd->Rebin(m_rebinsMgg);
+		
+		TH1F *lochEtaPionBkgd = (TH1F*)h_eta1PionLineshape->ProjectionY("hNarrowEtaPionBkgd",
+			minAngleBin, maxAngleBin, "e");
+		double nEtaPiNarrow = lochEtaPionBkgd->Integral();
+		double nEtaPiWide   = hEtaPionBkgd->Integral();
+		if(nEtaPiWide>0.0) hEtaPionBkgd->Scale(nEtaPiNarrow/nEtaPiWide);
+		
+		locFitter.SetEtaPionLineshape(hEtaPionBkgd);
+		
+		double locEtaPionFrac    = h_EtaPionBkgdFraction_bggen->GetBinContent(h_EtaPionBkgdFraction_bggen->FindBin(locAngle));
+		double locEtaPionFracErr = h_EtaPionBkgdFraction_bggen->GetBinError(h_EtaPionBkgdFraction_bggen->FindBin(locAngle));
+		locFitter.SetEtaPionBkgdFraction(locEtaPionFrac, locEtaPionFracErr);
 		
 		//----------------------------------------------//
 		// Do fit and extract yield:
@@ -921,16 +861,6 @@ void EtaAnalyzer::ExtractAngularYield(MggFitter& locFitter, int drawOption)
 		double locYieldFit, locYieldFitErr;
 		locFitter.GetYield(locYieldFit, locYieldFitErr, 1, 1);
 		
-		if(m_fitOption_signal==2) {
-			// We didn't try to separate exclusive and inclusive eta production in the fit
-			// Instead, rely on fraction of background from BGGEN to get signal yield:
-			
-			double locBggenFrac = h_HadronicBkgdFraction_bggen_cut->GetBinContent(
-				h_HadronicBkgdFraction_bggen_cut->GetXaxis()->FindBin(locAngle));
-			locYieldFit    /= (1.0+locBggenFrac);
-			locYieldFitErr /= (1.0+locBggenFrac);
-		}
-		
 		m_angularYieldFit[iThetaBin] = {locYieldFit, locYieldFitErr};
 		
 		// Empty target background integrated between mgg cut (from fit function):
@@ -951,31 +881,25 @@ void EtaAnalyzer::ExtractAngularYield(MggFitter& locFitter, int drawOption)
 		
 		// Fraction of hadronic background integrated over all mgg:
 		
-		if(m_fitOption_signal>=7) {
-			double hadronicBkgdFrac, hadronicBkgdFracErr;
-			locFitter.GetHadronicBkgdFraction(hadronicBkgdFrac, hadronicBkgdFracErr);
-			m_angularHadronicBkgdFraction[iThetaBin] = {hadronicBkgdFrac, hadronicBkgdFracErr};
-			
-			// eta+pion:
-			if(m_fitOption_signal>8) {
-				double etaPionFrac, etaPionFracErr;
-				locFitter.GetEtaPionBkgdFraction(etaPionFrac, etaPionFracErr);
-				m_angularEtaPionBkgdFraction[iThetaBin] = {etaPionFrac, etaPionFracErr};
-			}
-		}
+		double hadronicBkgdFrac, hadronicBkgdFracErr;
+		locFitter.GetHadronicBkgdFraction(hadronicBkgdFrac, hadronicBkgdFracErr);
+		m_angularHadronicBkgdFraction[iThetaBin] = {hadronicBkgdFrac, hadronicBkgdFracErr};
+		
+		// eta+pion:
+		double etaPionFrac, etaPionFracErr;
+		locFitter.GetEtaPionBkgdFraction(etaPionFrac, etaPionFracErr);
+		m_angularEtaPionBkgdFraction[iThetaBin] = {etaPionFrac, etaPionFracErr};
 		
 		// Yield of eta+pion background, integrated between mgg cut:
 		
-		if(m_fitOption_signal>=7) {
-			double hadronicBkgdYield, hadronicBkgdYieldErr;
-			locFitter.GetHadronicBkgdYield(hadronicBkgdYield, hadronicBkgdYieldErr);
-			m_angularYieldHadronicBkgd[iThetaBin] = {hadronicBkgdYield, hadronicBkgdYieldErr};
-			
-			// eta+pion:
-			double etaPionYield, etaPionYieldErr;
-			locFitter.GetEtaPionYield(etaPionYield, etaPionYieldErr);
-			m_angularYieldEtaPion[iThetaBin] = {etaPionYield, etaPionYieldErr};
-		}
+		double hadronicBkgdYield, hadronicBkgdYieldErr;
+		locFitter.GetHadronicBkgdYield(hadronicBkgdYield, hadronicBkgdYieldErr);
+		m_angularYieldHadronicBkgd[iThetaBin] = {hadronicBkgdYield, hadronicBkgdYieldErr};
+		
+		// eta+pion:
+		double etaPionYield, etaPionYieldErr;
+		locFitter.GetEtaPionYield(etaPionYield, etaPionYieldErr);
+		m_angularYieldEtaPion[iThetaBin] = {etaPionYield, etaPionYieldErr};
 		
 		// Yield of omega background, integrated between mgg cut:
 		
@@ -1043,12 +967,9 @@ void EtaAnalyzer::ExtractAngularYield(MggFitter& locFitter, int drawOption)
 			
 			if(m_fitOption_omega==4) locFitter.GetRhoFunction(&locfRho, "locfRho");
 			
-			if(m_fitOption_signal>=6) {
-				locFitter.GetHadronicBkgdFunction(&locfHadronicBkgd, "locfHadronicBkgd");
-				if(m_fitOption_signal>8) {
-					locFitter.GetEtaPionFunction(&locfEtaPion, "locfEtaPion");
-				}
-			}
+			locFitter.GetHadronicBkgdFunction(&locfHadronicBkgd, "locfHadronicBkgd");
+			locFitter.GetEtaPionFunction(&locfEtaPion, "locfEtaPion");
+			
 			if(m_fitOption_empty==1) {
 				// Change the binWidth parameter in the empty target fit function to match
 				// the full target data we're plotting it over:
@@ -1455,11 +1376,9 @@ void EtaAnalyzer::PlotHadronicBkgdFraction()
 	h_HadronicBkgdFraction_bggen->SetMarkerSize(0.7);
 	h_HadronicBkgdFraction_bggen->SetLineWidth(2);
 	
-	if(m_fitOption_signal>=11) {
-		for(int ibin=1; ibin<=h_HadronicBkgdFraction_bggen->GetXaxis()->GetNbins(); ibin++) {
-			h_HadronicBkgdFraction_bggen->SetBinContent(ibin, 1.0);
-			h_HadronicBkgdFraction_bggen->SetBinError(ibin, 0.0);
-		}
+	for(int ibin=1; ibin<=h_HadronicBkgdFraction_bggen->GetXaxis()->GetNbins(); ibin++) {
+		h_HadronicBkgdFraction_bggen->SetBinContent(ibin, 1.0);
+		h_HadronicBkgdFraction_bggen->SetBinError(ibin, 0.0);
 	}
 	
 	double locMaxRatio = 0.0;

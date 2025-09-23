@@ -52,7 +52,7 @@ void YieldFitter::FitAngularYield(double minFitRange, double maxFitRange)
 	
 	if(0) {
 		// Fix incoherent normalization in fit:
-		f_yield->FixParameter(3, 0.552842);
+		f_yield->FixParameter(3, 0.56);
 		if(m_components.size()>3) {
 			f_yield->FixParameter(4, 0.6);
 		}

@@ -37,10 +37,10 @@ class EtaAnalyzer {
 			h_mggVsThetaFull_acc(nullptr), 
 			h_mggVsThetaEmpty_acc(nullptr), 
 			
-			h_etaLineshapeCoh(nullptr),  
-			h_etaLineshapeBGGEN(nullptr), 
+			h_etaLineshapeCoh(nullptr), 
+			h_etaLineshapeQF(nullptr), 
 			h_omegaLineshape(nullptr), 
-			h_fdcOmegaLineshape(nullptr), 
+			h_rhoLineshape(nullptr),
 			
 			h_eta1PionLineshape(nullptr), 
 			h_eta2PionLineshape(nullptr), 
@@ -124,7 +124,7 @@ class EtaAnalyzer {
 			m_subtractEmpty        =  0;
 			m_fitOption_empty      =  1;
 			
-			m_fitOption_signal     = 12;
+			m_fitOption_signal     =  2;
 			m_fitOption_bkgd       =  2;
 			m_fitOption_poly       =  2;
 			m_fitOption_omega      =  1;
@@ -234,11 +234,10 @@ class EtaAnalyzer {
 		int LoadDataHistograms();
 		
 		int LoadLineshapes();
-		int LoadEtaLineshape();
-		int LoadBGGENLineshape();
+		int LoadEtaLineshape_Coh();
+		int LoadEtaLineshape_QF();
 		int LoadEtaPionLineshape();
 		int LoadOmegaLineshape();
-		int LoadFDCOmegaLineshape();
 		
 		// Get photon flux (functinos are defined in Flux.cc):
 		
@@ -288,8 +287,8 @@ class EtaAnalyzer {
 		TH2F *h_mggVsThetaFull_acc, *h_mggVsThetaEmpty_acc;
 		
 		// MC Lineshapes:
-		TH2F *h_etaLineshapeCoh,   *h_etaLineshapeBGGEN;
-		TH2F *h_omegaLineshape,    *h_rhoLineshape, *h_fdcOmegaLineshape;
+		TH2F *h_etaLineshapeCoh,   *h_etaLineshapeQF;
+		TH2F *h_omegaLineshape,    *h_rhoLineshape;
 		TH2F *h_eta1PionLineshape, *h_eta2PionLineshape, *h_eta3PionLineshape;
 		TH2F *h_hadronicBkgdLineshape;
 		
