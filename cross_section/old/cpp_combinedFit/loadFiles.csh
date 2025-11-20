@@ -1,0 +1,3 @@
+#!/bin/tcsh
+
+nedit eta_cs.config src/CrossSection.cc src/YieldFitter.cc src/Data.cc src/EtaAnalyzer.cc src/MggFitter.cc src/FitFunction.cc &
