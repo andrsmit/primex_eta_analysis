@@ -1,0 +1,530 @@
+#include "EtaAnalyzer.h"
+#include "MggFitter.h"
+#include "CrossSection.h"
+
+TString primexAnaDir = "/work/halld/home/andrsmit/primex_eta_analysis";
+
+TString    dataDirectory = "/work/halld/home/andrsmit/primex_eta_analysis/analyze_trees/rootFiles";
+TString   cohMCDirectory = "/work/halld/home/andrsmit/primex_eta_analysis/eta_gg_matrix/analyze_trees/rootFiles";
+TString    qfMCDirectory = "/work/halld/home/andrsmit/primex_eta_analysis/qf_mc/analyze_trees/rootFiles";
+TString omegaMCDirectory = "/work/halld/home/andrsmit/primex_eta_analysis/backgrounds/analyze_trees/rootFiles";
+TString   bggenDirectory = "/work/halld/home/andrsmit/primex_eta_analysis/bggen_ana/analyze_trees/rootFiles";
+
+int EtaAnalyzer::LoadDataHistograms()
+{
+	printf("\nREADING DATA HISTOGRAMS...\n");
+	
+	TString fieldString = "bfield";
+	if(m_phase==1) fieldString = "nobfield";
+	
+	TString anaString = "";
+	TString dirString = "";
+	switch(m_analysisOption) {
+		case 1:
+			dirString = "matrix";
+			anaString = "_matrix";
+			break;
+		case 2:
+			dirString = "FCAL";
+			anaString = "_FCAL";
+			break;
+		case 3:
+			dirString = "BCAL";
+			anaString = "_BCAL";
+			break;
+		case 4:
+			dirString = "beam";
+			anaString = "_beam";
+			break;
+		case 5:
+			dirString = "TOF";
+			anaString = "_TOF";
+			break;
+		default:
+			dirString = "default";
+			anaString = "";
+			break;
+	}
+	
+	TString vetoStr = "";
+	if(m_analysisOption>0) vetoStr = Form("_VetoOption%d", m_vetoOption);
+	if(m_analysisOption==8) vetoStr = "";
+	
+	TString fileTypeString = m_phase==1 ? "EVIO" : "REST";
+	
+	TString fullTargetFileName  = Form("%s/phase%d/%s/CORRECTED_0.5PERCENT/%s/full_target_%s%s%s.root",  
+		dataDirectory.Data(), m_phase, fileTypeString.Data(), 
+		dirString.Data(), fieldString.Data(), anaString.Data(), vetoStr.Data());
+	
+	TString emptyTargetFileName = Form("%s/phase%d/%s/CORRECTED_0.5PERCENT/%s/empty_target_%s%s%s.root", 
+		dataDirectory.Data(), m_phase, fileTypeString.Data(), 
+		dirString.Data(), fieldString.Data(), anaString.Data(), vetoStr.Data());
+	
+	if(gSystem->AccessPathName(fullTargetFileName.Data()) || gSystem->AccessPathName(emptyTargetFileName.Data()))
+		return 1;
+	
+	printf("   Full Target: %s\n",  fullTargetFileName.Data());
+	printf("  Empty Target: %s\n", emptyTargetFileName.Data());
+	printf("\n");
+	
+	//--------------------------------//
+	
+	// Reading the histograms with the "matrix" option (m_analysisOption=1) is fundamentally different from the rest:
+	
+	if(m_analysisOption==1) {
+		
+		//-------------------------------------//
+		// Get the full target data:
+		
+		TFile *fullTargetFile = new TFile(fullTargetFileName.Data(), "READ");
+		
+		TH3F *h3Full     = (TH3F*)fullTargetFile->Get("invmassMatrix_prompt")->Clone("h3Full");
+		TH3F *h3Full_acc = (TH3F*)fullTargetFile->Get("invmassMatrix_acc")->Clone("h3Full_acc");
+		
+		double locBinSize = h3Full->GetZaxis()->GetBinWidth(1);
+		int ebin1 = h3Full->GetZaxis()->FindBin(m_minBeamEnergy + 0.5*locBinSize);
+		int ebin2 = h3Full->GetZaxis()->FindBin(m_maxBeamEnergy - 0.5*locBinSize);
+		
+		// consistency check to make sure binning of data histogram aligns with specified energy range:
+		
+		double locMinimumEnergy = h3Full->GetZaxis()->GetBinCenter(ebin1) - 0.5*locBinSize;
+		double locMaximumEnergy = h3Full->GetZaxis()->GetBinCenter(ebin2) + 0.5*locBinSize;
+		
+		if((fabs(locMinimumEnergy-m_minBeamEnergy)>1.e6) || (fabs(locMaximumEnergy-m_maxBeamEnergy)>1.e6)) {
+			printf("\n\nWarning! Bin edges of data histogram are inconsistent with specified energy range:\n");
+			printf("   Specified energy range: %.5f GeV - %.5f GeV\n", m_minBeamEnergy, m_maxBeamEnergy);
+			printf("   Flux Integration Range: %.5f GeV - %.5f GeV\n\n", locMinimumEnergy, locMaximumEnergy);
+		}
+		
+		h3Full->GetZaxis()->SetRange(ebin1, ebin2);
+		h3Full_acc->GetZaxis()->SetRange(ebin1, ebin2);
+		
+		h_mggVsThetaFull = (TH2F*)h3Full->Project3D("yx")->Clone("mgg_vs_theta_full");
+		h_mggVsThetaFull->SetDirectory(0);
+		
+		h_mggVsThetaFull_acc = (TH2F*)h3Full_acc->Project3D("yx")->Clone("mgg_vs_theta_full_acc");
+		h_mggVsThetaFull_acc->SetDirectory(0);
+		
+		fullTargetFile->Close();
+		
+		//-------------------------------------//
+		// Do the same for the empty target data:
+		
+		TFile *emptyTargetFile = new TFile(emptyTargetFileName.Data(), "READ");
+		
+		TH3F *h3Empty     = (TH3F*)emptyTargetFile->Get("invmassMatrix_prompt")->Clone("h3Empty");
+		TH3F *h3Empty_acc = (TH3F*)emptyTargetFile->Get("invmassMatrix_acc")->Clone("h3Empty_acc");
+		
+		locBinSize = h3Empty->GetZaxis()->GetBinWidth(1);
+		ebin1 = h3Empty->GetZaxis()->FindBin(m_minBeamEnergy + 0.5*locBinSize);
+		ebin2 = h3Empty->GetZaxis()->FindBin(m_maxBeamEnergy - 0.5*locBinSize);
+		
+		h3Empty->GetZaxis()->SetRange(ebin1, ebin2);
+		h3Empty_acc->GetZaxis()->SetRange(ebin1, ebin2);
+		
+		h_mggVsThetaEmpty = (TH2F*)h3Empty->Project3D("yx")->Clone("mgg_vs_theta_empty");
+		h_mggVsThetaEmpty->SetDirectory(0);
+		
+		h_mggVsThetaEmpty_acc = (TH2F*)h3Empty->Project3D("yx")->Clone("mgg_vs_theta_empty_acc");
+		h_mggVsThetaEmpty_acc->SetDirectory(0);
+		
+		emptyTargetFile->Close();
+		
+		h_mggVsThetaFull_acc->Scale(0.1);
+		h_mggVsThetaEmpty_acc->Scale(0.1);
+	}
+	else {
+		TFile *fullTargetFile = new TFile(fullTargetFileName.Data(), "READ");
+		
+		h_mggVsThetaFull = (TH2F*)fullTargetFile->Get(Form("%s_prompt",m_mggHistName.Data()))->Clone("mgg_vs_theta_full");
+		h_mggVsThetaFull->SetDirectory(0);
+		
+		h_mggVsThetaFull_acc = (TH2F*)fullTargetFile->Get(Form("%s_acc",m_mggHistName.Data()))->Clone("mgg_vs_theta_full_acc");
+		h_mggVsThetaFull_acc->SetDirectory(0);
+		
+		fullTargetFile->Close();
+		
+		TFile *emptyTargetFile = new TFile(emptyTargetFileName.Data(), "READ");
+		
+		h_mggVsThetaEmpty = (TH2F*)emptyTargetFile->Get(Form("%s_prompt",m_mggHistName.Data()))->Clone("mgg_vs_theta_empty");
+		h_mggVsThetaEmpty->SetDirectory(0);
+		
+		h_mggVsThetaEmpty_acc = (TH2F*)emptyTargetFile->Get(Form("%s_acc",m_mggHistName.Data()))->Clone("mgg_vs_theta_empty_acc");
+		h_mggVsThetaEmpty_acc->SetDirectory(0);
+		
+		emptyTargetFile->Close();
+	}
+	
+	// the histograms in the out-of-time bands were already scaled by the 1/10 factor, but in the MggFitter code, we need this removed:
+	
+	h_mggVsThetaFull_acc->Scale(10.0);
+	h_mggVsThetaEmpty_acc->Scale(10.0);
+	
+	return 0;
+}
+
+int EtaAnalyzer::LoadLineshapes()
+{
+	printf("\nREADING LINESHAPES...\n");
+	
+	if(LoadEtaLineshape_Coh()) return 1;
+	if(LoadEtaLineshape_QF()) return 2;
+	if(LoadEtaXLineshapes()) return 3;
+	if(LoadOmegaLineshape()) return 4;
+	if(LoadRhoLineshape()) return 5;
+	if(LoadIncoherentFraction()) return 6;
+	
+	return 0;
+}
+
+int EtaAnalyzer::LoadIncoherentFraction()
+{
+	TString locFileName =
+		"/work/halld/home/andrsmit/primex_eta_analysis/theory/sgevorkyan/farm/rootFiles/incoherent_fraction.root";
+	if(gSystem->AccessPathName(locFileName.Data())) return 1;
+	
+	TFile *fIn = new TFile(locFileName.Data(), "READ");
+	h_incFraction = (TH1F*)fIn->Get("incFraction")->Clone("h_incFraction");
+	h_incFraction->SetDirectory(0);
+	fIn->Close();
+	return 0;
+}
+
+int EtaAnalyzer::LoadEtaLineshape_Coh()
+{
+	TString anaString = "";
+	switch(m_analysisOption) {
+		case 1:
+			anaString = "_matrix";
+			break;
+		case 2:
+			anaString = "_FCAL";
+			break;
+		case 3:
+			anaString = "_BCAL";
+			break;
+		case 4:
+			anaString = "_beam";
+			break;
+		case 5:
+			anaString = "_TOF";
+			break;
+		case 8:
+			anaString = "_angular";
+			break;
+		default:
+			anaString = "";
+			break;
+	}
+	
+	TString vetoStr = "";
+	if(m_analysisOption>0) vetoStr = Form("_VetoOption%d", m_vetoOption);
+	if(m_analysisOption==8) vetoStr = "";
+	
+	int locPhase = m_phase;
+	TString mcFileName = Form("%s/phase%d/phase%d%s%s.root",  cohMCDirectory.Data(), locPhase, locPhase, anaString.Data(), vetoStr.Data());
+	
+	if(gSystem->AccessPathName(mcFileName.Data())) return 1;
+	printf("  Coh Eta lineshape from %s\n", mcFileName.Data());
+	
+	//--------------------------------//
+	
+	// Reading the histograms with the "matrix" option (m_analysisOption=1) is fundamentally different from the rest:
+	
+	if(m_analysisOption==1) {
+		
+		TFile *mcFile = new TFile(mcFileName.Data(), "READ");
+		
+		TH3F *h3Full = (TH3F*)mcFile->Get("invmassMatrix")->Clone("h3Full");
+		
+		double locBinSize = h3Full->GetZaxis()->GetBinWidth(1);
+		int ebin1 = h3Full->GetZaxis()->FindBin(m_minBeamEnergy + 0.5*locBinSize);
+		int ebin2 = h3Full->GetZaxis()->FindBin(m_maxBeamEnergy - 0.5*locBinSize);
+		
+		// consistency check to make sure binning of data histogram aligns with specified energy range:
+		
+		double locMinimumEnergy = h3Full->GetZaxis()->GetBinCenter(ebin1) - 0.5*locBinSize;
+		double locMaximumEnergy = h3Full->GetZaxis()->GetBinCenter(ebin2) + 0.5*locBinSize;
+		
+		if((fabs(locMinimumEnergy-m_minBeamEnergy)>1.e6) || (fabs(locMaximumEnergy-m_maxBeamEnergy)>1.e6)) {
+			printf("\n\nWarning! Bin edges of eta mc histogram are inconsistent with specified energy range:\n");
+			printf("   Specified energy range: %.5f GeV - %.5f GeV\n", m_minBeamEnergy, m_maxBeamEnergy);
+			printf("   Flux Integration Range: %.5f GeV - %.5f GeV\n\n", locMinimumEnergy, locMaximumEnergy);
+		}
+		
+		h3Full->GetZaxis()->SetRange(ebin1, ebin2);
+		
+		h_etaLineshapeCoh = (TH2F*)h3Full->Project3D("yx")->Clone("etaLineshapeCoh");
+		h_etaLineshapeCoh->SetDirectory(0);
+		
+		mcFile->Close();
+	}
+	else if(m_analysisOption==8) {
+		TFile *mcFile = new TFile(mcFileName.Data(), "READ");
+		
+		TString locHistName = "mgg_const_angularSmear_00";
+		if(m_matrixHistName.Contains("_AngularSmear_")) {
+			locHistName = Form("mgg_const_angularSmear_%c%c",
+				m_matrixHistName[m_matrixHistName.Length()-2], m_matrixHistName[m_matrixHistName.Length()-1]);
+		}
+		else if(m_matrixHistName.Contains("_AngularShift_")) {
+			locHistName = Form("mgg_const_angularShift_%c%c",
+				m_matrixHistName[m_matrixHistName.Length()-2], m_matrixHistName[m_matrixHistName.Length()-1]);
+		}
+		printf("\n\n\n");
+		printf("LINESHAPE HISTOGRAM: %s\n", locHistName.Data());
+		printf("\n\n\n");
+		
+		h_etaLineshapeCoh = (TH2F*)mcFile->Get(locHistName.Data())->Clone("etaLineshapeCoh");
+		h_etaLineshapeCoh->SetDirectory(0);
+		mcFile->Close();
+	}
+	else {
+		TFile *mcFile = new TFile(mcFileName.Data(), "READ");
+		
+		if(m_analysisOption==0) {
+			h_etaLineshapeCoh  = (TH2F*)mcFile->Get(Form("VetoOption%d/mgg_const_cut_veto_%d", 
+				m_vetoOption, m_vetoOption))->Clone("etaLineshapeCoh");
+		} else {
+			h_etaLineshapeCoh = (TH2F*)mcFile->Get(Form("%s",m_mggHistName.Data()))->Clone("etaLineshapeCoh");
+		}
+		h_etaLineshapeCoh->SetDirectory(0);
+		mcFile->Close();
+	}
+	return 0;
+}
+
+int EtaAnalyzer::LoadEtaLineshape_QF()
+{
+	TString anaString = "";
+	switch(m_analysisOption) {
+		case 1:
+			anaString = "_matrix";
+			break;
+		case 2:
+			anaString = "_FCAL";
+			break;
+		case 3:
+			anaString = "_BCAL";
+			break;
+		case 4:
+			anaString = "_beam";
+			break;
+		case 5:
+			anaString = "_TOF";
+			break;
+		case 8:
+			anaString = "_angular";
+			break;
+		default:
+			anaString = "";
+			break;
+	}
+	
+	TString vetoStr = "";
+	if(m_analysisOption>0) vetoStr = Form("_VetoOption%d", m_vetoOption);
+	
+	int locPhase = m_phase;
+	TString mcFileName = Form("%s/phase%d/phase%d%s%s.root",  qfMCDirectory.Data(), locPhase, locPhase, anaString.Data(), vetoStr.Data());
+	
+	if(gSystem->AccessPathName(mcFileName.Data())) return 1;
+	printf("  QF Eta lineshape from %s\n", mcFileName.Data());
+	
+	//--------------------------------//
+	
+	// Reading the histograms with the "matrix" option (m_analysisOption=1) is fundamentally different from the rest:
+	
+	if(m_analysisOption==1) {
+		
+		TFile *mcFile = new TFile(mcFileName.Data(), "READ");
+		
+		TH3F *h3QF = (TH3F*)mcFile->Get("invmassMatrix")->Clone("h3QF");
+		
+		double locBinSize = h3QF->GetZaxis()->GetBinWidth(1);
+		int ebin1 = h3QF->GetZaxis()->FindBin(m_minBeamEnergy + 0.5*locBinSize);
+		int ebin2 = h3QF->GetZaxis()->FindBin(m_maxBeamEnergy - 0.5*locBinSize);
+		
+		// consistency check to make sure binning of data histogram aligns with specified energy range:
+		
+		double locMinimumEnergy = h3QF->GetZaxis()->GetBinCenter(ebin1) - 0.5*locBinSize;
+		double locMaximumEnergy = h3QF->GetZaxis()->GetBinCenter(ebin2) + 0.5*locBinSize;
+		
+		if((fabs(locMinimumEnergy-m_minBeamEnergy)>1.e6) || (fabs(locMaximumEnergy-m_maxBeamEnergy)>1.e6)) {
+			printf("\n\nWarning! Bin edges of eta mc histogram are inconsistent with specified energy range:\n");
+			printf("   Specified energy range: %.5f GeV - %.5f GeV\n", m_minBeamEnergy, m_maxBeamEnergy);
+			printf("   Flux Integration Range: %.5f GeV - %.5f GeV\n\n", locMinimumEnergy, locMaximumEnergy);
+		}
+		
+		h3QF->GetZaxis()->SetRange(ebin1, ebin2);
+		
+		h_etaLineshapeQF = (TH2F*)h3QF->Project3D("yx")->Clone("etaLineshapeQF");
+		h_etaLineshapeQF->SetDirectory(0);
+		
+		mcFile->Close();
+	}
+	else {
+		TFile *mcFile = new TFile(mcFileName.Data(), "READ");
+		
+		if(m_analysisOption==0) {
+			h_etaLineshapeQF  = (TH2F*)mcFile->Get(Form("VetoOption%d/mgg_const_cut_veto_%d", 
+				m_vetoOption, m_vetoOption))->Clone("etaLineshapeQF");
+		} else {
+			h_etaLineshapeQF = (TH2F*)mcFile->Get(Form("%s",m_mggHistName.Data()))->Clone("etaLineshapeQF");
+		}
+		h_etaLineshapeQF->SetDirectory(0);
+		mcFile->Close();
+	}
+	return 0;
+}
+
+int EtaAnalyzer::LoadEtaXLineshapes()
+{
+	TString anaString = "";
+	TString locMggHistName1 = "mgg_const_bggen_";
+	TString locMggHistName2 = "_cut";
+	
+	if(m_vetoOption!=4)
+	{
+		printf("\n\n");
+		printf("=====================================================\n");
+		printf("WARNING: You requested VetoOption=%d, but are using  \n", m_vetoOption);
+		printf("    bggen lineshapes corresponding to VetoOption=4.  \n");
+		printf("=====================================================\n");
+		printf("\n\n");
+	}
+	TString mcFileName  = Form("%s/phase%d/Helium_VetoOption%d%s.root",  bggenDirectory.Data(), m_phase, 4, anaString.Data());
+	if(gSystem->AccessPathName(mcFileName.Data())) return 1;
+	
+	printf("  Eta+X lineshapes from %s\n", mcFileName.Data());
+	
+	TFile *mcFile = new TFile(mcFileName.Data(), "READ");
+	
+	// thrown histogram:
+	
+	TH1F *locThrown            = (TH1F*)mcFile->Get("thrown_reactions_bggen");
+	double nThrown             = locThrown->Integral() * 10.0;
+	double simulatedLuminosity = nThrown / 1.18673e+08; // 1.18e+08 pb/nucleon is total photoproduction cross section
+	
+	double scaleFactor = 2.0*(1.e-6)*m_luminosity / simulatedLuminosity;
+	
+	// eta+pion background channels:
+	
+	h_eta1PionLineshape = (TH2F*)mcFile->Get(Form("%setapion%s", locMggHistName1.Data(), locMggHistName2.Data()))->Clone("etaPiLineshape");
+	h_eta1PionLineshape->SetDirectory(0);
+	h_eta1PionLineshape->Scale(scaleFactor);
+	
+	h_eta2PionLineshape = (TH2F*)mcFile->Get(Form("%seta2pion%s", locMggHistName1.Data(), locMggHistName2.Data()))->Clone("etaPiPiLineshape");
+	h_eta2PionLineshape->SetDirectory(0);
+	h_eta2PionLineshape->Scale(scaleFactor);
+	
+	h_eta3PionLineshape = (TH2F*)mcFile->Get(Form("%seta3pion%s", locMggHistName1.Data(), locMggHistName2.Data()))->Clone("etaPiPiPiLineshape");
+	h_eta3PionLineshape->SetDirectory(0);
+	h_eta3PionLineshape->Scale(scaleFactor);
+	
+	// every other hadronic background, besides for omega+rho:
+	
+	h_hadronicBkgdLineshape = (TH2F*)mcFile->Get(Form("%sbkgd%s", locMggHistName1.Data(), locMggHistName2.Data()))->Clone("bkgdLineshape");
+	h_hadronicBkgdLineshape->SetDirectory(0);
+	h_hadronicBkgdLineshape->Scale(scaleFactor);
+	
+	//-------------------------------------------------------------------//
+	// To simplify the fitting, combine everything that isn't eta+pi into a single histogram:
+	
+	h_hadronicBkgdLineshape->Add(h_eta2PionLineshape);
+	h_hadronicBkgdLineshape->Add(h_eta3PionLineshape);
+	
+	//-------------------------------------------------------------------//
+	// Store fractions of each background, relative to single-eta signal:
+	
+	TH2F *h2_exclusive = (TH2F*)mcFile->Get(Form("%ssignal%s", locMggHistName1.Data(), locMggHistName2.Data()));
+	h2_exclusive->Scale(scaleFactor);
+	
+	//----------------------//
+	// Without cut on invariant mass:
+	
+	int minMggCutBin = h2_exclusive->GetYaxis()->FindBin(m_minFitRange);
+	int maxMggCutBin = h2_exclusive->GetYaxis()->FindBin(m_maxFitRange);
+	
+	TH1F *h1_exclusive = (TH1F*)h2_exclusive->ProjectionX("h1_exclusive",       minMggCutBin, maxMggCutBin);
+	TH1F *h1_eta1pion  = (TH1F*)h_eta1PionLineshape->ProjectionX("h1_eta1pion", minMggCutBin, maxMggCutBin);
+	TH1F *h1_bkgd      = (TH1F*)h_hadronicBkgdLineshape->ProjectionX("h1_bkgd", minMggCutBin, maxMggCutBin);
+	
+	h1_exclusive->Rebin(m_rebinsTheta);
+	h1_eta1pion->Rebin(m_rebinsTheta);
+	h1_bkgd->Rebin(m_rebinsTheta);
+	
+	//----------------------//
+	// With cut on invariant mass:
+	
+	minMggCutBin = h2_exclusive->GetYaxis()->FindBin(0.5);
+	maxMggCutBin = h2_exclusive->GetYaxis()->FindBin(0.6);
+	
+	TH1F *h1_exclusive_cut = (TH1F*)h2_exclusive->ProjectionX("h1_exclusive_cut",       minMggCutBin, maxMggCutBin);
+	TH1F *h1_eta1pion_cut  = (TH1F*)h_eta1PionLineshape->ProjectionX("h1_eta1pion_cut", minMggCutBin, maxMggCutBin);
+	TH1F *h1_bkgd_cut      = (TH1F*)h_hadronicBkgdLineshape->ProjectionX("h1_bkgd_cut", minMggCutBin, maxMggCutBin);
+	
+	h1_exclusive_cut->Rebin(m_rebinsTheta);
+	h1_eta1pion_cut->Rebin(m_rebinsTheta);
+	h1_bkgd_cut->Rebin(m_rebinsTheta);
+	
+	//----------------------//
+	
+	// eta+pi bkgd fraction:
+	
+	h1_eta1pion->Divide(h1_exclusive);
+	h_EtaPionBkgdFraction_bggen = (TH1F*)h1_eta1pion->Clone("etaPionFraction_bggen");
+	h_EtaPionBkgdFraction_bggen->SetDirectory(0);
+	
+	h1_eta1pion_cut->Divide(h1_exclusive_cut);
+	h_EtaPionBkgdFraction_bggen_cut = (TH1F*)h1_eta1pion_cut->Clone("etaPionFraction_bggen_cut");
+	h_EtaPionBkgdFraction_bggen_cut->SetDirectory(0);
+	
+	// every other hadronic bkgd (excluding rho+omega):
+	
+	h1_bkgd->Divide(h1_exclusive);
+	h_HadronicBkgdFraction_bggen = (TH1F*)h1_bkgd->Clone("hadronicBkgdFraction_bggen");
+	h_HadronicBkgdFraction_bggen->SetDirectory(0);
+	
+	h1_bkgd_cut->Divide(h1_exclusive_cut);
+	h_HadronicBkgdFraction_bggen_cut = (TH1F*)h1_bkgd_cut->Clone("hadronicBkgdFraction_bggen_cut");
+	h_HadronicBkgdFraction_bggen_cut->SetDirectory(0);
+	
+	mcFile->Close();
+	
+	return 0;
+}
+
+int EtaAnalyzer::LoadOmegaLineshape()
+{
+	TString mcFileName, mcHistName;
+	if(m_phase==3)
+	{
+		mcFileName = Form("%s/omega_gpi0/coh/phase3.root", omegaMCDirectory.Data());
+		mcHistName = Form("VetoOption%d/mgg_const_cut_veto_%d", m_vetoOption, m_vetoOption);
+	}
+	else
+	{
+		int locVetoOption = 4;
+		if((m_vetoOption==1) || (m_vetoOption==6) || (m_vetoOption==7)) locVetoOption = m_vetoOption;
+		mcFileName = Form("%s/phase1/Helium_VetoOption%d.root", bggenDirectory.Data(), locVetoOption);
+		mcHistName = "mgg_const_bggen_omega_cut";
+	}
+	
+	if(gSystem->AccessPathName(mcFileName.Data())) return 1;
+	
+	printf("  Omega lineshape from %s\n", mcFileName.Data());
+	
+	TFile *mcFile = new TFile(mcFileName.Data(), "READ");
+	
+	h_omegaLineshape = (TH2F*)mcFile->Get(mcHistName.Data())->Clone("omegaLineshape");
+	h_omegaLineshape->SetDirectory(0);
+	
+	mcFile->Close();
+	return 0;
+}
+
+int EtaAnalyzer::LoadRhoLineshape()
+{
+	// Not yet implemented:
+	return 0;
+}
