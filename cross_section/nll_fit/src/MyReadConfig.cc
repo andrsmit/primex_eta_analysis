@@ -98,7 +98,7 @@ Double_t* MyReadConfig::GetConfig6Par(TString name)
 	Double_t* iPar = new Double_t[6];
 	
 	for(Int_t i=0; i<nLine; i++) {
-		if(!(strLine[i].BeginsWith("#")) && strLine[i].Contains(name)) {
+		if(!(strLine[i].BeginsWith("#")) && strLine[i].Contains(name+":")) {
 			sscanf(strLine[i].Data(),"%*s %s %s %s %s %s %s",tmp1,tmp2,tmp3,tmp4,tmp5,tmp6);
 		}
 	}
@@ -126,7 +126,7 @@ Double_t* MyReadConfig::GetConfig5Par(TString name)
 	Double_t* iPar = new Double_t[5];
 	
 	for(Int_t i=0; i<nLine; i++) {
-		if(!(strLine[i].BeginsWith("#")) && strLine[i].Contains(name)) {
+		if(!(strLine[i].BeginsWith("#")) && strLine[i].Contains(name+":")) {
 			sscanf(strLine[i].Data(),"%*s %s %s %s %s %s",tmp1,tmp2,tmp3,tmp4,tmp5);
 		}
 	}
@@ -152,7 +152,7 @@ Double_t* MyReadConfig::GetConfig4Par(TString name)
 	Double_t* iPar = new Double_t[4];
 	
 	for(Int_t i=0; i<nLine; i++) {
-		if(!(strLine[i].BeginsWith("#")) && strLine[i].Contains(name)) {
+		if(!(strLine[i].BeginsWith("#")) && strLine[i].Contains(name+":")) {
 			sscanf(strLine[i].Data(),"%*s %s %s %s %s",tmp1,tmp2,tmp3,tmp4);
 		}
 	}
@@ -176,7 +176,7 @@ Double_t* MyReadConfig::GetConfig3Par(TString name)
 	Double_t* iPar = new Double_t[3];
 	
 	for(Int_t i=0; i<nLine; i++) {
-		if(!(strLine[i].BeginsWith("#")) && strLine[i].Contains(name)) {
+		if(!(strLine[i].BeginsWith("#")) && strLine[i].Contains(name+":")) {
 			sscanf(strLine[i].Data(),"%*s %s %s %s",tmp1,tmp2,tmp3);
 		}
 	}
@@ -198,7 +198,7 @@ Double_t* MyReadConfig::GetConfig2Par(TString name)
 	Double_t* iPar = new Double_t[2];
 	
 	for(Int_t i=0; i<nLine; i++) {
-		if(!(strLine[i].BeginsWith("#")) && strLine[i].Contains(name)) {
+		if(!(strLine[i].BeginsWith("#")) && strLine[i].Contains(name+":")) {
 			sscanf(strLine[i].Data(),"%*s %s %s",tmp1,tmp2);
 		}
 	}
@@ -218,7 +218,7 @@ Double_t* MyReadConfig::GetConfig1Par(TString name)
 	Double_t* iPar = new Double_t[1];
 	
 	for(Int_t i=0; i<nLine; i++) {
-		if(!(strLine[i].BeginsWith("#")) && strLine[i].Contains(name)) {
+		if(!(strLine[i].BeginsWith("#")) && strLine[i].Contains(name+":")) {
 			sscanf(strLine[i].Data(),"%*s %s",tmp1);
 		}     
 	}

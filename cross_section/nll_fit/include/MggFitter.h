@@ -444,6 +444,12 @@ class MggFitter {
 		double EmptyMggFitFunction(double *x, double *par);
 		double        EtaLineshape(double *x, double *par);
 		
+		double q_pi(double M, double mPi=0.13957018);
+		double RelBW(double *x, double *par);
+		double RelBW_massdep(double *x, double *par);
+		double Rho0DecayFactor(double);
+		void GetConvolvedRhoMass();
+		
 		//-----------------------------------------------------------------//
 		// Models for each fit component (defined in Models.cc):
 		
@@ -515,6 +521,7 @@ class MggFitter {
 		
 		TH1F *h_rhoLineshape;
 		TF1  *f_rhoLineshape;
+		TF1  *f_BW_rho;
 		
 		TF1  *f_chebyshev;
 		

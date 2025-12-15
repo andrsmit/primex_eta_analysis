@@ -175,17 +175,26 @@ class EtaAnalyzer {
 		static constexpr double m_targetMass     = 4.002602;   // g/mol
 		static constexpr double m_avogdroNum     = 6.02214e23; // atoms/mol
 		
-		// Run-conditions:
+		// Run-conditions/Data-sets:
 		
 		void SetPhase(int);
+		
 		void SetAnalysisOption(int);
 		void SetVetoOption(int);
 		void SetMggHistName(TString);
+		
+		void SetAnalysisOption_MC(int);
+		void SetVetoOption_MC(int);
+		void SetMggHistName_MC(TString);
+		
 		void SetMatrixHistName(TString);
 		
 		int GetPhase() { return m_phase; }
 		int GetAnalysisOption() { return m_analysisOption; }
 		int GetVetoOption() { return m_vetoOption; }
+		
+		int GetAnalysisOption_MC() { return m_analysisOption_MC; }
+		int GetVetoOption_MC() { return m_vetoOption_MC; }
 		
 		double GetEmptyFluxRatio() { return m_emptyTargetFluxRatio; }
 		
@@ -356,9 +365,16 @@ class EtaAnalyzer {
 		//-----------------------------------------------------------//
 		// Run-specific numbers:
 		
-		int m_phase, m_analysisOption, m_vetoOption;
+		int m_phase;
 		double m_luminosity, m_emptyTargetFluxRatio;
-		TString m_mggHistName, m_matrixHistName;
+		
+		int m_analysisOption, m_vetoOption;
+		TString m_mggHistName;
+		
+		int m_analysisOption_MC, m_vetoOption_MC;
+		TString m_mggHistName_MC;
+		
+		TString m_matrixHistName;
 		
 		//-----------------------------------------------------------//
 		// Variables defining bin sizes (defaults set in constructor):

@@ -193,7 +193,7 @@ int EtaAnalyzer::LoadIncoherentFraction()
 int EtaAnalyzer::LoadEtaLineshape_Coh()
 {
 	TString anaString = "";
-	switch(m_analysisOption) {
+	switch(m_analysisOption_MC) {
 		case 1:
 			anaString = "_matrix";
 			break;
@@ -218,8 +218,8 @@ int EtaAnalyzer::LoadEtaLineshape_Coh()
 	}
 	
 	TString vetoStr = "";
-	if(m_analysisOption>0) vetoStr = Form("_VetoOption%d", m_vetoOption);
-	if(m_analysisOption==8) vetoStr = "";
+	if(m_analysisOption_MC>0) vetoStr = Form("_VetoOption%d", m_vetoOption_MC);
+	if(m_analysisOption_MC==8) vetoStr = "";
 	
 	int locPhase = m_phase;
 	TString mcFileName = Form("%s/phase%d/phase%d%s%s.root",  cohMCDirectory.Data(), locPhase, locPhase, anaString.Data(), vetoStr.Data());
@@ -229,9 +229,9 @@ int EtaAnalyzer::LoadEtaLineshape_Coh()
 	
 	//--------------------------------//
 	
-	// Reading the histograms with the "matrix" option (m_analysisOption=1) is fundamentally different from the rest:
+	// Reading the histograms with the "matrix" option (m_analysisOption_MC=1) is fundamentally different from the rest:
 	
-	if(m_analysisOption==1) {
+	if(m_analysisOption_MC==1) {
 		
 		TFile *mcFile = new TFile(mcFileName.Data(), "READ");
 		
@@ -259,7 +259,7 @@ int EtaAnalyzer::LoadEtaLineshape_Coh()
 		
 		mcFile->Close();
 	}
-	else if(m_analysisOption==8) {
+	else if(m_analysisOption_MC==8) {
 		TFile *mcFile = new TFile(mcFileName.Data(), "READ");
 		
 		TString locHistName = "mgg_const_angularSmear_00";
@@ -282,11 +282,11 @@ int EtaAnalyzer::LoadEtaLineshape_Coh()
 	else {
 		TFile *mcFile = new TFile(mcFileName.Data(), "READ");
 		
-		if(m_analysisOption==0) {
+		if(m_analysisOption_MC==0) {
 			h_etaLineshapeCoh  = (TH2F*)mcFile->Get(Form("VetoOption%d/mgg_const_cut_veto_%d", 
-				m_vetoOption, m_vetoOption))->Clone("etaLineshapeCoh");
+				m_vetoOption_MC, m_vetoOption_MC))->Clone("etaLineshapeCoh");
 		} else {
-			h_etaLineshapeCoh = (TH2F*)mcFile->Get(Form("%s",m_mggHistName.Data()))->Clone("etaLineshapeCoh");
+			h_etaLineshapeCoh = (TH2F*)mcFile->Get(Form("%s",m_mggHistName_MC.Data()))->Clone("etaLineshapeCoh");
 		}
 		h_etaLineshapeCoh->SetDirectory(0);
 		mcFile->Close();
@@ -297,7 +297,7 @@ int EtaAnalyzer::LoadEtaLineshape_Coh()
 int EtaAnalyzer::LoadEtaLineshape_QF()
 {
 	TString anaString = "";
-	switch(m_analysisOption) {
+	switch(m_analysisOption_MC) {
 		case 1:
 			anaString = "_matrix";
 			break;
@@ -322,7 +322,7 @@ int EtaAnalyzer::LoadEtaLineshape_QF()
 	}
 	
 	TString vetoStr = "";
-	if(m_analysisOption>0) vetoStr = Form("_VetoOption%d", m_vetoOption);
+	if(m_analysisOption_MC>0) vetoStr = Form("_VetoOption%d", m_vetoOption_MC);
 	
 	int locPhase = m_phase;
 	TString mcFileName = Form("%s/phase%d/phase%d%s%s.root",  qfMCDirectory.Data(), locPhase, locPhase, anaString.Data(), vetoStr.Data());
@@ -332,9 +332,9 @@ int EtaAnalyzer::LoadEtaLineshape_QF()
 	
 	//--------------------------------//
 	
-	// Reading the histograms with the "matrix" option (m_analysisOption=1) is fundamentally different from the rest:
+	// Reading the histograms with the "matrix" option (m_analysisOption_MC=1) is fundamentally different from the rest:
 	
-	if(m_analysisOption==1) {
+	if(m_analysisOption_MC==1) {
 		
 		TFile *mcFile = new TFile(mcFileName.Data(), "READ");
 		
@@ -365,11 +365,11 @@ int EtaAnalyzer::LoadEtaLineshape_QF()
 	else {
 		TFile *mcFile = new TFile(mcFileName.Data(), "READ");
 		
-		if(m_analysisOption==0) {
+		if(m_analysisOption_MC==0) {
 			h_etaLineshapeQF  = (TH2F*)mcFile->Get(Form("VetoOption%d/mgg_const_cut_veto_%d", 
-				m_vetoOption, m_vetoOption))->Clone("etaLineshapeQF");
+				m_vetoOption_MC, m_vetoOption_MC))->Clone("etaLineshapeQF");
 		} else {
-			h_etaLineshapeQF = (TH2F*)mcFile->Get(Form("%s",m_mggHistName.Data()))->Clone("etaLineshapeQF");
+			h_etaLineshapeQF = (TH2F*)mcFile->Get(Form("%s",m_mggHistName_MC.Data()))->Clone("etaLineshapeQF");
 		}
 		h_etaLineshapeQF->SetDirectory(0);
 		mcFile->Close();
@@ -497,7 +497,7 @@ int EtaAnalyzer::LoadEtaXLineshapes()
 int EtaAnalyzer::LoadOmegaLineshape()
 {
 	TString mcFileName, mcHistName;
-	if(m_phase==3)
+	if(0) //(m_phase==3)
 	{
 		mcFileName = Form("%s/omega_gpi0/coh/phase3.root", omegaMCDirectory.Data());
 		mcHistName = Form("VetoOption%d/mgg_const_cut_veto_%d", m_vetoOption, m_vetoOption);

@@ -97,7 +97,7 @@ int main(int argc, char **argv)
 		//fileName = "/work/halld/home/andrsmit/public/ForIgal/updated_results/loose-bcal-with-sc.root";
 	}
 	
-	if(1)
+	if(0)
 	{
 		if(!locEtaAna.IsMatrixLoaded()) {
 			if(locEtaAna.LoadAngularMatrix()) {
@@ -138,9 +138,11 @@ int main(int argc, char **argv)
 		locEtaAna.PlotQFFraction();
 	}
 	else if(1) {
-		
-		fileName = Form("%s/output/yield_phase%d_VetoOption%d_fitOption2.root",
+		/*
+		fileName = Form("%s/output/yield_phase%d_VetoOption%d_new.root",
 			locPathName.Data(), locEtaAna.GetPhase(),locEtaAna.GetVetoOption());
+		*/
+		fileName = Form("%s/output/yield_phase3_VetoOption6_signal3_omega3_rho0.root", locPathName.Data());
 		printf("\nGetting yield from file: %s\n", fileName.Data());
 		
 		TFile *fIn = new TFile(fileName.Data(), "READ");
@@ -158,6 +160,8 @@ int main(int argc, char **argv)
 			double binC = hYield->GetBinContent(ibin);
 			double binE = hYield->GetBinError(ibin);
 			
+			hYield->SetBinError(ibin, 2.0*sqrt(binC));
+			/*
 			// check for nans:
 			if(binE!=binE) {
 				hYield->SetBinError(ibin, 1.5*sqrt(binC));
@@ -168,6 +172,7 @@ int main(int argc, char **argv)
 			
 			// make sure the error bars are not anomalously large:
 			if(binE > 2.5*sqrt(binC)) hYield->SetBinError(ibin, 2.5*sqrt(binC));
+			*/
 		}
 		
 		hYield->SetDirectory(0);
@@ -294,78 +299,79 @@ int LoadConfigSettings(EtaAnalyzer &anaObject, TString fileName, int phase)
 		}
 	}
 	
-	//----------------------------------------//
-	//
-	// Analysis and Veto Options:
-	//   (mgg histogram and angular matrix names are specified here as well)
-	//
-	
 	if(ReadFile->GetConfigName("angularRange") != "")
 	{
 		anaObject.SetAngularRange((double)ReadFile->GetConfig2Par("angularRange")[0], 
 				(double)ReadFile->GetConfig2Par("angularRange")[1]);
 	}
 	
+	//----------------------------------------//
+	//
+	// Analysis and Veto Options:
+	//   (mgg histogram and angular matrix names are specified here as well)
+	//
+	
 	if(ReadFile->GetConfigName("analysisOption") != "")
 	{
 		anaObject.SetAnalysisOption((int)ReadFile->GetConfig1Par("analysisOption")[0]);
+		anaObject.SetAnalysisOption_MC((int)ReadFile->GetConfig1Par("analysisOption")[0]);
 	}
 	if(ReadFile->GetConfigName("vetoOption") != "")
 	{
 		anaObject.SetVetoOption((int)ReadFile->GetConfig1Par("vetoOption")[0]);
+		anaObject.SetVetoOption_MC((int)ReadFile->GetConfig1Par("vetoOption")[0]);
 	}
 	
-	switch(anaObject.GetAnalysisOption()) {
-		case 0:
-			anaObject.SetMggHistName(Form("VetoOption%d/mgg_const_cut_veto_%d",
-				anaObject.GetVetoOption(), anaObject.GetVetoOption()));
-			anaObject.SetMatrixHistName(Form("AngularMatrix/AngularMatrix_veto_%d",
-				anaObject.GetVetoOption()));
-			
-			if(false) {
-				// Set this to true to use Raw Invariant mass spectrum instead
-				anaObject.SetMggHistName(Form("VetoOption%d/mgg_veto_%d",
-					anaObject.GetVetoOption(), anaObject.GetVetoOption()));
-				anaObject.SetRawMassOption(1);
-			}
-			break;
-		case 1:
-			anaObject.SetMatrixHistName("AngularMatrix");
-			break;
-		case 8:
-			anaObject.SetMggHistName(Form("VetoOption%d/mgg_const_cut_veto_%d",
-				anaObject.GetVetoOption(), anaObject.GetVetoOption()));
-			if(ReadFile->GetConfigName("matrixName") != "")
-			{
-				anaObject.SetMatrixHistName(ReadFile->GetConfigName("matrixName"));
-			}
-			else {
-				printf("\nNo matrix name specified for analysis option: %d. Exiting.\n", 
-					anaObject.GetAnalysisOption());
-				exit(1);
-			}
-			break;
-		default:
+	// Default hist name for data+MC:
+	anaObject.SetMggHistName(Form("VetoOption%d/mgg_const_cut_veto_%d", anaObject.GetVetoOption(), anaObject.GetVetoOption()));
+	anaObject.SetMggHistName_MC(Form("VetoOption%d/mgg_const_cut_veto_%d", anaObject.GetVetoOption(), anaObject.GetVetoOption()));
+	
+	if(anaObject.GetAnalysisOption() > 0) {
+		if(ReadFile->GetConfigName("histName") != ""){
+			anaObject.SetMggHistName(ReadFile->GetConfigName("histName"));
+			anaObject.SetMggHistName_MC(ReadFile->GetConfigName("histName"));
+		}
+		else {
+			printf("\nNo histogram name specified for analysis option: %d. Exiting.\n", 
+				anaObject.GetAnalysisOption());
+			exit(1);
+		}
+	}
+	
+	// Override analysisOption, vetoOption, and histNames for MC if they were provided:
+	
+	if(ReadFile->GetConfigName("analysisOption_MC") != "")
+	{
+		anaObject.SetAnalysisOption_MC((int)ReadFile->GetConfig1Par("analysisOption_MC")[0]);
+	}
+	if(ReadFile->GetConfigName("vetoOption_MC") != "")
+	{
+		anaObject.SetVetoOption_MC((int)ReadFile->GetConfig1Par("vetoOption_MC")[0]);
+	}
+	
+	if(anaObject.GetAnalysisOption_MC() > 0) {
+		if(ReadFile->GetConfigName("histName_MC") != ""){
+			anaObject.SetMggHistName(ReadFile->GetConfigName("histName"));
+		}
+		else {
+			printf("\nNo histogram name specified for MC analysis option: %d. Exiting.\n", 
+				anaObject.GetAnalysisOption_MC());
+			exit(1);
+		}
+	}
+	
+	// Default matrix name:
+	anaObject.SetMatrixHistName(Form("AngularMatrix/AngularMatrix_veto_%d", anaObject.GetVetoOption()));
+	
+	if(anaObject.GetAnalysisOption_MC() > 0) {
+		if(ReadFile->GetConfigName("matrixName") != "")
 		{
-			if(ReadFile->GetConfigName("histName") != "")
-			{
-				anaObject.SetMggHistName(ReadFile->GetConfigName("histName"));
-			}
-			else {
-				printf("\nNo histogram name specified for analysis option: %d. Exiting.\n", 
-					anaObject.GetAnalysisOption());
-				exit(1);
-			}
-			
-			if(ReadFile->GetConfigName("matrixName") != "")
-			{
-				anaObject.SetMatrixHistName(ReadFile->GetConfigName("matrixName"));
-			}
-			else {
-				printf("\nNo matrix name specified for analysis option: %d. Exiting.\n", 
-					anaObject.GetAnalysisOption());
-				exit(1);
-			}
+			anaObject.SetMatrixHistName(ReadFile->GetConfigName("matrixName"));
+		}
+		else {
+			printf("\nNo matrix name specified for MC analysis option: %d. Exiting.\n", 
+				anaObject.GetAnalysisOption_MC());
+			exit(1);
 		}
 	}
 	

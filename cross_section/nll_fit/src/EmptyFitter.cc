@@ -16,7 +16,8 @@ void MggFitter::FitEmptyWide()
 	excludeRegions.push_back({0.70,0.85});
 	GuessEmptyBkgdParameters();
 	
-	f_emptyWide->SetRange(minEmptyFitRange, maxEmptyFitRange);
+	//f_emptyWide->SetRange(minEmptyFitRange, maxEmptyFitRange);
+	f_emptyWide->SetRange(0.30, 0.925);
 	h_emptyWide[0]->Fit(f_emptyWide, locFitOption);
 	
 	excludeRegions.clear();
@@ -29,11 +30,12 @@ void MggFitter::FitEmptyWide()
 		GuessEmptyFDCParameters();
 	}
 	
-	f_emptyWide->SetRange(minEmptyFitRange, maxEmptyFitRange);
+	//f_emptyWide->SetRange(minEmptyFitRange, maxEmptyFitRange);
+	f_emptyWide->SetRange(0.30, 0.925);
 	h_emptyWide[0]->Fit(f_emptyWide, locFitOption);
 	
 	excludeRegions.clear();
-	f_emptyWide->SetRange(minEmptyFitRange, maxEmptyFitRange);
+	//f_emptyWide->SetRange(minEmptyFitRange, maxEmptyFitRange);
 	
 	return;
 }

@@ -41,21 +41,70 @@ struct YieldFitter::CombinedChi2 {
 	int nHists;
 	vector<vector<int>> parIndices;
 	
-	CombinedChi2(YieldFitter *f, const vector<vector<int>> &indices, double a, double b) 
+	// Pre-computed data:
+	vector<vector<double>> binMin;
+	vector<vector<double>> binMax;
+	vector<vector<double>> meas;
+	vector<vector<double>> err;
+	
+	// scratch buffer for parameters
+	mutable vector<vector<double>> pars;
+	
+	CombinedChi2(YieldFitter *f, 
+				 const vector<vector<int>> &indices, 
+				 double a, double b)
 		: fitter(f), parIndices(indices), x1(a), x2(b) 
 	{
 		nHists = (int)indices.size();
 		//printf("%d HISTS INCLUDED IN FIT\n", nHists);
+		
+		binMin.resize(nHists);
+		binMax.resize(nHists);
+		meas.resize(nHists);
+		err.resize(nHists);
+		pars.resize(nHists);
+		
+		for(int ih=0; ih<nHists; ih++) {
+			TH1F *h = fitter->h_dNdTheta[ih];
+			int nb = h->GetNbinsX();
+			
+			int minBin = h->GetXaxis()->FindBin(x1);
+			int maxBin = h->GetXaxis()->FindBin(x2);
+			
+			int useBins = maxBin - minBin + 1;
+			
+			binMin[ih].resize(useBins);
+			binMax[ih].resize(useBins);
+			meas[ih].resize(useBins);
+			err[ih].resize(useBins);
+			
+			for (int ib = minBin; ib <= maxBin; ib++) {
+				int j = ib - minBin;
+				
+				double center = h->GetBinCenter(ib);
+				double width  = h->GetBinWidth(ib);
+				
+				binMin[ih][j] = center - 0.5 * width;
+				binMax[ih][j] = center + 0.5 * width;
+				
+				double y = h->GetBinContent(ib);
+				double e = h->GetBinError(ib);
+				
+				meas[ih][j] = y;
+				err[ih][j]  = (e < sqrt(y)) ? sqrt(y) : e;
+			}
+		}
 	}
-	CombinedChi2() {};
 	
 	double operator()(const double* p) const
 	{
-		vector<vector<double>> pars(nHists);
-		for(int ih=0; ih<nHists; ih++) {
-			pars[ih].clear();
-			for(int ipar=0; ipar<parIndices[ih].size(); ipar++) {
-				pars[ih].push_back(p[parIndices[ih][ipar]]);
+		// Build local parameter groups (no dynamic allocation)
+		for (int ih = 0; ih < nHists; ih++) {
+			auto& v = pars[ih];
+			const auto& idx = parIndices[ih];
+			v.resize(idx.size());
+			for (int k = 0; k < idx.size(); k++) {
+				v[k] = p[idx[k]];
 			}
 		}
 		
@@ -65,35 +114,51 @@ struct YieldFitter::CombinedChi2 {
 		
 		for(int ih=0; ih<nHists; ih++) {
 			
+			const auto& bmin = binMin[ih];
+			const auto& bmax = binMax[ih];
+			const auto& y    = meas[ih];
+			const auto& e    = err[ih];
+			
+			for (int j = 0; j < bmin.size(); j++) {
+				
+				double expYield = fitter->GetExpectedYieldFast(bmin[j], bmax[j], ih, pars[ih].data());
+				
+				double diff = y[j] - expYield;
+				chi2 += (diff * diff) / (e[j] * e[j]);
+			}
+			
+			
 			// loop over all bins within fit range:
-			
-			TAxis *locAxis = fitter->h_dNdTheta[ih]->GetXaxis();
-			
-			int locNbins = locAxis->GetNbins(); 
-			double locBinSize = locAxis->GetBinWidth(1);
+			/*
+			int locNbins = fitter->h_dNdTheta[ih]->GetXaxis()->GetNbins();
+			double locBinSize = fitter->h_dNdTheta[ih]->GetXaxis()->GetBinWidth(1);
 			
 			double minEnergy = fitter->m_energyBins[ih].first;
 			double maxEnergy = fitter->m_energyBins[ih].second;
 			
-			int minBin = locAxis->FindBin(x1);
-			int maxBin = locAxis->FindBin(x2);
+			int minBin = fitter->h_dNdTheta[ih]->GetXaxis()->FindBin(x1);
+			int maxBin = fitter->h_dNdTheta[ih]->GetXaxis()->FindBin(x2);
 			
-			for(int ibin=minBin; ibin<=maxBin; ibin++) {
-				double minAngle = locAxis->GetBinCenter(ibin) - 0.5*locAxis->GetBinWidth(ibin);
-				double maxAngle = locAxis->GetBinCenter(ibin) + 0.5*locAxis->GetBinWidth(ibin);
+			for(int ibin=minBin; ibin<=maxBin; ibin++)
+			{
+				double minAngle = fitter->h_dNdTheta[ih]->GetXaxis()->GetBinCenter(ibin) 
+					- 0.5*fitter->h_dNdTheta[ih]->GetXaxis()->GetBinWidth(ibin);
+				double maxAngle = fitter->h_dNdTheta[ih]->GetXaxis()->GetBinCenter(ibin) 
+					+ 0.5*fitter->h_dNdTheta[ih]->GetXaxis()->GetBinWidth(ibin);
 				
 				double measYield    = fitter->h_dNdTheta[ih]->GetBinContent(ibin);
 				double measYieldErr = fitter->h_dNdTheta[ih]->GetBinError(ibin);
 				if(measYieldErr < sqrt(measYield)) measYieldErr = sqrt(measYield);
 				
 				double expYield = fitter->GetExpectedYield(minAngle, maxAngle, ih, pars[ih].data());
-				/*
-				printf("%.2f-%.2f  (%.1f GeV - %.1f GeV):\n", minAngle, maxAngle, minEnergy, maxEnergy);
-				printf("  Measured Yield: %f +/- %f\n", measYield, measYieldErr);
-				printf("  Expected Yield: %f\n", expYield);
-				*/
+				
+				//printf("%.2f-%.2f  (%.1f GeV - %.1f GeV):\n", minAngle, maxAngle, minEnergy, maxEnergy);
+				//printf("  Measured Yield: %f +/- %f\n", measYield, measYieldErr);
+				//printf("  Expected Yield: %f\n", expYield);
+				
 				chi2 += pow((measYield - expYield)/measYieldErr, 2.0);
 			}
+			*/
 		}
 		
 		return chi2;
@@ -244,10 +309,10 @@ void YieldFitter::InitializeMatrices()
 		for(int iEnergyBin=1; iEnergyBin<=h_matrixFull->GetZaxis()->GetNbins(); iEnergyBin++) {
 			
 			if((iEnergyBin<minEBin) || (iEnergyBin>maxEBin)) {
-				for(int iThetaBin=1; iThetaBin<=h_matrixFull->GetXaxis()->GetNbins(); iThetaBin++) {
+				for(int iThrownBin=1; iThrownBin<=h_matrixFull->GetXaxis()->GetNbins(); iThrownBin++) {
 					for(int iRecBin=1; iRecBin<=h_matrixFull->GetYaxis()->GetNbins(); iRecBin++) {
-						loch3->SetBinContent(iThetaBin, iRecBin, iEnergyBin, 0.0);
-						loch3->SetBinError(iThetaBin, iRecBin, iEnergyBin, 0.0);
+						loch3->SetBinContent(iThrownBin, iRecBin, iEnergyBin, 0.0);
+						loch3->SetBinError(iThrownBin, iRecBin, iEnergyBin, 0.0);
 					}
 				}
 				continue;
@@ -255,24 +320,23 @@ void YieldFitter::InitializeMatrices()
 			
 			double locEnergy = h_matrixFull->GetZaxis()->GetBinCenter(iEnergyBin);
 			
-			for(int iThetaBin=1; iThetaBin<=h_matrixFull->GetXaxis()->GetNbins(); iThetaBin++) {
-				double locTheta = h_matrixFull->GetXaxis()->GetBinCenter(iThetaBin);
+			for(int iThrownBin=1; iThrownBin<=h_matrixFull->GetXaxis()->GetNbins(); iThrownBin++) {
+				double locThetaThrown = h_matrixFull->GetXaxis()->GetBinCenter(iThrownBin);
 				
-				double locThrown = h_thrown->GetBinContent(h_thrown->GetXaxis()->FindBin(locEnergy), 
-					h_thrown->GetYaxis()->FindBin(locTheta));
+				double locNThrown = h_thrown->GetBinContent(h_thrown->GetXaxis()->FindBin(locEnergy), 
+					h_thrown->GetYaxis()->FindBin(locThetaThrown));
 				
 				for(int iRecBin=1; iRecBin<=h_matrixFull->GetYaxis()->GetNbins(); iRecBin++) {
 					double locAcc = 0.0, locAccErr = 0.0;
-					if(locThrown > 0.0) {
-						locAcc    = h_matrixFull->GetBinContent(iThetaBin, iRecBin, iEnergyBin) / locThrown;
-						locAccErr = sqrt(locThrown * locAcc * (1.0-locAcc)) / locThrown;
+					if(locNThrown > 0.0) {
+						locAcc    = h_matrixFull->GetBinContent(iThrownBin, iRecBin, iEnergyBin) / locNThrown;
+						locAccErr = sqrt(locNThrown * locAcc * (1.0-locAcc)) / locNThrown;
 					}
-					loch3->SetBinContent(iThetaBin, iRecBin, iEnergyBin, locAcc);
-					loch3->SetBinError(iThetaBin, iRecBin, iEnergyBin, locAccErr);
+					loch3->SetBinContent(iThrownBin, iRecBin, iEnergyBin, locAcc);
+					loch3->SetBinError(iThrownBin, iRecBin, iEnergyBin, locAccErr);
 				}
 			}
 		}
-		
 		h_matrices.push_back(loch3);
 	}
 	
@@ -282,10 +346,10 @@ void YieldFitter::InitializeMatrices()
 	for(int iEnergyBin=1; iEnergyBin<=h_matrixFull->GetZaxis()->GetNbins(); iEnergyBin++) {
 		
 		if((iEnergyBin<minEBin) || (iEnergyBin>maxEBin)) {
-			for(int iThetaBin=1; iThetaBin<=h_matrixFull->GetXaxis()->GetNbins(); iThetaBin++) {
+			for(int iThrownBin=1; iThrownBin<=h_matrixFull->GetXaxis()->GetNbins(); iThrownBin++) {
 				for(int iRecBin=1; iRecBin<=h_matrixFull->GetYaxis()->GetNbins(); iRecBin++) {
-					h_matrixFull->SetBinContent(iThetaBin, iRecBin, iEnergyBin, 0.0);
-					h_matrixFull->SetBinError(iThetaBin, iRecBin, iEnergyBin, 0.0);
+					h_matrixFull->SetBinContent(iThrownBin, iRecBin, iEnergyBin, 0.0);
+					h_matrixFull->SetBinError(iThrownBin, iRecBin, iEnergyBin, 0.0);
 				}
 			}
 			continue;
@@ -293,20 +357,20 @@ void YieldFitter::InitializeMatrices()
 		
 		double locEnergy = h_matrixFull->GetZaxis()->GetBinCenter(iEnergyBin);
 		
-		for(int iThetaBin=1; iThetaBin<=h_matrixFull->GetXaxis()->GetNbins(); iThetaBin++) {
-			double locTheta = h_matrixFull->GetXaxis()->GetBinCenter(iThetaBin);
+		for(int iThrownBin=1; iThrownBin<=h_matrixFull->GetXaxis()->GetNbins(); iThrownBin++) {
+			double locThrownTheta = h_matrixFull->GetXaxis()->GetBinCenter(iThrownBin);
 			
-			double locThrown = h_thrown->GetBinContent(h_thrown->GetXaxis()->FindBin(locEnergy), 
-				h_thrown->GetYaxis()->FindBin(locTheta));
+			double locNThrown = h_thrown->GetBinContent(h_thrown->GetXaxis()->FindBin(locEnergy), 
+				h_thrown->GetYaxis()->FindBin(locThrownTheta));
 			
 			for(int iRecBin=1; iRecBin<=h_matrixFull->GetYaxis()->GetNbins(); iRecBin++) {
 				double locAcc = 0.0, locAccErr = 0.0;
-				if(locThrown > 0.0) {
-					locAcc    = h_matrixFull->GetBinContent(iThetaBin, iRecBin, iEnergyBin) / locThrown;
-					locAccErr = sqrt(locThrown * locAcc * (1.0-locAcc)) / locThrown;
+				if(locNThrown > 0.0) {
+					locAcc    = h_matrixFull->GetBinContent(iThrownBin, iRecBin, iEnergyBin) / locNThrown;
+					locAccErr = sqrt(locNThrown * locAcc * (1.0-locAcc)) / locNThrown;
 				}
-				h_matrixFull->SetBinContent(iThetaBin, iRecBin, iEnergyBin, locAcc);
-				h_matrixFull->SetBinError(iThetaBin, iRecBin, iEnergyBin, locAccErr);
+				h_matrixFull->SetBinContent(iThrownBin, iRecBin, iEnergyBin, locAcc);
+				h_matrixFull->SetBinError(iThrownBin, iRecBin, iEnergyBin, locAccErr);
 			}
 		}
 	}
@@ -315,6 +379,7 @@ void YieldFitter::InitializeMatrices()
 void YieldFitter::InitializeFluxWeights()
 {
 	h_fluxWeights.clear();
+	m_fractionalLumi.clear();
 	
 	int nHists = (int)h_dNdTheta.size();
 	
@@ -337,6 +402,7 @@ void YieldFitter::InitializeFluxWeights()
 		loch1->Scale(1.0/integral);
 		
 		h_fluxWeights.push_back(loch1);
+		m_fractionalLumi.push_back(integral*m_luminosity);
 	}
 }
 
@@ -349,6 +415,10 @@ void YieldFitter::FitAngularYield(double minFitRange, double maxFitRange, TStrin
 	
 	// Split h_fluxWeightsFull into appropriate energy bins:
 	InitializeFluxWeights();
+	
+	// Store histograms in std::vectors for speed:
+	PrecomputeMatrices();
+	PrecomputeTheory();
 	
 	if(TVirtualFitter::GetFitter()) {
 		delete TVirtualFitter::GetFitter();
@@ -412,13 +482,47 @@ void YieldFitter::FitAngularYield(double minFitRange, double maxFitRange, TStrin
 	DumpFitParameters(locFitter);
 	
 	//---------------------------------------------//
-	// fix interference angle:
+	// fix decay width:
 	/*
 	for(int ih=0; ih<nHists; ih++) {
-		int phiPar = (int)(find(m_parameterList.begin(), m_parameterList.end(), Form("#phi_{%d}[#circ]",ih)) - m_parameterList.begin());
+		int phiPar = (int)(find(m_parameterList.begin(), m_parameterList.end(), "#Gamma(#eta#rightarrow#gamma#gamma)[keV]") 
+			- m_parameterList.begin());
 		if(phiPar >= m_parameterList.size()) continue;
 		
-		locFitter.Config().ParSettings(phiPar).Set(locFitter.Config().ParSettings(phiPar).Name(), 45.5);
+		locFitter.Config().ParSettings(phiPar).Set(locFitter.Config().ParSettings(phiPar).Name(), 0.420);
+		locFitter.Config().ParSettings(phiPar).Fix();
+	}
+	
+	//---------------------------------------------//
+	// fix interference angle:
+	
+	for(int ih=0; ih<nHists; ih++) {
+		int phiPar = (int)(find(m_parameterList.begin(), m_parameterList.end(), "#phi[#circ]") - m_parameterList.begin());
+		if(phiPar >= m_parameterList.size()) continue;
+		
+		locFitter.Config().ParSettings(phiPar).Set(locFitter.Config().ParSettings(phiPar).Name(), 38.0);
+		locFitter.Config().ParSettings(phiPar).Fix();
+	}
+	
+	//---------------------------------------------//
+	// fix coherent normalization:
+	
+	for(int ih=0; ih<nHists; ih++) {
+		int phiPar = (int)(find(m_parameterList.begin(), m_parameterList.end(), Form("A_{Coh,%d}",ih)) - m_parameterList.begin());
+		if(phiPar >= m_parameterList.size()) continue;
+		
+		locFitter.Config().ParSettings(phiPar).Set(locFitter.Config().ParSettings(phiPar).Name(), 0.9);
+		locFitter.Config().ParSettings(phiPar).Fix();
+	}
+	
+	//---------------------------------------------//
+	// fix incoherent normalization:
+	
+	for(int ih=0; ih<nHists; ih++) {
+		int phiPar = (int)(find(m_parameterList.begin(), m_parameterList.end(), Form("A_{Inc,%d}",ih)) - m_parameterList.begin());
+		if(phiPar >= m_parameterList.size()) continue;
+		
+		locFitter.Config().ParSettings(phiPar).Set(locFitter.Config().ParSettings(phiPar).Name(), 0.624);
 		locFitter.Config().ParSettings(phiPar).Fix();
 	}
 	*/
@@ -452,18 +556,20 @@ void YieldFitter::FitAngularYield(double minFitRange, double maxFitRange, TStrin
 	
 	UpdateFitFunctions(result);
 	/*
-	f_dNdTheta[0]->SetParameter(1, 0.408761);
-	f_dNdTheta[0]->SetParameter(2, 0.884369);
-	f_dNdTheta[0]->SetParameter(3, 55.1587);
-	f_dNdTheta[0]->SetParameter(4, 0.544789);
-	f_dNdTheta[1]->SetParameter(1, 0.408761);
-	f_dNdTheta[1]->SetParameter(2, 0.750513);
-	f_dNdTheta[1]->SetParameter(3, 0.100165);
-	f_dNdTheta[1]->SetParameter(4, 0.601827);
-	f_dNdTheta[2]->SetParameter(1, 0.408761);
-	f_dNdTheta[2]->SetParameter(2, 0.733869);
-	f_dNdTheta[2]->SetParameter(3, 16.6884);
-	f_dNdTheta[2]->SetParameter(4, 0.617338);
+	f_dNdTheta[0]->SetParameter(0, 0.42);
+	f_dNdTheta[0]->SetParameter(0, 38.0);
+	f_dNdTheta[0]->SetParameter(0, 0.90);
+	f_dNdTheta[0]->SetParameter(0, 0.62);
+	
+	f_dNdTheta[1]->SetParameter(0, 0.42);
+	f_dNdTheta[1]->SetParameter(0, 38.0);
+	f_dNdTheta[1]->SetParameter(0, 0.90);
+	f_dNdTheta[1]->SetParameter(0, 0.62);
+	
+	f_dNdTheta[2]->SetParameter(0, 0.42);
+	f_dNdTheta[2]->SetParameter(0, 38.0);
+	f_dNdTheta[2]->SetParameter(0, 0.90);
+	f_dNdTheta[2]->SetParameter(0, 0.62);
 	*/
 	DrawFitResult(0.0, 4.0, outputFileName);
 }
@@ -844,7 +950,7 @@ int YieldFitter::LoadTheoryHists()
 		case SGEVORKYAN_STRONG_RADIUS_VAR:
 		{
 			theoryFileNames[0] = 
-				"/work/halld/home/andrsmit/primex_eta_analysis/theory/sgevorkyan/farm/rootFiles/he4-eta-xs-sgevorkyan-v2.root";
+				"/work/halld/home/andrsmit/primex_eta_analysis/theory/sgevorkyan/farm/ap_variations/he4-eta-xs-sgevorkyan-v4.root";
 			
 			theoryFileNames[1] = Form(
 				"/work/halld/home/andrsmit/primex_eta_analysis/theory/sgevorkyan/farm/radius_variations/he4-eta-xs-sgevorkyan-%s.root", 
@@ -1103,6 +1209,7 @@ int YieldFitter::LoadTheoryHists()
 	f_TheoryTulio->SetParameter(0, 1);
 	h_TheoryTulio->Fit("f_TheoryTulio");
 	*/
+	
 	return 0;
 }
 
@@ -1195,54 +1302,108 @@ int YieldFitter::InitializeModelComponents()
 	return nComponents;
 }
 
-
-double YieldFitter::GetExpectedYield(double minAngle, double maxAngle, int histIndex, double *par, int isolateInter)
+void YieldFitter::PrecomputeMatrices()
 {
-	int locMinReconAngleBin = h_matrixFull->GetYaxis()->FindBin(minAngle+(1.e-6));
-	int locMaxReconAngleBin = h_matrixFull->GetYaxis()->FindBin(maxAngle-(1.e-6));
+	int nHists = h_matrices.size();
 	
-	double angleBinSize = m_thrownAngleBinSize * TMath::DegToRad();
+	precomputedMatrix.nEnergyBins.resize(nHists);
+	precomputedMatrix.nThrownBins.resize(nHists);
+	precomputedMatrix.nReconBins.resize(nHists);
 	
-	double Gamma = par[0];
-	double Phi   = par[1];
-	double Acoh  = par[2];
-	double AincP = par[3];
-	double AincN = (m_components.size()>3) ? par[4] : 0.0;
-	/*
-	printf("    Gamma: %f\n", Gamma);
-	printf("    Acoh:  %f\n", Acoh);
-	printf("    Phi:   %f\n", Phi);
-	printf("    Ainc:  %f\n", AincP);
-	*/
-	int locMinEnergyBin = h_matrixFull->GetZaxis()->FindBin(m_energyBins[histIndex].first  + 0.5*m_beamEnergyBinSize);
-	int locMaxEnergyBin = h_matrixFull->GetZaxis()->FindBin(m_energyBins[histIndex].second - 0.5*m_beamEnergyBinSize);
+	// Flux-Weights:
+	precomputedMatrix.fluxWeights.resize(nHists);
+	precomputedMatrix.energyBins.resize(nHists);
 	
-	double dNdTheta = 0.0;
-	for(int iReconBin=locMinReconAngleBin; iReconBin<=locMaxReconAngleBin; iReconBin++) {
+	for(int ih=0; ih<nHists; ih++)
+	{
+		int startEBin = h_fluxWeightsFull->GetXaxis()->FindBin(m_energyBins[ih].first  + 1.e-6);
+		int   endEBin = h_fluxWeightsFull->GetXaxis()->FindBin(m_energyBins[ih].second - 1.e-6);
+		int nEnergyBins = (endEBin-startEBin)+1;
 		
-		for(int iEnergyBin=locMinEnergyBin; iEnergyBin<=locMaxEnergyBin; iEnergyBin++) {
-			double locEnergy = h_matrixFull->GetZaxis()->GetBinCenter(iEnergyBin);
-			
-			for(int iThetaBin=1; iThetaBin<=h_matrixFull->GetXaxis()->GetNbins(); iThetaBin++) {
-				double locMatrix = h_matrices[histIndex]->GetBinContent(iThetaBin, iReconBin, iEnergyBin);
-				double locCS;
-				if(isolateInter) locCS = GetCrossSectionInterference(locEnergy, iThetaBin, Gamma, Acoh, Phi);
-				else             locCS = GetCrossSection(locEnergy, iThetaBin, Gamma, Acoh, AincP, AincN, Phi);
-				
-				dNdTheta += (locMatrix * locCS * h_fluxWeights[histIndex]->GetBinContent(h_fluxWeights[histIndex]->FindBin(locEnergy)));
-			}
+		precomputedMatrix.fluxWeights[ih].resize(nEnergyBins);
+		precomputedMatrix.energyBins[ih].resize(nEnergyBins);
+		
+		for(int iEBin=0; iEBin<nEnergyBins; iEBin++) {
+			precomputedMatrix.fluxWeights[ih][iEBin] = h_fluxWeights[ih]->GetBinContent(iEBin+startEBin);
+			precomputedMatrix.energyBins[ih][iEBin]  = h_fluxWeights[ih]->GetXaxis()->GetBinCenter(iEBin+startEBin);
 		}
 	}
 	
-	int locMinFluxBin = h_fluxWeightsFull->GetXaxis()->FindBin(m_energyBins[histIndex].first  + 0.5*m_beamEnergyBinSize);
-	int locMaxFluxBin = h_fluxWeightsFull->GetXaxis()->FindBin(m_energyBins[histIndex].second - 0.5*m_beamEnergyBinSize);
+	// Angular Resolution/Acceptance Matrices:
+	precomputedMatrix.matrix.resize(nHists);
 	
-	double fractionalLumi = m_luminosity * h_fluxWeightsFull->Integral(locMinFluxBin, locMaxFluxBin);
-	//printf("  fracitonalLumi: %f\n", fractionalLumi/m_luminosity);
-	
-	double yield = dNdTheta * fractionalLumi * EtaAnalyzer::m_branchingRatio * (m_thrownAngleBinSize*TMath::DegToRad());
-	return yield;
+	for(int ih=0; ih<nHists; ih++)
+	{
+		int startEBin = h_matrices[ih]->GetZaxis()->FindBin(m_energyBins[ih].first  + 1.e-6);
+		int   endEBin = h_matrices[ih]->GetZaxis()->FindBin(m_energyBins[ih].second - 1.e-6);
+		int nEnergyBins = (endEBin-startEBin)+1;
+		
+		int nThrownBins = h_matrices[ih]->GetXaxis()->GetNbins();
+		int nReconBins = h_matrices[ih]->GetYaxis()->GetNbins();
+		
+		precomputedMatrix.nEnergyBins[ih] = nEnergyBins;
+		precomputedMatrix.nThrownBins[ih] = nThrownBins;
+		precomputedMatrix.nReconBins[ih] = nReconBins;
+		
+		// Allocate storage
+		precomputedMatrix.matrix[ih].resize(nEnergyBins, std::vector<double>(nReconBins*nThrownBins, 0.0));
+		
+		// Fill matrix content
+		for(int iEBin=0; iEBin<nEnergyBins; iEBin++) {
+			for(int iThrownBin=0; iThrownBin<nThrownBins; iThrownBin++) {
+				for(int iReconBin=0; iReconBin<nReconBins; iReconBin++)
+				{
+					int idx = iReconBin*nThrownBins + iThrownBin;
+					precomputedMatrix.matrix[ih][iEBin][idx] = 
+						h_matrices[ih]->GetBinContent(iThrownBin+1, iReconBin+1, iEBin+startEBin);
+				}
+			}
+		}
+	}
 }
+
+void YieldFitter::PrecomputeTheory()
+{
+	int locNThetaBins = h_Theory[0]->GetNbinsY();
+	
+	// we want to start from m_minBeamEnergy and end at m_maxBeamEnergy:
+	int startEBin = h_Theory[0]->GetXaxis()->FindBin(m_minBeamEnergy + 1.e-6);
+	int   endEBin = h_Theory[0]->GetXaxis()->FindBin(m_maxBeamEnergy - 1.e-6);
+	int locNEnergyBins = (endEBin-startEBin)+1;
+	
+	precomputedTheory.nEnergyBins = locNEnergyBins;
+	precomputedTheory.nThetaBins  = locNThetaBins;
+	
+	// Allocate storage:
+	precomputedTheory.prim.resize(locNEnergyBins*locNThetaBins);
+	precomputedTheory.coh.resize(locNEnergyBins*locNThetaBins);
+	precomputedTheory.inc.resize(locNEnergyBins*locNThetaBins);
+	if(h_Theory.size()>3) precomputedTheory.incN.resize(locNEnergyBins*locNThetaBins);
+	
+	precomputedTheory.primAmpReal.resize(locNEnergyBins*locNThetaBins);
+	precomputedTheory.primAmpImag.resize(locNEnergyBins*locNThetaBins);
+	precomputedTheory.strongAmpReal.resize(locNEnergyBins*locNThetaBins);
+	precomputedTheory.strongAmpImag.resize(locNEnergyBins*locNThetaBins);
+	
+	// Fill vectors from histograms:
+	for(int iThetaBin=0; iThetaBin<locNThetaBins; iThetaBin++) {
+		for(int iEnergyBin=0; iEnergyBin<locNEnergyBins; iEnergyBin++)
+		{
+			int idx = iEnergyBin*locNThetaBins + iThetaBin;
+			
+			precomputedTheory.prim[idx] = h_Theory[0]->GetBinContent(startEBin+iEnergyBin, iThetaBin+1);
+			precomputedTheory.coh[idx]  = h_Theory[1]->GetBinContent(startEBin+iEnergyBin, iThetaBin+1);
+			precomputedTheory.inc[idx]  = h_Theory[2]->GetBinContent(startEBin+iEnergyBin, iThetaBin+1);
+			if(h_Theory.size()>3) precomputedTheory.incN[idx] = h_Theory[3]->GetBinContent(startEBin+iEnergyBin, iThetaBin+1);
+			
+			precomputedTheory.primAmpReal[idx] = h_PrimReal->GetBinContent(startEBin+iEnergyBin, iThetaBin+1);
+			precomputedTheory.primAmpImag[idx] = h_PrimImag->GetBinContent(startEBin+iEnergyBin, iThetaBin+1);
+			precomputedTheory.strongAmpReal[idx] = h_StrongReal->GetBinContent(startEBin+iEnergyBin, iThetaBin+1);
+			precomputedTheory.strongAmpImag[idx] = h_StrongImag->GetBinContent(startEBin+iEnergyBin, iThetaBin+1);
+		}
+	}
+}
+
 
 double YieldFitter::YieldFitFunction(double *x, double *par)
 {
@@ -1261,7 +1422,7 @@ double YieldFitter::YieldFitFunction(double *x, double *par)
 	locPars.push_back(par[4]); // A_inc
 	locPars.push_back(par[5]);
 	
-	double yield = GetExpectedYield(minAngle, maxAngle, HistIndex, locPars.data());
+	double yield = GetExpectedYieldFast(minAngle, maxAngle, HistIndex, locPars.data());
 	
 	//printf("expected yield between %f-%f deg: %f\n", minAngle, maxAngle, yield);
 	//printf(" correction needed: %f\n", h_dNdTheta[HistIndex]->GetBinWidth(1) / reconAngleBinWidth);
@@ -1298,6 +1459,168 @@ double YieldFitter::YieldFitFunction_Interference(double *x, double *par)
 	
 	return yield;
 }
+
+
+double YieldFitter::GetExpectedYieldFast(double minAngle, double maxAngle, int histIndex, double *par)
+{
+	const auto &matrix = precomputedMatrix.matrix[histIndex];
+	const auto &flux   = precomputedMatrix.fluxWeights[histIndex];
+	const auto &energy = precomputedMatrix.energyBins[histIndex];
+	
+	int nEnergyBins = precomputedMatrix.nEnergyBins[histIndex];
+	int nThrownBins = precomputedMatrix.nThrownBins[histIndex];
+	
+	double Gamma = par[0];
+	double Phi   = par[1];
+	double Acoh  = par[2];
+	double AincP = par[3];
+	double AincN = (m_components.size() > 3) ? par[4] : 0.0;
+	
+	double dNdTheta = 0.0;
+	
+	// Loop over all reconstruction bins in range
+	
+	int startReconBin = h_matrixFull->GetYaxis()->FindBin(minAngle+(1.e-6));
+	int   endReconBin = h_matrixFull->GetYaxis()->FindBin(maxAngle-(1.e-6));
+	int nReconBins = (endReconBin-startReconBin)+1;
+	
+	for(int iReconBin=startReconBin; iReconBin<=endReconBin; iReconBin++) {
+		for(int iThrownBin=0; iThrownBin<nThrownBins; iThrownBin++) {
+			
+			int idx = (iReconBin-1)*nThrownBins + iThrownBin;
+			for(int iEnergyBin=0; iEnergyBin<nEnergyBins; iEnergyBin++)
+			{
+				double locEnergy     = energy[iEnergyBin];
+				double locFluxWeight = flux[iEnergyBin];
+				double locMatrix     = matrix[iEnergyBin][idx];
+				double locCS         = GetCrossSectionFast(locEnergy, iThrownBin+1, Gamma, Acoh, AincP, AincN, Phi);
+				dNdTheta += (locMatrix * locCS * locFluxWeight);
+			}
+		}
+	}
+	
+	double yield = dNdTheta * m_fractionalLumi[histIndex] * EtaAnalyzer::m_branchingRatio * (m_thrownAngleBinSize * TMath::DegToRad());
+	return yield;
+}
+
+double YieldFitter::GetCrossSectionFast(double beamEnergy, int thetaBin, 
+	double Gamma, double Acoh, double AincP, double AincN, double Phi) 
+{
+	double gammaGen = (m_model>= 6) ? 0.515 : 0.510;
+	
+	// Need to find appropriate energy bin:
+	int eBin = static_cast<int>((beamEnergy - m_minBeamEnergy)/m_beamEnergyBinSize);
+	if(eBin < 0) {
+		printf("\n\n");
+		printf("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
+		printf("Error when computing energy bin index inside of GetCrossSectionFast()!\n");
+		printf("   beamEnergy, m_minBeamEnergy, m_beamEnergyBinSize:  %.04f,   %.04f,   %.04f\n", beamEnergy, m_minBeamEnergy, m_beamEnergyBinSize);
+		printf("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
+		printf("\n\n");
+		eBin = 0;
+	}
+	
+	// 0-based thetaBin, convert from 1-based if needed
+	int tBin = thetaBin - 1;
+	int idx = eBin * precomputedTheory.nThetaBins + tBin;
+	
+	double locPrim = (Gamma / gammaGen) * precomputedTheory.prim[idx];
+	double locCoh  = Acoh * precomputedTheory.coh[idx];
+	double locInc  = AincP * precomputedTheory.inc[idx];
+	if(!precomputedTheory.incN.empty()) {
+		locInc += AincN * precomputedTheory.incN[idx];
+	}
+	
+	double locInt = GetCrossSectionInterferenceFast(beamEnergy, thetaBin, Gamma, Acoh, Phi);
+	return locPrim + locCoh + locInc + locInt;
+}
+
+double YieldFitter::GetCrossSectionInterferenceFast(double beamEnergy, int thetaBin, double Gamma, double Acoh, double Phi) 
+{
+	double gammaGen = (m_model>=6) ? 0.515 : 0.510;
+	
+	// Need to find appropriate energy bin:
+	int eBin = static_cast<int>((beamEnergy - m_minBeamEnergy)/m_beamEnergyBinSize);
+	if(eBin < 0) {
+		printf("\n\n");
+		printf("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
+		printf("Error when computing energy bin index inside of GetCrossSectionFast()!\n");
+		printf("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
+		printf("\n\n");
+		eBin = 0;
+	}
+	
+	// 0-based thetaBin, convert from 1-based if needed
+	int tBin = thetaBin - 1;
+	int idx = eBin * precomputedTheory.nThetaBins + tBin;
+	
+	double locInt = 0.0;
+	if(m_model>=6) {
+		double int1 = (precomputedTheory.primAmpReal[idx]*precomputedTheory.strongAmpReal[idx]
+			+ precomputedTheory.primAmpImag[idx]*precomputedTheory.strongAmpImag[idx]) * cos(Phi*TMath::DegToRad());
+		
+		double int2 = (precomputedTheory.primAmpImag[idx]*precomputedTheory.strongAmpReal[idx]
+			- precomputedTheory.primAmpReal[idx]*precomputedTheory.strongAmpImag[idx]) * sin(Phi*TMath::DegToRad());
+		
+		return 2.0 * sqrt(Gamma/gammaGen) * sqrt(Acoh) * (int1 + int2);
+	} else {
+		double locPrim = (Gamma/gammaGen) * precomputedTheory.prim[idx];
+		double locCoh  = Acoh * precomputedTheory.coh[idx];
+		return 2.0 * sqrt(locPrim*locCoh) * cos(Phi*TMath::DegToRad());
+	}
+}
+
+
+double YieldFitter::GetExpectedYield(double minAngle, double maxAngle, int histIndex, double *par, int isolateInter)
+{
+	int locMinReconAngleBin = h_matrixFull->GetYaxis()->FindBin(minAngle+(1.e-6));
+	int locMaxReconAngleBin = h_matrixFull->GetYaxis()->FindBin(maxAngle-(1.e-6));
+	
+	double angleBinSize = m_thrownAngleBinSize * TMath::DegToRad();
+	
+	double Gamma = par[0];
+	double Phi   = par[1];
+	double Acoh  = par[2];
+	double AincP = par[3];
+	double AincN = (m_components.size()>3) ? par[4] : 0.0;
+	/*
+	printf("    Gamma: %f\n", Gamma);
+	printf("    Acoh:  %f\n", Acoh);
+	printf("    Phi:   %f\n", Phi);
+	printf("    Ainc:  %f\n", AincP);
+	*/
+	int locMinEnergyBin = h_matrixFull->GetZaxis()->FindBin(m_energyBins[histIndex].first  + 0.5*m_beamEnergyBinSize);
+	int locMaxEnergyBin = h_matrixFull->GetZaxis()->FindBin(m_energyBins[histIndex].second - 0.5*m_beamEnergyBinSize);
+	
+	double dNdTheta = 0.0;
+	
+	for(int iReconBin=locMinReconAngleBin; iReconBin<=locMaxReconAngleBin; iReconBin++) {
+		
+		for(int iEnergyBin=locMinEnergyBin; iEnergyBin<=locMaxEnergyBin; iEnergyBin++) {
+			double locEnergy = h_matrixFull->GetZaxis()->GetBinCenter(iEnergyBin);
+			
+			for(int iThetaBin=1; iThetaBin<=h_matrixFull->GetXaxis()->GetNbins(); iThetaBin++) {
+				double locMatrix = h_matrices[histIndex]->GetBinContent(iThetaBin, iReconBin, iEnergyBin);
+				double locCS;
+				if(isolateInter) locCS = GetCrossSectionInterference(locEnergy, iThetaBin, Gamma, Acoh, Phi);
+				else             locCS = GetCrossSection(locEnergy, iThetaBin, Gamma, Acoh, AincP, AincN, Phi);
+				dNdTheta += (locMatrix * locCS * h_fluxWeights[histIndex]->GetBinContent(h_fluxWeights[histIndex]->FindBin(locEnergy)));
+			}
+		}
+	}
+	
+	//printf("theta: %f; dNdTheta = %f (default)\n", 0.5*(minAngle+maxAngle), dNdTheta);
+	
+	int locMinFluxBin = h_fluxWeightsFull->GetXaxis()->FindBin(m_energyBins[histIndex].first  + 0.5*m_beamEnergyBinSize);
+	int locMaxFluxBin = h_fluxWeightsFull->GetXaxis()->FindBin(m_energyBins[histIndex].second - 0.5*m_beamEnergyBinSize);
+	
+	double fractionalLumi = m_luminosity * h_fluxWeightsFull->Integral(locMinFluxBin, locMaxFluxBin);
+	//printf("  fractionalLumi: %f\n", fractionalLumi/m_luminosity);
+	
+	double yield = dNdTheta * fractionalLumi * EtaAnalyzer::m_branchingRatio * (m_thrownAngleBinSize*TMath::DegToRad());
+	return yield;
+}
+
 
 double YieldFitter::GetCrossSection(double beamEnergy, int thetaBin, 
 	double Gamma, double Acoh, double AincP, double AincN, double Phi) 

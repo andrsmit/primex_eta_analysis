@@ -13,7 +13,8 @@ MggFitter::MggFitter() :
 	h_hadronicBkgdLineshape(nullptr), f_hadronicBkgdLineshape(nullptr), 
 	h_etaPionLineshape(nullptr),      f_etaPionLineshape(nullptr), 
 	h_omegaLineshape(nullptr),        f_omegaLineshape(nullptr),
-	h_rhoLineshape(nullptr)
+	h_rhoLineshape(nullptr),          f_rhoLineshape(nullptr), 
+	f_BW_rho(nullptr)
 {
 	f_chebyshev = new TF1("chebyshev", "cheb5", 0.0, 1.0);
 	
@@ -338,7 +339,7 @@ struct MggFitter::CombinedNLL {
 						nll);
         		}
 				
-				fitter->h_acc_fit_full->SetBinContent(ibin, a_i);
+				//fitter->h_acc_fit_full->SetBinContent(ibin, a_i);
 			}
 		}
 		
@@ -425,7 +426,7 @@ struct MggFitter::CombinedNLL {
 						nll);
         		}
 				
-				fitter->h_acc_fit_empty->SetBinContent(ibin, b_i);
+				//fitter->h_acc_fit_empty->SetBinContent(ibin, b_i);
 			}
 		}
 		
@@ -551,10 +552,15 @@ void MggFitter::FitData()
 	auto result0 = locFitter1.Result();
 	excludeRegions.clear();
 	UpdateFitFunctions(result0);
+	DumpFitParameters();
 	return;
 	*/
 	
-	excludeRegions.push_back({0.50,0.85});
+	if(fitOption_omega==0) {
+		excludeRegions.push_back({0.50,0.60});
+	} else {
+		excludeRegions.push_back({0.50,0.85});
+	}
 	
 	FixBeamlineParameters(locFitter1);
 	ReleaseEMParameters(locFitter1);
@@ -562,7 +568,7 @@ void MggFitter::FitData()
 	locFitter1.FitFCN();
 	
 	auto result1 = locFitter1.Result();
-	if(debug) {
+	if(1) {
 		printf("\n\nFit Results (1st fit):\n");
 		result1.Print(std::cout);
 	}
@@ -588,22 +594,25 @@ void MggFitter::FitData()
 	
 	SetFitParameters(locFitter2, locFitter1); // set from previous fit
 	
-	// Only do the combined fit in the region where empty background is large:
-	//if(angle < 2.0) {
-		
-		ReleaseBeamlineParameters(locFitter2);
-		
-		locFitter2.Config().ParSettings(alpha_flux_par).Release();
-		locFitter2.Config().ParSettings(alpha_flux_par).SetLimits(0.9*m_emptyFluxRatio, 1.1*m_emptyFluxRatio);
-		combinedFit = 1;
-		locFitter2.FitFCN();
-		
-		auto result2 = locFitter2.Result();
-		if(debug) {
-			printf("\n\nFit Results (2nd fit):\n");
-			result2.Print(std::cout);
-		}
-	//}
+	UpdateFitFunctions(locFitter2);
+	DumpFitParameters();
+	
+	FixEMParameters(locFitter2);
+	ReleaseBeamlineParameters(locFitter2);
+	
+	//locFitter2.Config().ParSettings(alpha_flux_par).Release();
+	//locFitter2.Config().ParSettings(alpha_flux_par).SetLimits(0.9*m_emptyFluxRatio, 1.1*m_emptyFluxRatio);
+	combinedFit = 1;
+	locFitter2.FitFCN();
+	
+	auto result2 = locFitter2.Result();
+	if(debug) {
+		printf("\n\nFit Results (2nd fit):\n");
+		result2.Print(std::cout);
+	}
+	//excludeRegions.clear();
+	//UpdateFitFunctions(result2);
+	//return;
 	
 	//=======================================================================================================//
 	// Next, fit the region to the right of the peak, allowing the omega parameters to float:
@@ -611,7 +620,6 @@ void MggFitter::FitData()
 	if(debug) printf("  fit 3: omega parameters floating...\n");
 	
 	excludeRegions.clear();
-	excludeRegions.push_back({minFitRange,0.65});
 	
 	CombinedNLL locNLL3(this, m_parIndexFull, m_parIndexEmpty);
 	locNLL3.x1 = 0.65;
@@ -631,15 +639,23 @@ void MggFitter::FitData()
 	// Fix parameters that were floating in previous step:
 	FixEMParameters(locFitter3);
 	FixBeamlineParameters(locFitter3);
-	ReleaseOmegaParameters(locFitter3);
 	
-	combinedFit = 0;
-	locFitter3.FitFCN();
-	
-	auto result3 = locFitter3.Result();
-	if(debug) {
-		printf("\n\nFit Results (3rd fit):\n");
-		result3.Print(std::cout);
+	if(fitOption_omega>0) {
+		
+		excludeRegions.push_back({minFitRange,0.65});
+		ReleaseOmegaParameters(locFitter3);
+		
+		combinedFit = 0;
+		locFitter3.FitFCN();
+		
+		auto result3 = locFitter3.Result();
+		if(debug) {
+			printf("\n\nFit Results (3rd fit):\n");
+			result3.Print(std::cout);
+		}
+		//excludeRegions.clear();
+		//UpdateFitFunctions(result3);
+		//return;
 	}
 	
 	//=======================================================================================================//
@@ -667,8 +683,9 @@ void MggFitter::FitData()
 	SetFitParameters(locFitter4, locFitter3); // set from previous fit:
 	
 	FixOmegaParameters(locFitter4);
-	ReleaseFDCParameters(locFitter4);
 	ReleaseEtaParameters(locFitter4);
+	ReleaseFDCParameters(locFitter4);
+	
 	/*
 	locFitter4.Config().ParSettings(A_empty_par).Release();
 	locFitter4.Config().ParSettings(A_empty_par).SetLimits(0.02, 0.08);
@@ -1057,6 +1074,9 @@ void MggFitter::ReleaseFDCParameters(ROOT::Fit::Fitter &fitter) {
 		{
 			for(int i=0; i<m_muFDC.size(); i++) {
 				
+				// skip fitting regions outside of specified fit range:
+				if((m_muFDC[i] < minFitRange) || (m_muFDC[i] > maxFitRange)) continue;
+				
 				bool skip = false;
 				for(int ireg=0; ireg<(int)excludeRegions.size(); ireg++) {
 					double locMin = excludeRegions[ireg].first;
@@ -1301,6 +1321,24 @@ void MggFitter::ReleaseOmegaParameters(ROOT::Fit::Fitter &fitter)
 			fitter.Config().ParSettings(Sig2Par).SetLimits(0.02, 0.10);
 			break;
 		}
+		case 5:
+		{
+			// allow mean and sigmas to float from lineshape fit:
+			
+			int NPar   = (int)(find(m_parametersFull.begin(), m_parametersFull.end(), "N_{#omega}") - m_parametersFull.begin());
+			int dMuPar = (int)(find(m_parametersFull.begin(), m_parametersFull.end(), "#Delta#mu_{#omega}") - m_parametersFull.begin());
+			int SigPar = (int)(find(m_parametersFull.begin(), m_parametersFull.end(), "#sigma_{x}") - m_parametersFull.begin());
+			
+			fitter.Config().ParSettings(NPar).Release();
+			fitter.Config().ParSettings(NPar).SetLimits(0.0, 1.e6);
+			
+			fitter.Config().ParSettings(dMuPar).Release();
+			fitter.Config().ParSettings(dMuPar).SetLimits(-0.02, 0.02);
+			
+			fitter.Config().ParSettings(SigPar).Release();
+			fitter.Config().ParSettings(SigPar).SetLimits(0.8, 2.0);
+			break;
+		}
 	}
 	
 	switch(fitOption_rho) {
@@ -1317,6 +1355,13 @@ void MggFitter::ReleaseOmegaParameters(ROOT::Fit::Fitter &fitter)
 				fitter.Config().ParSettings(dMuPar).Release();
 				fitter.Config().ParSettings(dMuPar).SetLimits(-0.02, 0.02);
 			}
+			break;
+		}
+		case 2:
+		{
+			int NPar = (int)(find(m_parametersFull.begin(), m_parametersFull.end(), "frac_{#rho,#omega}") - m_parametersFull.begin());
+			//fitter.Config().ParSettings(NPar).Release();
+			//fitter.Config().ParSettings(NPar).SetLimits(0.0, 2.5);
 			break;
 		}
 	}
@@ -1372,6 +1417,17 @@ void MggFitter::FixOmegaParameters(ROOT::Fit::Fitter &fitter) {
 			fitter.Config().ParSettings(Sig2Par).Fix();
 			break;
 		}
+		case 5:
+		{
+			int NPar   = (int)(find(m_parametersFull.begin(), m_parametersFull.end(), "N_{#omega}") - m_parametersFull.begin());
+			int dMuPar = (int)(find(m_parametersFull.begin(), m_parametersFull.end(), "#Delta#mu_{#omega}") - m_parametersFull.begin());
+			int SigPar = (int)(find(m_parametersFull.begin(), m_parametersFull.end(), "#sigma_{x}") - m_parametersFull.begin());
+			
+			fitter.Config().ParSettings(NPar).Fix();
+			fitter.Config().ParSettings(dMuPar).Fix();
+			fitter.Config().ParSettings(SigPar).Fix();
+			break;
+		}
 	}
 	
 	switch(fitOption_rho) {
@@ -1386,6 +1442,12 @@ void MggFitter::FixOmegaParameters(ROOT::Fit::Fitter &fitter) {
 				int dMuPar = (int)(find(m_parametersFull.begin(), m_parametersFull.end(), "#Delta#mu_{#omega}") - m_parametersFull.begin());
 				fitter.Config().ParSettings(dMuPar).Fix();
 			}
+			break;
+		}
+		case 2:
+		{
+			int NPar = (int)(find(m_parametersFull.begin(), m_parametersFull.end(), "frac_{#rho,#omega}") - m_parametersFull.begin());
+			fitter.Config().ParSettings(NPar).Fix();
 			break;
 		}
 	}
@@ -2090,12 +2152,18 @@ void MggFitter::FitOmegaLineshape(int drawOption)
 	f_omegaLineshape->SetParameters(fOmega2->GetParameters());
 	f_omegaLineshape->FixParameter(9, 1.0);
 	
-	if(fitOption_rho==1) {
+	if((fitOption_rho==1) || (fitOption_rho==2)) {
+		
+		// get h_rhoLinshape as convolution of reconstructed mass distribution from omega->pi0+gamma decay and relativistic BW
+		
+		GetConvolvedRhoMass();
+		h_rhoLineshape->Scale(1.0/h_rhoLineshape->Integral());
+		
 		f_rhoLineshape = new TF1("f_rhoLineshape", DoubleCrystalBallPDF, minFitRange, maxFitRange, 10);
 		f_rhoLineshape->SetParameters(fOmega2->GetParameters());
 		f_rhoLineshape->SetParameter(0, fOmega2->GetParameter(0)-0.01);
-		f_rhoLineshape->SetParameter(1, 2.75*fOmega2->GetParameter(1));
-		f_rhoLineshape->SetParameter(5, 2.75*fOmega2->GetParameter(5));
+		f_rhoLineshape->SetParameter(1, 3.0*fOmega2->GetParameter(1));
+		f_rhoLineshape->SetParameter(5, 3.0*fOmega2->GetParameter(5));
 		f_rhoLineshape->FixParameter(9, 1.0);
 	}
 	
@@ -2487,7 +2555,9 @@ void MggFitter::GetRhoYield(double &yield, double &yieldErr)
 	
 	// estimate uncertainty from fit parameter:
 	
-	int rhoYieldPar = f_full->GetParNumber("N_{#rho}");
+	int rhoYieldPar;
+	if(fitOption_rho==2) rhoYieldPar = f_full->GetParNumber("frac_{#rho,#omega}");
+	else rhoYieldPar = f_full->GetParNumber("N_{#rho}");
 	
 	double locRelErr = f_full->GetParError(rhoYieldPar) / f_full->GetParameter(rhoYieldPar);
 	if(locRelErr>2.0) locRelErr = 2.0;
@@ -2818,13 +2888,23 @@ void MggFitter::ZeroHadronicBkgdPars(TF1 *f1)
 
 void MggFitter::ZeroOmegaPars(TF1 *f1)
 {
-	f1->SetParameter("N_{#omega}", 0.0);
+	if(fitOption_rho==2) {
+		f1->SetParameter("switch_omega",0.0);
+	}
+	else {
+		f1->SetParameter("N_{#omega}", 0.0);
+	}
 	return;
 }
 
 void MggFitter::ZeroRhoPars(TF1 *f1)
 {
-	f1->SetParameter("N_{#rho}", 0.0);
+	if(fitOption_rho==2) {
+		f1->SetParameter("frac_{#rho,#omega}",0.0);
+	}
+	else {
+		f1->SetParameter("N_{#rho}", 0.0);
+	}
 	return;
 }
 
@@ -3153,7 +3233,7 @@ int MggFitter::GetOmegaParameters(vector<TString> &parameters)
 	
 	int nParameters = 0;
 	switch(fitOption_omega) {
-		case 0:
+		default:
 			break;
 		case 1:
 			parameters.push_back("N_{#omega}");
@@ -3186,10 +3266,16 @@ int MggFitter::GetOmegaParameters(vector<TString> &parameters)
 			parameters.push_back("frac_{#omega}");
 			nParameters += 10;
 			break;
+		case 5:
+			parameters.push_back("N_{#omega}");
+			parameters.push_back("#Delta#mu_{#omega}");
+			parameters.push_back("#sigma_{x}");
+			nParameters += 3;
+			break;
 	}
 	
 	switch(fitOption_rho) {
-		case 0:
+		default:
 			break;
 		case 1:
 		{
@@ -3199,6 +3285,14 @@ int MggFitter::GetOmegaParameters(vector<TString> &parameters)
 				parameters.push_back("#Delta#mu_{#omega}");
 				nParameters++;
 			}
+			break;
+		}
+		case 2:
+		{
+			parameters.push_back("frac_{#rho,#omega}");
+			nParameters++;
+			parameters.push_back("switch_omega");
+			nParameters++;
 			break;
 		}
 	}
@@ -3307,4 +3401,196 @@ int MggFitter::GetBeamlineParameters(vector<TString> &parameters)
 	}
 	
 	return nParameters;
+}
+
+double MggFitter::q_pi(double M, double mPi)
+{
+	if (M <= 2.0*mPi) return 0.0;
+	double val = 0.5*M * sqrt(1.0 - 4.0*mPi*mPi/(M*M));
+	return val;
+}
+
+double MggFitter::RelBW_massdep(double *x, double *par)
+{
+	double M   = x[0];        // MeV
+	double M0  = par[0];      // MeV
+	double G0  = par[1];      // MeV (width at resonance)
+	double norm= par[2];
+	
+	// pion mass (use charged or neutral as appropriate)
+	const double mPi = 0.13957018; // MeV (pi+)
+	double q    = q_pi(M, mPi);
+	double q0   = q_pi(M0, mPi);
+	double GammaM = 0.0;
+	if (q0 > 0.0 && q > 0.0) {
+		// P-wave (l=1) -> q^3 behavior and  M0/M factor
+		GammaM = G0 * pow(q/q0, 3) * (M0 / M);
+	} else {
+		GammaM = 0.0;
+	}
+	
+	double numer = M0 * G0; // keep numerator with on-shell width if you want that convention
+	double denom = (M*M - M0*M0)*(M*M - M0*M0) + (M0*GammaM)*(M0*GammaM);
+	return norm * numer / denom;
+}
+
+double MggFitter::RelBW(double *x, double *par)
+{
+	double M    = x[0];
+	double M0   = par[0];
+	double G    = par[1];
+	double norm = par[2];
+	
+	double numerator   = M0 * G;
+	double denominator = (M*M - M0*M0)*(M*M - M0*M0) + (M0*G)*(M0*G);
+	
+	return norm * numerator / denominator;
+}
+
+double MggFitter::Rho0DecayFactor(double m)
+{
+	double m_pi=0.135;
+	double m_rho=0.77;
+	double k = (pow(m,2.0) - pow(m_pi,2.0))/(pow(m_rho,2.0) - pow(m_pi,2.0)) * (m_rho/m);
+	return pow(k,3.0);
+}
+
+void MggFitter::GetConvolvedRhoMass()
+{
+	if(f_BW_rho==nullptr) {
+		f_etaLineshape = new TF1("f_etaLineshape", this, &MggFitter::EtaLineshape, minFitRange, maxFitRange, 1);
+		f_BW_rho = new TF1("f_BW_rho", this, &MggFitter::RelBW, 0.0, 1.2, 3);
+		f_BW_rho->SetParameters(0.770, 0.1474, 1.0);
+	}
+	
+	double locBinW = h_omegaLineshape->GetXaxis()->GetBinWidth(1);
+	int nBins = (1.2-0.0)/locBinW;
+	
+	TH1F *h_bw = new TH1F("h_bw", "", nBins, 0.0, 1.2);
+	h_bw->GetXaxis()->SetTitle("m_{#rho} (Rel. BW) [GeV/c^{2}]");
+	h_bw->GetXaxis()->SetTitleSize(0.05);
+	h_bw->GetXaxis()->SetTitleOffset(1.0);
+	h_bw->GetXaxis()->CenterTitle(true);
+	
+	for(int i=0; i<1.e6; i++) h_bw->Fill(f_BW_rho->GetRandom());
+	// modify this breit-wigner with the mass-dependent factor for pi0+gamma decay rate:
+	for(int ibin=1; ibin<=h_bw->GetXaxis()->GetNbins(); ibin++) {
+		double m = h_bw->GetBinCenter(ibin);
+		double f = 0;
+		if(m>0.3) f = Rho0DecayFactor(m);
+		h_bw->SetBinContent(ibin, h_bw->GetBinContent(ibin)*f);
+	}
+	h_bw->Scale(1.0/h_bw->Integral());
+	
+	
+	TH1F *h_deltaM = new TH1F("h_deltaM", "", h_omegaLineshape->GetXaxis()->GetNbins(), -0.48, 0.32);
+	h_deltaM->GetXaxis()->SetTitle("m_{#gamma#gamma}^{Constr} - m_{#omega} [GeV/c^{2}]");
+	h_deltaM->GetXaxis()->SetTitleSize(0.05);
+	h_deltaM->GetXaxis()->SetTitleOffset(1.0);
+	h_deltaM->GetXaxis()->CenterTitle(true);
+	
+	for(int ibin=1; ibin<=h_omegaLineshape->GetXaxis()->GetNbins(); ibin++) {
+		//double x = h_omegaLineshape->GetXaxis()->GetBinCenter(ibin);
+		//double x_shifted = x - h_omegaLineshape->GetXaxis()->GetBinCenter(h_omegaLineshape->FindBin(0.782));
+		double c = h_omegaLineshape->GetBinContent(ibin);
+		h_deltaM->SetBinContent(ibin, c);
+	}
+	
+	//----------------------------------------------------//
+	
+	int n1 = h_bw->GetNbinsX();
+	int n2 = h_deltaM->GetNbinsX();
+	
+	double bw1 = h_bw->GetBinWidth(1);
+	double bw2 = h_deltaM->GetBinWidth(1);
+	
+	if (fabs(bw1 - bw2) > 1e-12) {
+		std::cerr << "ERROR: histograms must have same bin width.\n";
+		return;
+	}
+	
+	double bw = bw1;
+	int nout = n1 + n2 - 1;
+	
+	// Define x-axis: convolution support is full sum of ranges
+	double xmin = h_bw->GetXaxis()->GetXmin() + h_deltaM->GetXaxis()->GetXmin();
+	double xmax = xmin + nout * bw;
+	
+	if(h_rhoLineshape==nullptr) {
+		h_rhoLineshape = new TH1F("h_rhoLineshape", "Convolved Rho Lineshape", nout, xmin, xmax);
+	}
+	h_rhoLineshape->GetXaxis()->SetTitle("Expected m_{#gamma#gamma}^{Constr} spectrum [GeV/c^{2}]");
+	h_rhoLineshape->GetXaxis()->SetTitleSize(0.05);
+	h_rhoLineshape->GetXaxis()->SetTitleOffset(1.0);
+	h_rhoLineshape->GetXaxis()->CenterTitle(true);
+	
+	// Perform discrete convolution:
+	// h_rhoLineshape[k] = sum_i h_bw[i] * h_deltaM[k-i]
+	for (int k = 0; k < nout; k++) {
+		double sum = 0.0;
+		
+		// i loops over valid bins of h1
+		for (int i = 1; i <= n1; i++) {
+			
+			int j = (k + 1) - i + 1; 
+			// Explanation:
+			// ROOT bins start at 1, convolution indices start at 0
+			
+			if (j < 1 || j > n2) continue;
+			
+			sum += h_bw->GetBinContent(i) * h_deltaM->GetBinContent(j);
+		}
+		
+		h_rhoLineshape->SetBinContent(k+1, sum);
+	}
+	
+	
+	for(int ibin=1; ibin<=h_rhoLineshape->GetXaxis()->GetNbins(); ibin++) {
+		double locx = h_rhoLineshape->GetBinCenter(ibin);
+		if(locx<0.3) h_rhoLineshape->SetBinContent(ibin,0.0);
+		else if(locx>1.1) h_rhoLineshape->SetBinContent(ibin,0.0);
+	}
+	h_rhoLineshape->Scale(1.0/h_rhoLineshape->Integral());
+	h_rhoLineshape->GetXaxis()->SetRangeUser(0.3,1.1);
+	
+	/*
+	TCanvas *locC0 = new TCanvas("locC0", "BW", 1000, 800);
+	locC0->SetLeftMargin(0.13); locC0->SetRightMargin(0.07);
+	locC0->SetBottomMargin(0.13); locC0->SetTopMargin(0.07);
+	locC0->cd();
+	h_bw->GetXaxis()->SetRangeUser(0.3,1.1);
+	h_bw->Draw("hist");
+	locC0->Update();
+	locC0->Modified();
+	
+	TCanvas *locC1 = new TCanvas("locC1", "deltaM", 1000, 800);
+	locC1->SetLeftMargin(0.13); locC1->SetRightMargin(0.07);
+	locC1->SetBottomMargin(0.13); locC1->SetTopMargin(0.07);
+	locC1->cd();
+	h_deltaM->Draw("hist");
+	locC1->Update();
+	locC1->Modified();
+	
+	TCanvas *locC2 = new TCanvas("locC2", "lineshape", 1000, 800);
+	locC2->SetLeftMargin(0.13); locC2->SetRightMargin(0.07);
+	locC2->SetBottomMargin(0.13); locC2->SetTopMargin(0.07);
+	locC2->cd();
+	h_rhoLineshape->Draw("hist");
+	locC2->Update();
+	locC2->Modified();
+	
+	locC0->SaveAs("rho_bw.pdf");
+	locC1->SaveAs("recon_mass_omega.pdf");
+	locC2->SaveAs("rho_lineshape.pdf");
+	*/
+	
+	//getchar();
+	//delete locC0;
+	//delete locC1;
+	//delete locC2;
+	
+	//delete h_deltaM;
+	//delete h_bw;
+	
+	return;
 }

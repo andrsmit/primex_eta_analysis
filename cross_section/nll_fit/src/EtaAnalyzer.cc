@@ -23,7 +23,6 @@ void EtaAnalyzer::SetAnalysisOption(int option)
 	m_analysisOption = option;
 	return;
 }
-
 void EtaAnalyzer::SetVetoOption(int option)
 {
 	if((option<0) || (option>8)) {
@@ -33,12 +32,36 @@ void EtaAnalyzer::SetVetoOption(int option)
 	m_vetoOption = option;
 	return;
 }
-
 void EtaAnalyzer::SetMggHistName(TString name)
 {
 	m_mggHistName = name;
 	return;
 }
+
+void EtaAnalyzer::SetAnalysisOption_MC(int option)
+{
+	if((option<0) || (option>8)) {
+		cout << "\nUnsupported analysis option provided.\n" << endl;
+		exit(1);
+	}
+	m_analysisOption_MC = option;
+	return;
+}
+void EtaAnalyzer::SetVetoOption_MC(int option)
+{
+	if((option<0) || (option>8)) {
+		cout << "\nUnsupported veto option provided.\n" << endl;
+		exit(1);
+	}
+	m_vetoOption_MC = option;
+	return;
+}
+void EtaAnalyzer::SetMggHistName_MC(TString name)
+{
+	m_mggHistName_MC = name;
+	return;
+}
+
 void EtaAnalyzer::SetMatrixHistName(TString name)
 {
 	m_matrixHistName = name;
@@ -149,8 +172,8 @@ void EtaAnalyzer::SetFitOption_bkgd(int option, int order)
 }
 void EtaAnalyzer::SetFitOption_omega(int option)
 {
-	if((option<0) || (option>4)) {
-		printf("\nUnsupported omega fit option provided (should be 0-4). Using default option: %d\n", m_fitOption_omega);
+	if((option<0) || (option>5)) {
+		printf("\nUnsupported omega fit option provided (should be 0-5). Using default option: %d\n", m_fitOption_omega);
 	}
 	else {
 		m_fitOption_omega = option;
@@ -159,12 +182,21 @@ void EtaAnalyzer::SetFitOption_omega(int option)
 }
 void EtaAnalyzer::SetFitOption_rho(int option)
 {
-	if((option<0) || (option>1)) {
-		printf("\nUnsupported rho fit option provided (should be 0-1). Using default option: %d\n", m_fitOption_rho);
+	if((option<0) || (option>2)) {
+		printf("\nUnsupported rho fit option provided (should be 0-2). Using default option: %d\n", m_fitOption_rho);
 	}
 	else {
 		m_fitOption_rho = option;
+		if(m_fitOption_rho==2) {
+			if((m_fitOption_omega!=2) && (m_fitOption_omega!=3)) {
+				printf("\nWARNING: Inconsistent rho+omega fit options provided. Setting fitOption_omega=3, fitOption_rho=2\n");
+				m_fitOption_omega==3;
+			}
+		}
 	}
+	
+	if(m_fitOption_omega==0) m_fitOption_rho = 0;
+	
 	return;
 }
 void EtaAnalyzer::SetFitOption_etap(int option)
@@ -364,6 +396,9 @@ TString EtaAnalyzer::GetFitOptionStr(int option)
 				case 4:
 					optString = "Simulated Lineshape (with double Crystal Ball parameterization and floating width)";
 					break;
+				case 5:
+					optString = "Simulated Lineshape (with double Crystal Ball parameterization and floating width)";
+					break;
 			}
 			break;
 		case 3:
@@ -503,19 +538,19 @@ void EtaAnalyzer::DrawFitResult(TH1F *h1, TH1F *hPull, TF1 *fFit, TF1 *fSignal,
 	
 	//gStyle->SetOptFit(0);
 	
-	fEmpty->SetLineStyle(1);
-	fBkgd->SetLineStyle(7);
+	if(fEmpty) fEmpty->SetLineStyle(1);
+	if(fBkgd)  fBkgd->SetLineStyle(7);
 	
 	pFit->cd();
 	h1->Draw("PE1");
 	fFit->Draw("same");
-	fSignal->Draw("same");
-	if(fBkgd)  fBkgd->Draw("same");
-	if(fOmega) fOmega->Draw("same");
-	if(fRho)   fRho->Draw("same");
+	//if(fSignal) fSignal->Draw("same");
+	if(fBkgd)   fBkgd->Draw("same");
+	if(fOmega)  fOmega->Draw("same");
+	if(fRho)    fRho->Draw("same");
 	if(fHadronicBkgd) fHadronicBkgd->Draw("same");
-	if(fEtaPi) fEtaPi->Draw("same");
-	if(fEmpty) fEmpty->Draw("same");
+	if(fEtaPi)  fEtaPi->Draw("same");
+	if(fEmpty)  fEmpty->Draw("same");
 	//if(fAcc) fAcc->Draw("same");
 	
 	pFit->Update();
@@ -528,9 +563,9 @@ void EtaAnalyzer::DrawFitResult(TH1F *h1, TH1F *hPull, TF1 *fFit, TF1 *fSignal,
 	lx2->SetY2(gPad->GetUymax());
 	lx2->Draw("same");
 	
-	TLegend *locLeg = new TLegend(0.125, 0.400, 0.370, 0.750);
+	TLegend *locLeg = new TLegend(0.125, 0.430, 0.370, 0.780);
 	locLeg->AddEntry(fFit,    "Full Fit",         "l");
-	locLeg->AddEntry(fSignal, "Signal Lineshape", "l");
+	if(fSignal)       locLeg->AddEntry(fSignal,       "Signal Lineshape", "l");
 	if(fEmpty)        locLeg->AddEntry(fEmpty,        "Empty-Target Bkgd", "l");
 	if(fEtaPi)        locLeg->AddEntry(fEtaPi,        "#eta#pi Bkgd", "l");
 	if(fHadronicBkgd) locLeg->AddEntry(fHadronicBkgd, "#eta#pi#pi Bkgd", "l");
@@ -568,7 +603,7 @@ void EtaAnalyzer::ExtractAngularYield(MggFitter &locFitter, int drawOption)
 		double locMinAngle = locAngle - m_angularBin[iThetaBin].second;
 		double locMaxAngle = locAngle + m_angularBin[iThetaBin].second;
 		
-		//if(locAngle<1.75) continue;
+		//if(locAngle<0.20) continue;
 		
 		//----------------------------------------------//
 		// Get 1-d projection of invariant mass spectrum:
@@ -640,7 +675,7 @@ void EtaAnalyzer::ExtractAngularYield(MggFitter &locFitter, int drawOption)
 		//----------------------------------------------//
 		// Omega Lineshape
 		
-		lineshapeWindowSize = 0.5;
+		lineshapeWindowSize = 2.0;
 		
 		lineshapeAngleLow  = locAngle - lineshapeWindowSize;
 		lineshapeAngleHigh = locAngle + lineshapeWindowSize;
@@ -651,7 +686,7 @@ void EtaAnalyzer::ExtractAngularYield(MggFitter &locFitter, int drawOption)
 		TH1F *hOmega = (TH1F*)h_omegaLineshape->ProjectionY("hOmega",
 			h_omegaLineshape->GetXaxis()->FindBin(lineshapeAngleLow),
 			h_omegaLineshape->GetXaxis()->FindBin(lineshapeAngleHigh)-1, "e");
-		hOmega->Rebin(m_rebinsMgg);
+		//hOmega->Rebin(m_rebinsMgg);
 		locFitter.SetOmegaLineshape(hOmega);
 		
 		//----------------------------------------------//
@@ -891,6 +926,7 @@ void EtaAnalyzer::ExtractAngularYield(MggFitter &locFitter, int drawOption)
 			TF1 *locfOmega        = nullptr;
 			TF1 *locfRho          = nullptr;
 			TF1 *locfBkgd         = nullptr;
+			TF1 *locfAcc          = nullptr;
 			
 			locFitter.GetFitFunction_Signal(&locfSignal, "locfSignal");
 			locFitter.GetFitFunction_Empty(&locfEmpty, "locfEmpty");
@@ -900,7 +936,6 @@ void EtaAnalyzer::ExtractAngularYield(MggFitter &locFitter, int drawOption)
 			locFitter.GetFitFunction_Rho(&locfRho, "locfRho");
 			locFitter.GetFitFunction_Bkgd(&locfBkgd, "locfBkgd");
 			
-			TF1 *locfAcc = nullptr;
 			locFitter.GetAccFunction(&locfAcc, "locfAcc");
 			
 			DrawFitResult(locHistFull, locPull, locfFit, locfSignal, 
@@ -931,7 +966,7 @@ void EtaAnalyzer::ExtractAngularYield(MggFitter &locFitter, int drawOption)
 				locHistEmptyWide->Draw("PE");
 				locfEmptyDraw->Draw("same");
 				locfEmptyBkgdDraw->Draw("same");
-				locHistEmpty->Draw("PE same");
+				//locHistEmpty->Draw("PE same");
 				
 				TLegend *locLeg = new TLegend(0.60, 0.60, 0.95, 0.89);
 				locLeg->AddEntry(locHistEmpty,     Form("Empty Bkgd from %.2f#circ - %.2f#circ", locMinAngle,   locMaxAngle));

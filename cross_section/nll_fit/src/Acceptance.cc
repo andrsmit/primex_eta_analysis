@@ -16,7 +16,7 @@ int EtaAnalyzer::LoadAngularMatrix()
 	if(gSystem->AccessPathName(matrixFileName.Data())) return 1;
 	
 	printf("  matrix file: %s\n", matrixFileName.Data());
-	
+	printf("  matrix hist: %s\n", m_matrixHistName.Data());
 	//------------------------------------------------------------//
 	
 	TFile *fMatrix = new TFile(matrixFileName.Data(), "READ");
@@ -440,26 +440,24 @@ TString EtaAnalyzer::GetMatrixFileName()
 	int locPhase = m_phase;
 	
 	TString matrixFileName;
-	switch(m_analysisOption) {
+	switch(m_analysisOption_MC) {
 		case 0:
 			matrixFileName = Form("phase%d.root", locPhase);
-			// TEMPORARY TEST:
-			//matrixFileName = Form("phase%d_angular_VetoOption6.root", locPhase);
 			break;
 		case 1:
-			matrixFileName = Form("phase%d_matrix_VetoOption%d.root", locPhase, m_vetoOption);
+			matrixFileName = Form("phase%d_matrix_VetoOption%d.root", locPhase, m_vetoOption_MC);
 			break;
 		case 2:
-			matrixFileName = Form("phase%d_FCAL_VetoOption%d.root", locPhase, m_vetoOption);
+			matrixFileName = Form("phase%d_FCAL_VetoOption%d.root", locPhase, m_vetoOption_MC);
 			break;
 		case 3:
-			matrixFileName = Form("phase%d_BCAL_VetoOption%d.root", locPhase, m_vetoOption);
+			matrixFileName = Form("phase%d_BCAL_VetoOption%d.root", locPhase, m_vetoOption_MC);
 			break;
 		case 4:
-			matrixFileName = Form("phase%d_beam_VetoOption%d.root", locPhase, m_vetoOption);
+			matrixFileName = Form("phase%d_beam_VetoOption%d.root", locPhase, m_vetoOption_MC);
 			break;
 		case 5:
-			matrixFileName = Form("phase%d_TOF_VetoOption%d.root", locPhase, m_vetoOption);
+			matrixFileName = Form("phase%d_TOF_VetoOption%d.root", locPhase, m_vetoOption_MC);
 			break;
 		case 8:
 			matrixFileName = Form("phase%d_angular_VetoOption6.root", locPhase);

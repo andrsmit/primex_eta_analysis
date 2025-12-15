@@ -14,8 +14,6 @@ int MggFitter::InitializeFitFunction(TF1 **f1, TString funcName)
 		nParameters++;
 	}
 	
-	//------------------------------------------//
-	
 	// initialize fit function for each angular bin:
 	
 	*f1 = new TF1(funcName.Data(), this, &MggFitter::MggFitFunction, 0.3, 1.20, nParameters);
@@ -140,7 +138,6 @@ void MggFitter::InitializeFitParameters(ROOT::Fit::Fitter &fitter)
 
 void MggFitter::SetFitParameters(ROOT::Fit::Fitter &fitterNew, ROOT::Fit::Fitter &fitterOld)
 {
-	
 	int nTotalParameters = (int)m_parametersFull.size();
 	
 	// Start by setting all parameters to zero:
@@ -150,6 +147,7 @@ void MggFitter::SetFitParameters(ROOT::Fit::Fitter &fitterNew, ROOT::Fit::Fitter
 	fitterNew.Config().SetParamsSettings(nTotalParameters, dummyPars);
 	
 	for(int ipar=0; ipar<nTotalParameters; ipar++) {
+		//printf("Setting parameter %d (%s) to %f\n", ipar, m_parametersFull[ipar].Data(), fitterOld.Config().ParSettings(ipar).Value());
 		fitterNew.Config().ParSettings(ipar).Set(fitterOld.Config().ParSettings(ipar).Name(), 
 			fitterOld.Config().ParSettings(ipar).Value());
 		
@@ -269,9 +267,21 @@ void MggFitter::GuessOmegaParameters(vector<double> &parGuesses)
 	
 	double NGuess_omega = NGuess;
 	double NGuess_rho   = 0.0;
-	if(fitOption_rho>0) {
-		NGuess_omega = 0.7*NGuess;
-		NGuess_rho   = 0.3*NGuess;
+	switch(fitOption_rho) {
+		default:
+			break;
+		case 1:
+		{
+			NGuess_omega = 0.9*NGuess;
+			NGuess_rho   = 0.1*NGuess;
+			break;
+		}
+		case 2:
+		{
+			NGuess_omega = 0.9*NGuess;
+			NGuess_rho   = 0.1;
+			break;
+		}
 	}
 	
 	switch(fitOption_omega) {
@@ -318,6 +328,13 @@ void MggFitter::GuessOmegaParameters(vector<double> &parGuesses)
 			parGuesses.push_back(f_omegaLineshape->GetParameter(8));
 			break;
 		}
+		case 5:
+		{
+			parGuesses.push_back(NGuess);
+			parGuesses.push_back(0.0);
+			parGuesses.push_back(1.0);
+			break;
+		}
 	}
 	
 	switch(fitOption_rho) {
@@ -329,6 +346,12 @@ void MggFitter::GuessOmegaParameters(vector<double> &parGuesses)
 			if((fitOption_omega!=2) && (fitOption_omega!=3)) {
 				parGuesses.push_back(lineshapeOffset);
 			}
+			break;
+		}
+		case 2:
+		{
+			parGuesses.push_back(NGuess_rho);
+			parGuesses.push_back(1.0); // a switch to turn off contribution from omega
 			break;
 		}
 	}
@@ -462,6 +485,7 @@ double MggFitter::MggFitFunction(double *x, double *par)
 	double alpha_flux       = par[nParameters+0];
 	double alpha_acc        = par[nParameters+1];
 	double alpha_acc_switch = par[nParameters+2];
+	
 	// should be 1 when fitting, but can set to 0 to turn off the contribution from accidentals in the full target data, 
 	// without removing accidentals from the empty target 
 	

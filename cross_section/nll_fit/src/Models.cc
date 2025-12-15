@@ -180,6 +180,30 @@ double MggFitter::model_omega(double locMgg, double *par)
 				+ frac*NormCrystalBall(locMgg, mu2, sigma2, alpha2, n2));
 			break;
 		}
+		case 5:
+		{
+			// Fit using lineshape extracted from simulated histogram, but allow width to float:
+			
+			double N       = par[0];
+			double dmu     = par[1];
+			double xsigma  = par[2];
+			nParameters    = 3;
+			
+			double    mu1 = f_omegaLineshape->GetParameter(0) - dmu;
+			double sigma1 = f_omegaLineshape->GetParameter(1) * xsigma;
+			double alpha1 = f_omegaLineshape->GetParameter(2);
+			double     n1 = f_omegaLineshape->GetParameter(3);
+			double    mu2 = f_omegaLineshape->GetParameter(4) + mu1;
+			double sigma2 = f_omegaLineshape->GetParameter(5) * xsigma;
+			double alpha2 = f_omegaLineshape->GetParameter(6);
+			double     n2 = f_omegaLineshape->GetParameter(7);
+			double   frac = f_omegaLineshape->GetParameter(8);
+			
+			if(N==0) fOmega = 0;
+			else fOmega = N * ((1.0-frac)*NormCrystalBall(locMgg, mu1, sigma1, alpha1, n1) 
+				+ frac*NormCrystalBall(locMgg, mu2, sigma2, alpha2, n2));
+			break;
+		}
 	}
 	
 	// now get contribution from rho:
@@ -196,28 +220,81 @@ double MggFitter::model_omega(double locMgg, double *par)
 			
 			double dmu;
 			switch(fitOption_omega) {
-				case 0:
+				default:
+				{
 					dmu = par[nParameters];
 					nParameters++;
 					break;
+				}
 				case 1:
+				{
 					dmu = par[nParameters];
 					nParameters++;
 					break;
+				}
 				case 2:
+				{
 					dmu = par[1];
 					break;
+				}
 				case 3:
+				{
 					dmu = par[1];
 					break;
+				}
 				case 4:
+				{
 					dmu = par[nParameters];
 					nParameters++;
 					break;
+				}
 			}
 			
+			bool use_hist = true;
+			
 			if(N==0) fRho += 0;
-			else fRho = N * f_rhoLineshape->Eval(locMgg-dmu);
+			else {
+				if(use_hist) {
+					fRho = N * h_rhoLineshape->GetBinContent(h_rhoLineshape->FindBin(locMgg-dmu))
+						/ h_rhoLineshape->GetBinWidth(h_rhoLineshape->FindBin(locMgg-dmu));
+				}
+				else {
+					fRho = N * f_rhoLineshape->Eval(locMgg-dmu);
+				}
+			}
+			break;
+		}
+		case 2:
+		{
+			// Fit using lineshape extracted from simulated histogram:
+			
+			double N = par[nParameters] * par[0];
+			nParameters++;
+			
+			double dmu = 0.;
+			if((fitOption_omega==2) || (fitOption_omega==3)) {
+				// this should always be the case for fitOption_rho=2!
+				dmu = par[1];
+			}
+			
+			bool use_hist = true;
+			
+			if(N==0) fRho += 0;
+			else {
+				if(use_hist) {
+					fRho = N * h_rhoLineshape->GetBinContent(h_rhoLineshape->FindBin(locMgg-dmu))
+						/ h_rhoLineshape->GetBinWidth(h_rhoLineshape->FindBin(locMgg-dmu));
+				}
+				else {
+					fRho = N * f_rhoLineshape->Eval(locMgg-dmu);
+				}
+			}
+			
+			double omega_switch = par[nParameters];
+			nParameters++;
+			
+			fOmega *= omega_switch;
+			break;
 		}
 	}
 	

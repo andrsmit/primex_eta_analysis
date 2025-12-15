@@ -73,7 +73,7 @@ int MggFitter::InitializeEmptyWideFitParameters()
 	
 	// omega from gas:
 	switch(fitOption_omega) {
-		case 0:
+		default:
 			break;
 		case 1:
 		{
@@ -114,6 +114,14 @@ int MggFitter::InitializeEmptyWideFitParameters()
 			nParameters += 10;
 			break;
 		}
+		case 5:
+		{
+			f_emptyWide->FixParameter(nParameters+0, 0.000);
+			f_emptyWide->FixParameter(nParameters+1, 0.000);
+			f_emptyWide->FixParameter(nParameters+2, 1.000);
+			nParameters += 3;
+			break;
+		}
 	}
 	
 	switch(fitOption_rho) {
@@ -127,6 +135,15 @@ int MggFitter::InitializeEmptyWideFitParameters()
 				f_emptyWide->FixParameter(nParameters, 0.000);
 				nParameters++;
 			}
+			break;
+		}
+		case 2:
+		{
+			f_emptyWide->FixParameter(nParameters, 0.000);
+			nParameters++;
+			f_emptyWide->FixParameter(nParameters, 1.000);
+			nParameters++;
+			break;
 		}
 	}
 	

@@ -27,6 +27,43 @@ using namespace std;
 #include "Math/Functor.h"
 #include "TVirtualFitter.h"
 
+struct PrecomputedMatrix
+{
+	// vectors storing number of bins for each dimension:
+	vector<int> nEnergyBins, nThrownBins, nReconBins;
+	
+	//
+	// Vectors storing fraction of flux in each beam energy bin
+	//   (normalized to the energy sub-range being fit)
+	// as well as the central energy of each bin.
+	//
+	// Indexing: [iHist][iEnergyBin]
+	//
+	vector<vector<double>> fluxWeights;
+	vector<vector<double>> energyBins;
+	
+	//
+	// Vectors storing the 3-D angular acceptance and resolution matrix
+	// for each energy sub-range being fit.
+	//
+	// Indexing: [iHist][iEnergyBin][iReconBin*nThrownBins + iThrownBin]
+	vector<vector<vector<double>>> matrix;
+};
+
+struct PrecomputedTheory
+{
+	// Everything organized into 1-D vectors.
+	//   indexing: iEnergyBin*nThetaBins + iThetaBin
+	
+	int nEnergyBins, nThetaBins;
+	double energyMin;
+	double energyBinWidth;
+	
+	vector<double> prim, coh, inc, incN;
+	vector<double> primAmpReal, strongAmpReal;
+	vector<double> primAmpImag, strongAmpImag;
+};
+
 class YieldFitter {
 	public:
 		YieldFitter() : 
@@ -176,6 +213,7 @@ class YieldFitter {
 		
 		// Fit/Draw Functions:
 		
+		double GetExpectedYieldFast(double, double, int, double *par);
 		double GetExpectedYield(double, double, int, double *par, int isolateInter=0);
 		
 		double YieldFitFunction(double *x, double *par);
@@ -185,6 +223,12 @@ class YieldFitter {
 		void FitAngularYield(double minFitRange=0.0, double maxFitRange=4.0, TString outputFileName="");
 		
 		struct CombinedChi2;
+		
+		PrecomputedMatrix precomputedMatrix;
+		void PrecomputeMatrices();
+		
+		PrecomputedTheory precomputedTheory;
+		void PrecomputeTheory();
 		
 	private:
 		
@@ -213,6 +257,7 @@ class YieldFitter {
 		TF1 *f_TheoryTulio;
 		
 		double m_luminosity;
+		vector<double> m_fractionalLumi;
 		
 		vector<TString> m_components;
 		int InitializeModelComponents();
@@ -247,6 +292,9 @@ class YieldFitter {
 		double m_thrownAngleBinSize =  0.010;
 		double m_minThrownAngle     =  0.000;
 		double m_maxThrownAngle     =  5.000;
+		
+		double GetCrossSectionFast(double, int, double, double, double, double, double);
+		double GetCrossSectionInterferenceFast(double, int, double, double, double);
 		
 		double GetCrossSection(double, int, double, double, double, double, double);
 		double GetCrossSectionInterference(double, int, double, double, double);
