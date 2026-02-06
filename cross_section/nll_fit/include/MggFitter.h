@@ -66,6 +66,11 @@ class MggFitter {
 		double minMggCut = 0.5;
 		double maxMggCut = 0.6;
 		
+		double bggenLSOffset = 0.002;//0.0013; 
+		// The above value was empirically determined by comparing the bggen MC (mgg_const_bggen_signal_cut) with QF MC.
+		// It was found that the center of the distribution from the former needed to be shifted by +0.0013 GeV/c2 to the right
+		// to match the distribution from the latter.
+		
 		int combinedFit = 1;
 		
 		// histograms to store the fitted values of expected accidental counts:
@@ -118,7 +123,7 @@ class MggFitter {
 			if(m_hadronicBkgdYieldBGGEN>1.0) {
 				h_hadronicBkgdLineshape->Scale(1.0/m_hadronicBkgdYieldBGGEN);
 			}
-			FitHadronicBkgdLineshape(drawOption);
+			//FitHadronicBkgdLineshape(drawOption);
 			return;
 		}
 		void FitHadronicBkgdLineshape(int drawOption=0);
@@ -135,9 +140,21 @@ class MggFitter {
 		}
 		void FitEtaPionLineshape(int drawOption=0);
 		
+		void SetEtaPiPiLineshape(TH1F *h1, int drawOption=0) {
+			h_etaPiPiLineshape = h1;
+			if(h1->Integral()>1.0) {
+				h_etaPiPiLineshape->Scale(1.0/h1->Integral());
+			}
+			FitEtaPiPiLineshape(drawOption);
+			return;
+		}
+		void FitEtaPiPiLineshape(int drawOption=0);
+		
 		// Set/fit lineshape of omega background:
 		void SetOmegaLineshape(TH1F *h1, int drawOption=0) { 
 			h_omegaLineshape = h1;
+			if(fitOption_rho==4) return;
+			
 			h_omegaLineshape->Scale(1.0/h_omegaLineshape->Integral());
 			if(fitOption_omega>2) FitOmegaLineshape(drawOption);
 			return;
@@ -147,7 +164,13 @@ class MggFitter {
 		// Set lineshape of rho background:
 		void SetRhoLineshape(TH1F *h1, int drawOption=0) { 
 			h_rhoLineshape = h1;
-			h_rhoLineshape->Scale(1.0/h_rhoLineshape->Integral());
+			if(fitOption_rho==4) {
+				h_omegaLineshape->Add(h_rhoLineshape,10.0);
+				h_omegaLineshape->Scale(1.0/h_omegaLineshape->Integral());
+			}
+			else {
+				h_rhoLineshape->Scale(1.0/h_rhoLineshape->Integral());
+			}
 			return;
 		}
 		
@@ -160,6 +183,13 @@ class MggFitter {
 			m_etaPionBkgdFrac    = frac;
 			m_etaPionBkgdFracErr = fracErr;
 			return;
+		}
+		
+		void SetHadBkgdPars_uv(double u, double v, double uErr=0.0, double vErr=0.0) {
+			m_hadBG_u    = u;
+			m_hadBG_v    = v;
+			m_hadBG_uErr = uErr;
+			m_hadBG_vErr = vErr;
 		}
 		
 		void FitData();
@@ -425,6 +455,118 @@ class MggFitter {
 		void GetRhoYield(double&, double&);
 		void GetBkgdYield(double&, double&);
 		
+		void GetBkgdPar_f(double &par, double &parErr) {
+			if(fitOption_signal<3) {
+				par    = 0.0;
+				parErr = 0.0;
+				return;
+			}
+			int parIndex = f_full->GetParNumber("f_{#etaX}");
+			par    = f_full->GetParameter(parIndex);
+			parErr = f_full->GetParError(parIndex);
+		}
+		void GetBkgdPar_r(double &par, double &parErr) {
+			if(fitOption_signal!=3) {
+				par    = 0.0;
+				parErr = 0.0;
+				return;
+			}
+			int parIndex = f_full->GetParNumber("r_{#etaX}");
+			par    = f_full->GetParameter(parIndex);
+			parErr = f_full->GetParError(parIndex);
+		}
+		
+		double GetParGuess_fEtaX() {
+			if(fitOption_signal<3) return 0.0;
+			
+			double p0 = 0.0, p1 = 0.0, p2 = 0.0, p3 = 0.0, p4 = 0.0, p5 = 0.0;
+			switch(vetoOption) {
+				case 4:
+				{
+					/*
+					p0 =  0.102594;
+					p1 =  0.562013;
+					p2 = -0.267013;
+					p3 =  0.0237676;
+					p4 =  0.00829501;
+					p5 = -0.00134025;
+					*/
+					p0 =  0.155506;
+					p1 =  0.522828;
+					p2 = -0.252722;
+					p3 =  0.0227911;
+					p4 =  0.00778369;
+					p5 = -0.00125899;
+					break;
+				}
+				case 5:
+				{
+					/*
+					p0 =  0.0;
+					p1 =  0.557399;
+					p2 = -0.406487;
+					p3 =  0.156223;
+					p4 = -0.0316226;
+					p5 =  0.0025599;
+					*/
+					p0 =  0.0574605;
+					p1 =  0.299429;
+					p2 = -0.094944;
+					p3 =  0.000957147;
+					p4 =  0.00249815;
+					p5 = -0.000178491;
+					break;
+				}
+				case 6:
+				{
+					/*
+					p0 =  0.0673978;
+					p1 =  0.314021;
+					p2 = -0.164916;
+					p3 =  0.0158012;
+					p4 =  0.00502211;
+					p5 = -0.000819364;
+					*/
+					p0 =  0.025;
+					p1 =  0.517426;
+					p2 = -0.455408;
+					p3 =  0.178494;
+					p4 = -0.0340806;
+					p5 =  0.00256045;
+					break;
+				}
+				default: 
+				{
+					break;
+				}
+			}
+			return (p0 + p1*angle + p2*pow(angle,2.0) + p3*pow(angle,3.0) + p4*pow(angle,4.0) + p5*pow(angle,5.0));
+		}
+		double GetParGuess_rEtaX() {
+			if(fitOption_signal!=3) return 1.0;
+			
+			double p0 = 1.0, p1 = 0.0, p2 = 0.0, p3 = 0.0, p4 = 0.0, p5 = 0.0;
+			switch(vetoOption) {
+				case 4:
+				{
+					break;
+				}
+				case 5:
+				{
+					break;
+				}
+				case 6:
+				{
+					break;
+				}
+				default: 
+				{
+					break;
+				}
+			}
+			return (p0 + p1*angle + p2*pow(angle,2.0) + p3*pow(angle,3.0) + p4*pow(angle,4.0));
+		}
+		
 		void GetOmegaFitPars(double&, double&, double&, double&, double&, double&, double&, double&);
 		
 		void GetEmptyEtaFraction(double&, double&);
@@ -497,6 +639,9 @@ class MggFitter {
 		double m_hadronicBkgdFrac       = 0.0, m_hadronicBkgdFracErr = 0.0;
 		double m_etaPionBkgdFrac        = 0.0, m_etaPionBkgdFracErr  = 0.0;
 		
+		double m_hadBG_u = 0.0, m_hadBG_uErr = 0.0;
+		double m_hadBG_v = 0.0, m_hadBG_vErr = 0.0;
+		
 		Option_t *fitOption = "R0Q";
 		
 		vector<pair<double,double>> excludeRegions;
@@ -515,6 +660,9 @@ class MggFitter {
 		
 		TH1F *h_etaPionLineshape;
 		TF1  *f_etaPionLineshape;
+		
+		TH1F *h_etaPiPiLineshape;
+		TF1  *f_etaPiPiLineshape;
 		
 		TH1F *h_omegaLineshape;
 		TF1  *f_omegaLineshape;

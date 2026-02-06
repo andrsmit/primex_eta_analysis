@@ -33,6 +33,8 @@ struct configSettings_t {
 
 ModelType StringToModelType(std::string str);
 
+TString GetOutputFileName(EtaAnalyzer);
+
 int LoadConfigSettings(EtaAnalyzer&, TString, int);
 int LoadModelType(YieldFitter&, TString);
 

@@ -160,6 +160,9 @@ class EtaAnalyzer {
 			m_maxFitRange          = 0.950;
 			m_minEmptyFitRange     = 0.300;
 			m_maxEmptyFitRange     = 0.950;
+			
+			m_lineshapeOffset      = 0.0;
+			m_lineshapeOffsetFound = false;
 		};
 		
 		~EtaAnalyzer(){};
@@ -182,6 +185,7 @@ class EtaAnalyzer {
 		void SetAnalysisOption(int);
 		void SetVetoOption(int);
 		void SetMggHistName(TString);
+		TString GetMggHistName() { return m_mggHistName; };
 		
 		void SetAnalysisOption_MC(int);
 		void SetVetoOption_MC(int);
@@ -225,6 +229,13 @@ class EtaAnalyzer {
 		void SetFitOption_rho(int);
 		void SetFitOption_etap(int);
 		
+		void SetLineshapeOffset(double offset) {
+			m_lineshapeOffset      = offset;
+			m_lineshapeOffsetFound = true;
+		}
+		double GetLineshapeOffset() { return m_lineshapeOffset; }
+		bool GetLineshapeOffsetFound() { return m_lineshapeOffsetFound; }
+		
 		void SetEmptyFitOption_eta(int);
 		void SetEmptyFitOption_omega(int);
 		void SetEmptyFitOption_fdc(int);
@@ -264,6 +275,7 @@ class EtaAnalyzer {
 		int LoadEtaLineshape_Coh();
 		int LoadEtaLineshape_QF();
 		int LoadEtaXLineshapes();
+		int LoadEtaXFractions();
 		int LoadOmegaLineshape();
 		int LoadRhoLineshape();
 		
@@ -329,8 +341,18 @@ class EtaAnalyzer {
 		TH1F *h_EtaPionBkgdFraction;  // from fit result
 		TH1F *h_EtaPionBkgdFraction_bggen, *h_EtaPionBkgdFraction_bggen_cut;  // from bggen simulation
 		
+		TH1F *h_EtaPiPiBkgdFraction;  // from fit result
+		TH1F *h_EtaPiPiBkgdFraction_bggen, *h_EtaPiPiBkgdFraction_bggen_cut;  // from bggen simulation
+		
 		TH1F *h_HadronicBkgdFraction; // from fit result
 		TH1F *h_HadronicBkgdFraction_bggen, *h_HadronicBkgdFraction_bggen_cut; // from bggen simulation
+		
+		// Histogram to store fitted parameter values for inclusive background channels:
+		
+		TH1F *h_BkgdPar_f_etaX, *h_BkgdPar_r_etaX;
+		
+		TH1F *h_LineshapeShift;
+		TCanvas *cShift;
 		
 		// Other inputs needed for cross section
 		
@@ -411,6 +433,9 @@ class EtaAnalyzer {
 		int m_lineshapeOption;
 		int m_useRawMass;
 		
+		double m_lineshapeOffset;
+		bool m_lineshapeOffsetFound;
+		
 		int m_emptyFitOption_eta;
 		int m_emptyFitOption_omega;
 		int m_emptyFitOption_fdc;
@@ -444,6 +469,8 @@ class EtaAnalyzer {
 		vector<pair<double,double>> m_fitResult_shift;
 		vector<pair<double,double>> m_fitResult_bkgdShift;
 		vector<pair<double,double>> m_fitResult_zqf;
+		
+		vector<pair<double,double>> m_angularPar_f_etaX, m_angularPar_r_etaX;
 		
 		// Histograms to store results:
 		
