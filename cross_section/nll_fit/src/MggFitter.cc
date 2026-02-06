@@ -441,6 +441,35 @@ struct MggFitter::CombinedNLL {
 		
 		nll += (constr1 + constr2);
 		
+		//------------------------------------------------------//
+		// Add Gaussian constraints for the f_etaX and r_etaX parameters:
+		/*
+		if(fitter->fitOption_signal>=3) {
+			
+			int locParIndex = (int)(find(fitter->m_parametersFull.begin(), fitter->m_parametersFull.end(), "f_{#etaX}") - 
+				fitter->m_parametersFull.begin());
+			double locF = p[locParIndex];
+			
+			double constraintFactor = 0.1;
+			if(fitter->angle < 0.5) constraintFactor = 0.2;
+			
+			double locFGuess = fitter->GetParGuess_fEtaX();
+			if(locFGuess>0.0) {
+				double constrF = 0.5*pow((locF - locFGuess)/(constraintFactor*locFGuess), 2.0);
+				nll += constrF;
+			}
+		}
+		*/
+		//------------------------------------------------------//
+		// Add Gaussian constraint for the offset parameter:
+		/*
+		int locOffsetIndex = (int)(find(fitter->m_parametersFull.begin(), fitter->m_parametersFull.end(), "#Delta#mu_{#eta}") - 
+			fitter->m_parametersFull.begin());
+		double locOffset = p[locOffsetIndex];
+		
+		double constrF = 0.5*pow(locOffset/0.0005, 2.0);
+		nll += constrF;
+		*/
 		return nll;
 	}
 };
@@ -458,6 +487,16 @@ void MggFitter::FitData()
 	}
 	
 	int debug = 0;
+	
+	/*
+	TCanvas *locc1 = new TCanvas("locc1","locc1",1000,750);
+	locc1->cd();
+	h_omegaLineshape->Draw();
+	cout << h_omegaLineshape->Integral() << endl;
+	locc1->Update();
+	locc1->Modified();
+	getchar();
+	*/
 	
 	if(f_emptyWide) delete f_emptyWide;
 	if(f_empty)     delete f_empty;
@@ -496,10 +535,12 @@ void MggFitter::FitData()
 	/*-----------------------------*/
 	// Next, initialize the fit functions themselves:
 	
-	f_etaLineshape = new TF1("f_etaLineshape", this, &MggFitter::EtaLineshape, minFitRange, maxFitRange, 1);
-	f_etaLineshape->SetParameter(0, 1.0);
-	f_etaLineshape->SetLineColor(kRed);
-	f_etaLineshape->SetNpx(1000);
+	if(f_etaLineshape==nullptr) {
+		f_etaLineshape = new TF1("f_etaLineshape", this, &MggFitter::EtaLineshape, minFitRange, maxFitRange, 1);
+		f_etaLineshape->SetParameter(0, 1.0);
+		f_etaLineshape->SetLineColor(kRed);
+		f_etaLineshape->SetNpx(1000);
+	}
 	
 	if(debug) printf("Initializing fit functions...\n");
 	InitializeFitFunction(&f_full);
@@ -548,13 +589,27 @@ void MggFitter::FitData()
 	combinedFit = 2;
 	locFitter1.FitFCN();
 	
-	/*
-	auto result0 = locFitter1.Result();
-	excludeRegions.clear();
-	UpdateFitFunctions(result0);
-	DumpFitParameters();
-	return;
-	*/
+	// update fitter with results:
+	auto result1 = locFitter1.Result();
+	for(int i=0; i<result1.NPar(); ++i) {
+		
+		const auto &ps = locFitter1.Config().ParSettings(i);
+		if(ps.IsFixed()) continue;
+		
+		double low  = ps.LowerLimit();
+		double high = ps.UpperLimit();
+		double val  = result1.Parameter(i);
+		if(val < low || val > high) {
+			cout << "\nPARAMETER OUTSIDE LIMITS (fitter1):\n";
+			cout << "  Index: " << i << "\n";
+			cout << "  Name: " << ps.Name() << "\n";
+			cout << "  Value: " << val << "\n";
+			cout << "  Lower: " << low << "\n";
+			cout << "  Upper: " << high << "\n\n";
+		}
+		
+		locFitter1.Config().ParSettings(i).SetValue(result1.Parameter(i));
+	}
 	
 	if(fitOption_omega==0) {
 		excludeRegions.push_back({0.50,0.60});
@@ -567,14 +622,37 @@ void MggFitter::FitData()
 	combinedFit = 0;
 	locFitter1.FitFCN();
 	
-	auto result1 = locFitter1.Result();
-	if(1) {
+	result1 = locFitter1.Result();
+	if(debug) {
 		printf("\n\nFit Results (1st fit):\n");
 		result1.Print(std::cout);
 	}
 	//excludeRegions.clear();
 	//UpdateFitFunctions(result1);
 	//return;
+	
+	// update fitter with results:
+	result1 = locFitter1.Result();
+	for(int i=0; i<result1.NPar(); ++i) {
+		
+		const auto &ps = locFitter1.Config().ParSettings(i);
+		if(ps.IsFixed()) continue;
+		
+		double low  = ps.LowerLimit();
+		double high = ps.UpperLimit();
+		double val  = result1.Parameter(i);
+		if(val < low || val > high) {
+			cout << "\nPARAMETER OUTSIDE LIMITS (fitter1):\n";
+			cout << "  Index: " << i << "\n";
+			cout << "  Name: " << ps.Name() << "\n";
+			cout << "  Value: " << val << "\n";
+			cout << "  Lower: " << low << "\n";
+			cout << "  Upper: " << high << "\n\n";
+		}
+		
+		locFitter1.Config().ParSettings(i).SetValue(result1.Parameter(i));
+		dummyPars[i] = result1.Parameter(i);
+	}
 	
 	//=======================================================================================================//
 	// Now, let the empty target background parameters float if they are within this fitting range:
@@ -594,9 +672,6 @@ void MggFitter::FitData()
 	
 	SetFitParameters(locFitter2, locFitter1); // set from previous fit
 	
-	UpdateFitFunctions(locFitter2);
-	DumpFitParameters();
-	
 	FixEMParameters(locFitter2);
 	ReleaseBeamlineParameters(locFitter2);
 	
@@ -613,6 +688,28 @@ void MggFitter::FitData()
 	//excludeRegions.clear();
 	//UpdateFitFunctions(result2);
 	//return;
+	
+	// update fitter with results:
+	for(int i=0; i<result2.NPar(); ++i) {
+		
+		const auto &ps = locFitter2.Config().ParSettings(i);
+		if(ps.IsFixed()) continue;
+		
+		double low  = ps.LowerLimit();
+		double high = ps.UpperLimit();
+		double val  = result2.Parameter(i);
+		if(val < low || val > high) {
+			cout << "\nPARAMETER OUTSIDE LIMITS (fitter2):\n";
+			cout << "  Index: " << i << "\n";
+			cout << "  Name: " << ps.Name() << "\n";
+			cout << "  Value: " << val << "\n";
+			cout << "  Lower: " << low << "\n";
+			cout << "  Upper: " << high << "\n\n";
+		}
+		
+		locFitter2.Config().ParSettings(i).SetValue(result2.Parameter(i));
+		dummyPars[i] = result1.Parameter(i);
+	}
 	
 	//=======================================================================================================//
 	// Next, fit the region to the right of the peak, allowing the omega parameters to float:
@@ -653,6 +750,29 @@ void MggFitter::FitData()
 			printf("\n\nFit Results (3rd fit):\n");
 			result3.Print(std::cout);
 		}
+		
+		// update fitter with results:
+		for(int i=0; i<result3.NPar(); ++i) {
+			
+			const auto &ps = locFitter3.Config().ParSettings(i);
+			if(ps.IsFixed()) continue;
+			
+			double low  = ps.LowerLimit();
+			double high = ps.UpperLimit();
+			double val  = result3.Parameter(i);
+			if(val < low || val > high) {
+				cout << "\nPARAMETER OUTSIDE LIMITS (fitter3):\n";
+				cout << "  Index: " << i << "\n";
+				cout << "  Name: " << ps.Name() << "\n";
+				cout << "  Value: " << val << "\n";
+				cout << "  Lower: " << low << "\n";
+				cout << "  Upper: " << high << "\n\n";
+			}
+			
+			locFitter3.Config().ParSettings(i).SetValue(result3.Parameter(i));
+			dummyPars[i] = result1.Parameter(i);
+		}
+		
 		//excludeRegions.clear();
 		//UpdateFitFunctions(result3);
 		//return;
@@ -705,6 +825,29 @@ void MggFitter::FitData()
 		printf("\n\nFit Results (4th fit):\n");
 		result4.Print(std::cout);
 	}
+	
+	// update fitter with results:
+	for(int i=0; i<result4.NPar(); ++i) {
+		
+		const auto &ps = locFitter4.Config().ParSettings(i);
+		if(ps.IsFixed()) continue;
+		
+		double low  = ps.LowerLimit();
+		double high = ps.UpperLimit();
+		double val  = result4.Parameter(i);
+		if(val < low || val > high) {
+			cout << "\nPARAMETER OUTSIDE LIMITS (fitter4):\n";
+			cout << "  Index: " << i << "\n";
+			cout << "  Name: " << ps.Name() << "\n";
+			cout << "  Value: " << val << "\n";
+			cout << "  Lower: " << low << "\n";
+			cout << "  Upper: " << high << "\n\n";
+		}
+		
+		locFitter4.Config().ParSettings(i).SetValue(result4.Parameter(i));
+		dummyPars[i] = result1.Parameter(i);
+	}
+	
 	//excludeRegions.clear();
 	//UpdateFitFunctions(result4);
 	//return;
@@ -769,40 +912,64 @@ void MggFitter::FitData()
 	ReleaseEMParameters(locFitter6);
 	ReleaseOmegaParameters(locFitter6);
 	
-	combinedFit = 0;
-	//if(angle<2.0) {
-		combinedFit = 1;
-		ReleaseBeamlineParameters(locFitter6);
-	//}
+	combinedFit = 1;
+	ReleaseBeamlineParameters(locFitter6);
 	
 	// which parameters do we want to run Minos errors on:
 	unsigned int yieldPar = (unsigned int)(find(m_parametersFull.begin(), m_parametersFull.end(), "N_{#eta}") - m_parametersFull.begin());
-	unsigned int etaPiPar = (unsigned int)(find(m_parametersFull.begin(), m_parametersFull.end(), "N_{#eta#pi}") - m_parametersFull.begin());
+	
+	TString etaPiParName = fitOption_signal < 3 ? "N_{#eta#pi}" : "f_{#etaX}";
+	unsigned int etaPiPar = (unsigned int)(find(m_parametersFull.begin(), m_parametersFull.end(), etaPiParName) - m_parametersFull.begin());
 	
 	//locFitter6.Config().SetMinosErrors({yieldPar, etaPiPar});
 	
 	bool ok = locFitter6.FitFCN();
 	
-	/*
-	FixBeamlineParameters(locFitter6);
-	FixOmegaParameters(locFitter6);
-	FixEMParameters(locFitter6);
-	combinedFit = 1;
-	
-	bool ok = locFitter6.FitFCN();
-	*/
+	// update fitter with results:
+	auto result6 = locFitter6.Result();
+	for(int i=0; i<result6.NPar(); ++i) {
+		
+		const auto &ps = locFitter6.Config().ParSettings(i);
+		if(ps.IsFixed()) continue;
+		
+		double low  = ps.LowerLimit();
+		double high = ps.UpperLimit();
+		double val  = result6.Parameter(i);
+		if(val < low || val > high) {
+			cout << "\nPARAMETER OUTSIDE LIMITS (fitter6):\n";
+			cout << "  Index: " << i << "\n";
+			cout << "  Name: " << ps.Name() << "\n";
+			cout << "  Value: " << val << "\n";
+			cout << "  Lower: " << low << "\n";
+			cout << "  Upper: " << high << "\n\n";
+		}
+		
+		locFitter6.Config().ParSettings(i).SetValue(result6.Parameter(i));
+		//locFitter6.Config().ParSettings(i).SetStepSize(result6.Error(i));
+		//
+		// Note: I commented out the above line because I'm not sure what happens for fixed parameters or
+		// for parameters where the error is poorly estimated.
+	}
 	
 	if(!ok) {
-		std::cerr << "Migrad failed, retrying with all empty target parameters fixed...\n";
+		std::cout << "Migrad failed, retrying with all empty target parameters fixed...\n";
 		FixBeamlineParameters(locFitter6);
 		ok = locFitter6.FitFCN();
 	}
 	if(!ok) {
-		std::cerr << "Migrad failed, retrying with all other background parameters fixed...\n";
+		std::cout << "Migrad failed, retrying with all other background parameters fixed...\n";
 		FixOmegaParameters(locFitter6);
 		FixEMParameters(locFitter6);
+		excludeRegions.push_back({minFitRange,0.48});
+		excludeRegions.push_back({0.65,maxFitRange});
+		
 		ok = locFitter6.FitFCN();
 	}
+	if(!ok) {
+		std::cerr << "Migrad still failed!!!!!!!!\n";
+	}
+	
+	excludeRegions.clear();
 	
 	result = locFitter6.Result();
 	result.Print(std::cout);
@@ -812,7 +979,6 @@ void MggFitter::FitData()
 	if(ok) {
 		// Run HESSE (improves covariance estimates):
 		locFitter6.CalculateHessErrors();
-		
 		locFitter6.CalculateMinosErrors();
 		
 		// update fit functions with minos errors:
@@ -820,21 +986,20 @@ void MggFitter::FitData()
 		double yieldErrLow  = result.LowerError(yieldPar);
 		double yieldErrHigh = result.UpperError(yieldPar);
 		double yieldErr     = fabs(yieldErrLow) > fabs(yieldErrHigh) ? fabs(yieldErrLow) : fabs(yieldErrHigh);
+		f_full->SetParError(f_full->GetParNumber(m_parametersFull[yieldPar].Data()), yieldErr);
 		
 		double etapiErrLow  = result.LowerError(etaPiPar);
 		double etapiErrHigh = result.UpperError(etaPiPar);
 		double etapiErr     = fabs(etapiErrLow) > fabs(etapiErrHigh) ? fabs(etapiErrLow) : fabs(etapiErrHigh);
-		
-		f_full->SetParError(f_full->GetParNumber(m_parametersFull[yieldPar].Data()), yieldErr);
 		f_full->SetParError(f_full->GetParNumber(m_parametersFull[etaPiPar].Data()), etapiErr);
 	}
-	*/
+	
 	// parameter to account for offset of simulated lineshape compared to dta.
 	int zPar = (int)(find(m_parametersFull.begin(), m_parametersFull.end(), "z_{qf}") - m_parametersFull.begin());
 	double z_qf_fit = result.Parameter(zPar);
 	f_etaLineshape->SetParameter(0, z_qf_fit);
 	
-	
+	/*
 	double etaYield   = result.Parameter(yieldPar);
 	double etaStatErr = result.ParError(yieldPar);
 	
@@ -850,7 +1015,7 @@ void MggFitter::FitData()
 	printf("Covariance: %f\n", covExcInc);
 	printf("Inclusive Yield: %f +/- %f\n", etaYield+etaPiYield, incStatErr);
 	printf("\n\n\n");
-	
+	*/
 	return;
 }
 
@@ -940,10 +1105,13 @@ void MggFitter::ReleaseEMParameters(ROOT::Fit::Fitter &fitter) {
 			
 			//fitter.Config().ParSettings(p1Par).Release();
 			//fitter.Config().ParSettings(p1Par).SetLimits(0.00, 1.e6);
-			
-			//fitter.Config().ParSettings(p2Par).Release();
-			//fitter.Config().ParSettings(p2Par).SetLimits(-1.e2, 1.e2);
-			
+			/*
+			if(angle>0.5) {
+				fitter.Config().ParSettings(p2Par).Release();
+				double minLimit = -7.0;
+				fitter.Config().ParSettings(p2Par).SetLimits(-10.0, -4.0);
+			}
+			*/
 			//fitter.Config().ParSettings(p3Par).Release();
 			//fitter.Config().ParSettings(p3Par).SetLimits(-1.e2, 1.e2);
 			//fitter.Config().ParSettings(p3Par).SetLimits(-1.e2, 1.e2);
@@ -1550,6 +1718,89 @@ void MggFitter::ReleaseEtaParameters(ROOT::Fit::Fitter &fitter) {
 			fitter.Config().ParSettings(rEtaXPar).SetLimits(0.0, 1.0);
 			break;
 		}
+		case 4:
+		{
+			//int offsetPar = (int)(find(m_parametersFull.begin(), m_parametersFull.end(), "#Delta#mu_{#eta}") - m_parametersFull.begin());
+			//fitter.Config().ParSettings(offsetPar).Release();
+			//fitter.Config().ParSettings(offsetPar).SetLimits(-0.01, 0.01);
+			
+			int NPar = (int)(find(m_parametersFull.begin(), m_parametersFull.end(), "N_{#eta}") - m_parametersFull.begin());
+			fitter.Config().ParSettings(NPar).Release();
+			fitter.Config().ParSettings(NPar).SetLimits(0.0, 1.e6);
+			/*
+			int zPar = (int)(find(m_parametersFull.begin(), m_parametersFull.end(), "z_{qf}") - m_parametersFull.begin());
+			fitter.Config().ParSettings(zPar).Release();
+			
+			double minLimit = 0.0, maxLimit = 1.0;
+			if(incFraction_theory>0.1) minLimit = incFraction_theory - 0.1;
+			if(incFraction_theory<0.9) maxLimit = incFraction_theory + 0.1;
+			
+			fitter.Config().ParSettings(zPar).SetLimits(minLimit, maxLimit);
+			*/
+			int fEtaXPar = (int)(find(m_parametersFull.begin(), m_parametersFull.end(), "f_{#etaX}") - m_parametersFull.begin());
+			fitter.Config().ParSettings(fEtaXPar).Release();
+			fitter.Config().ParSettings(fEtaXPar).SetLimits(0.0, 1.0);
+			
+			int uPar = (int)(find(m_parametersFull.begin(), m_parametersFull.end(), "u_{BG}") - m_parametersFull.begin());
+			double locUVal = fitter.Config().ParSettings(uPar).Value();
+			//if(locUVal>-3.0) {
+			if(vetoOption<5) {
+				fitter.Config().ParSettings(uPar).Release();
+				fitter.Config().ParSettings(uPar).SetLimits(-10.0,10.0);
+			}
+			else {
+				fitter.Config().ParSettings(uPar).Release();
+				fitter.Config().ParSettings(uPar).SetLimits(locUVal-1.0,locUVal+1.0);
+			}
+			
+			int vPar = (int)(find(m_parametersFull.begin(), m_parametersFull.end(), "v_{BG}") - m_parametersFull.begin());
+			double locVVal = fitter.Config().ParSettings(vPar).Value();
+			//if(locVVal>-2.0) {
+			if(vetoOption<5) {
+				fitter.Config().ParSettings(vPar).Release();
+				fitter.Config().ParSettings(vPar).SetLimits(-10.0,10.0);
+			}
+			else {
+				//fitter.Config().ParSettings(vPar).Release();
+				//fitter.Config().ParSettings(vPar).SetLimits(locVVal-1.0,locVVal+1.0);
+			}
+			break;
+		}
+		case 5:
+		{
+			//int offsetPar = (int)(find(m_parametersFull.begin(), m_parametersFull.end(), "#Delta#mu_{#eta}") - m_parametersFull.begin());
+			//fitter.Config().ParSettings(offsetPar).Release();
+			//fitter.Config().ParSettings(offsetPar).SetLimits(-0.01, 0.01);
+			
+			int NPar = (int)(find(m_parametersFull.begin(), m_parametersFull.end(), "N_{#eta}") - m_parametersFull.begin());
+			fitter.Config().ParSettings(NPar).Release();
+			fitter.Config().ParSettings(NPar).SetLimits(0.0, 1.e6);
+			
+			int fEtaXPar = (int)(find(m_parametersFull.begin(), m_parametersFull.end(), "f_{#etaX}") - m_parametersFull.begin());
+			fitter.Config().ParSettings(fEtaXPar).Release();
+			fitter.Config().ParSettings(fEtaXPar).SetLimits(0.0, 1.0);
+			
+			int uPar = (int)(find(m_parametersFull.begin(), m_parametersFull.end(), "u_{BG}") - m_parametersFull.begin());
+			double locUVal = fitter.Config().ParSettings(uPar).Value();
+			
+			if(vetoOption<5) {
+				fitter.Config().ParSettings(uPar).Release();
+				fitter.Config().ParSettings(uPar).SetLimits(-10.0,10.0);
+			}
+			else {
+				fitter.Config().ParSettings(uPar).Release();
+				fitter.Config().ParSettings(uPar).SetLimits(locUVal-1.0,locUVal+1.0);
+			}
+			
+			int vPar = (int)(find(m_parametersFull.begin(), m_parametersFull.end(), "v_{BG}") - m_parametersFull.begin());
+			double locVVal = fitter.Config().ParSettings(vPar).Value();
+			
+			if(vetoOption<5) {
+				fitter.Config().ParSettings(vPar).Release();
+				fitter.Config().ParSettings(vPar).SetLimits(-10.0,10.0);
+			}
+			break;
+		}
 	}
 }
 
@@ -1600,6 +1851,40 @@ void MggFitter::FixEtaParameters(ROOT::Fit::Fitter &fitter) {
 			fitter.Config().ParSettings(zPar).Fix();
 			fitter.Config().ParSettings(fEtaXPar).Fix();
 			fitter.Config().ParSettings(rEtaXPar).Fix();
+			break;
+		}
+		case 4:
+		{
+			int NPar      = (int)(find(m_parametersFull.begin(), m_parametersFull.end(), "N_{#eta}") - m_parametersFull.begin());
+			int offsetPar = (int)(find(m_parametersFull.begin(), m_parametersFull.end(), "#Delta#mu_{#eta}") - m_parametersFull.begin());
+			int zPar      = (int)(find(m_parametersFull.begin(), m_parametersFull.end(), "z_{qf}") - m_parametersFull.begin());
+			int fEtaXPar  = (int)(find(m_parametersFull.begin(), m_parametersFull.end(), "f_{#etaX}") - m_parametersFull.begin());
+			int uPar      = (int)(find(m_parametersFull.begin(), m_parametersFull.end(), "u_{BG}") - m_parametersFull.begin());
+			int vPar      = (int)(find(m_parametersFull.begin(), m_parametersFull.end(), "v_{BG}") - m_parametersFull.begin());
+			
+			fitter.Config().ParSettings(NPar).Fix();
+			fitter.Config().ParSettings(offsetPar).Fix();
+			fitter.Config().ParSettings(zPar).Fix();
+			fitter.Config().ParSettings(fEtaXPar).Fix();
+			fitter.Config().ParSettings(uPar).Fix();
+			fitter.Config().ParSettings(vPar).Fix();
+			break;
+		}
+		case 5:
+		{
+			int NPar      = (int)(find(m_parametersFull.begin(), m_parametersFull.end(), "N_{#eta}") - m_parametersFull.begin());
+			int offsetPar = (int)(find(m_parametersFull.begin(), m_parametersFull.end(), "#Delta#mu_{#eta}") - m_parametersFull.begin());
+			int zPar      = (int)(find(m_parametersFull.begin(), m_parametersFull.end(), "z_{qf}") - m_parametersFull.begin());
+			int fEtaXPar  = (int)(find(m_parametersFull.begin(), m_parametersFull.end(), "f_{#etaX}") - m_parametersFull.begin());
+			int uPar      = (int)(find(m_parametersFull.begin(), m_parametersFull.end(), "u_{BG}") - m_parametersFull.begin());
+			int vPar      = (int)(find(m_parametersFull.begin(), m_parametersFull.end(), "v_{BG}") - m_parametersFull.begin());
+			
+			fitter.Config().ParSettings(NPar).Fix();
+			fitter.Config().ParSettings(offsetPar).Fix();
+			fitter.Config().ParSettings(zPar).Fix();
+			fitter.Config().ParSettings(fEtaXPar).Fix();
+			fitter.Config().ParSettings(uPar).Fix();
+			fitter.Config().ParSettings(vPar).Fix();
 			break;
 		}
 	}
@@ -1833,6 +2118,12 @@ void MggFitter::FitQFLineshape(int drawOption)
 	f_qfLineshape->SetLineColor(kGreen);
 	
 	if(drawOption) {
+		
+		f_etaLineshape = new TF1("f_etaLineshape", this, &MggFitter::EtaLineshape, minFitRange, maxFitRange, 1);
+		f_etaLineshape->SetParameter(0, 1.0);
+		f_etaLineshape->SetLineColor(kRed);
+		f_etaLineshape->SetNpx(1000);
+		
 		TCanvas *cQFLS = new TCanvas("cQFLS", "cQFLS", 950, 700);
 		cQFLS->SetLeftMargin(0.13); cQFLS->SetRightMargin(0.07);
 		cQFLS->SetBottomMargin(0.13); cQFLS->SetTopMargin(0.07);
@@ -2039,6 +2330,9 @@ void MggFitter::FitEtaPionLineshape(int drawOption)
 	h_etaPionLineshape->Fit(fEtaPion2, "R0Q");
 	
 	if(drawOption) {
+		
+		h_etaPionLineshape->GetXaxis()->SetRangeUser(0.45,0.70);
+		
 		TCanvas *cEtaPionLS = new TCanvas("cEtaPionLS", "cEtaPionLS", 950, 700);
 		//cEtaPionLS->SetLogy();
 		h_etaPionLineshape->Draw();
@@ -2049,6 +2343,7 @@ void MggFitter::FitEtaPionLineshape(int drawOption)
 		printf("  fraction of eta+pion lineshape within mgg cut: %f\n", fracAccepted);
 		
 		cEtaPionLS->Update();
+		//cEtaPionLS->SaveAs("eta_pion_lineshape_fit.pdf");
 		getchar();
 		delete cEtaPionLS;
 	}
@@ -2059,6 +2354,88 @@ void MggFitter::FitEtaPionLineshape(int drawOption)
 	
 	fEtaPion1->Delete();
 	fEtaPion2->Delete();
+	
+	return;
+}
+
+void MggFitter::FitEtaPiPiLineshape(int drawOption)
+{
+	if(h_etaPiPiLineshape==NULL) {
+		f_etaPiPiLineshape = new TF1("f_etaPiPiLineshape", DoubleCrystalBallPDF_flip, minFitRange, maxFitRange, 10);
+		f_etaPiPiLineshape->SetParameters(0.59, 0.015, 1.0, 5.0, 0.02, 0.020, 1.0, 5.0, 0.0, 1.0);
+		return;
+	}
+	
+	TF1 *fEtaPiPi1 = new TF1("fEtaPiPi1", CrystalBallPDF_flip, 0.5, 0.7, 5);
+	
+	double    muGuess = h_etaPiPiLineshape->GetBinCenter(h_etaPiPiLineshape->GetMaximumBin());
+	double sigmaGuess = 0.015;
+	double alphaGuess = 1.0;
+	double     nGuess = 2.0;
+	
+	fEtaPiPi1->SetParameter(0,    muGuess);
+	fEtaPiPi1->SetParameter(1, sigmaGuess);
+	fEtaPiPi1->SetParameter(2, alphaGuess);
+	fEtaPiPi1->SetParameter(3,     nGuess);
+	
+	fEtaPiPi1->SetParLimits(0, 0.540,  0.610);
+	fEtaPiPi1->SetParLimits(1, 0.010,  0.050);
+	fEtaPiPi1->SetParLimits(2, 0.200,  9.999);
+	fEtaPiPi1->SetParLimits(3, 1.100, 49.999);
+	
+	fEtaPiPi1->FixParameter(4, h_etaPiPiLineshape->GetBinWidth(1));
+	
+	h_etaPiPiLineshape->Fit(fEtaPiPi1, "R0QL");
+	
+	TF1 *fEtaPiPi2 = new TF1("fEtaPiPi2", DoubleCrystalBallPDF_flip, 0.5, 0.75, 10);
+	fEtaPiPi2->SetParameter(0, fEtaPiPi1->GetParameter(0));
+	fEtaPiPi2->SetParameter(1, fEtaPiPi1->GetParameter(1));
+	fEtaPiPi2->SetParameter(2, fEtaPiPi1->GetParameter(2));
+	fEtaPiPi2->SetParameter(3, fEtaPiPi1->GetParameter(3));
+	fEtaPiPi2->SetParameter(4, 0.02);
+	fEtaPiPi2->SetParameter(5, fEtaPiPi1->GetParameter(1)*2.0);
+	fEtaPiPi2->SetParameter(6, fEtaPiPi1->GetParameter(2));
+	fEtaPiPi2->SetParameter(7, fEtaPiPi1->GetParameter(3));
+	fEtaPiPi2->SetParameter(8, 0.0);
+	
+	fEtaPiPi2->SetParLimits(0,  0.540,  0.610);
+	fEtaPiPi2->SetParLimits(1,  0.010,  0.050);
+	fEtaPiPi2->SetParLimits(2,  0.200,  9.999);
+	fEtaPiPi2->SetParLimits(3,  1.100, 49.999);
+	fEtaPiPi2->SetParLimits(4, -0.050,  0.050);
+	fEtaPiPi2->SetParLimits(5,  0.010,  0.050);
+	fEtaPiPi2->SetParLimits(6,  0.200,  9.999);
+	fEtaPiPi2->SetParLimits(7,  1.100, 49.999);
+	fEtaPiPi2->SetParLimits(8,  0.000,  1.000);
+	
+	fEtaPiPi2->FixParameter(9, h_etaPiPiLineshape->GetBinWidth(1));
+	
+	h_etaPiPiLineshape->Fit(fEtaPiPi2, "R0Q");
+	
+	if(drawOption) {
+		
+		h_etaPiPiLineshape->GetXaxis()->SetRangeUser(0.45, 0.70);
+		TCanvas *cEtaPiPiLS = new TCanvas("cEtaPiPiLS", "cEtaPiPiLS", 950, 700);
+		//cEtaPionLS->SetLogy();
+		h_etaPiPiLineshape->Draw();
+		fEtaPiPi2->Draw("same");
+		
+		// Calculate fraction of PDF between 0.5 and 0.6 GeV/c2:
+		double fracAccepted = fEtaPiPi2->Integral(0.5,0.6) / h_etaPiPiLineshape->GetXaxis()->GetBinWidth(1);
+		printf("  fraction of eta+pion lineshape within mgg cut: %f\n", fracAccepted);
+		
+		cEtaPiPiLS->Update();
+		//cEtaPiPiLS->SaveAs("eta_pipi_lineshape_fit.pdf");
+		getchar();
+		delete cEtaPiPiLS;
+	}
+	
+	f_etaPiPiLineshape = new TF1("f_etaPiPiLineshape", DoubleCrystalBallPDF_flip, minFitRange, maxFitRange, 10);
+	f_etaPiPiLineshape->SetParameters(fEtaPiPi2->GetParameters());
+	f_etaPiPiLineshape->FixParameter(9, 1.0);
+	
+	fEtaPiPi1->Delete();
+	fEtaPiPi2->Delete();
 	
 	return;
 }
@@ -2256,13 +2633,13 @@ void MggFitter::GetYield(double &yield, double &yieldErr, int useFitPars, int su
 				double locYieldEta    = locCorrection * N_eta;
 				double locYieldEtaErr = locCorrection * N_etaErr;
 				
-				double locCorrectionEtaPion = h_etaPionLineshape->Integral(h_etaPionLineshape->FindBin(minMggCut-lsShift-0.002),
-					h_etaPionLineshape->FindBin(maxMggCut-lsShift-0.002));
+				double locCorrectionEtaPion = h_etaPionLineshape->Integral(h_etaPionLineshape->FindBin(minMggCut-lsShift-bggenLSOffset),
+					h_etaPionLineshape->FindBin(maxMggCut-lsShift-bggenLSOffset));
 				double locYieldEtaPion      = locCorrectionEtaPion * N_etapi;
 				double locYieldEtaPionErr   = locCorrectionEtaPion * N_etapiErr;
 				
-				double locCorrectionBkgd = h_hadronicBkgdLineshape->Integral(h_hadronicBkgdLineshape->FindBin(minMggCut-lsShift-0.002), 
-					h_hadronicBkgdLineshape->FindBin(maxMggCut-lsShift-0.002));
+				double locCorrectionBkgd = h_hadronicBkgdLineshape->Integral(h_hadronicBkgdLineshape->FindBin(minMggCut-lsShift-bggenLSOffset), 
+					h_hadronicBkgdLineshape->FindBin(maxMggCut-lsShift-bggenLSOffset));
 				double locYieldBkgd    = locCorrectionBkgd * N_bkgd;
 				double locYieldBkgdErr = locCorrectionBkgd * N_bkgdErr;
 				
@@ -2317,13 +2694,13 @@ void MggFitter::GetYield(double &yield, double &yieldErr, int useFitPars, int su
 				double locYieldEta    = locCorrection * N_eta;
 				double locYieldEtaErr = locCorrection * N_etaErr;
 				
-				double locCorrectionEtaPion = h_etaPionLineshape->Integral(h_etaPionLineshape->FindBin(minMggCut-lsShift-0.002),
-					h_etaPionLineshape->FindBin(maxMggCut-lsShift-0.002));
+				double locCorrectionEtaPion = h_etaPionLineshape->Integral(h_etaPionLineshape->FindBin(minMggCut-lsShift-bggenLSOffset),
+					h_etaPionLineshape->FindBin(maxMggCut-lsShift-bggenLSOffset));
 				double locYieldEtaPion      = locCorrectionEtaPion * N_etapi;
 				double locYieldEtaPionErr   = locCorrectionEtaPion * N_etapiErr;
 				
-				double locCorrectionBkgd = h_hadronicBkgdLineshape->Integral(h_hadronicBkgdLineshape->FindBin(minMggCut-lsShift-0.002), 
-					h_hadronicBkgdLineshape->FindBin(maxMggCut-lsShift-0.002));
+				double locCorrectionBkgd = h_hadronicBkgdLineshape->Integral(h_hadronicBkgdLineshape->FindBin(minMggCut-lsShift-bggenLSOffset), 
+					h_hadronicBkgdLineshape->FindBin(maxMggCut-lsShift-bggenLSOffset));
 				double locYieldBkgd    = locCorrectionBkgd * N_bkgd;
 				double locYieldBkgdErr = locCorrectionBkgd * N_bkgdErr;
 				
@@ -2387,11 +2764,11 @@ void MggFitter::GetYield(double &yield, double &yieldErr, int useFitPars, int su
 				
 				double locCorrection_signal = f_etaLineshape->Integral(minMggCut-lsShift, maxMggCut-lsShift);
 				
-				double locCorrection_etapi = h_etaPionLineshape->Integral(h_etaPionLineshape->FindBin(minMggCut-lsShift-0.002),
-					h_etaPionLineshape->FindBin(maxMggCut-lsShift-0.002));
+				double locCorrection_etapi = h_etaPionLineshape->Integral(h_etaPionLineshape->FindBin(minMggCut-lsShift-bggenLSOffset),
+					h_etaPionLineshape->FindBin(maxMggCut-lsShift-bggenLSOffset));
 				
-				double locCorrection_etapipi = h_hadronicBkgdLineshape->Integral(h_hadronicBkgdLineshape->FindBin(minMggCut-lsShift-0.002), 
-					h_hadronicBkgdLineshape->FindBin(maxMggCut-lsShift-0.002));
+				double locCorrection_etapipi = h_hadronicBkgdLineshape->Integral(h_hadronicBkgdLineshape->FindBin(minMggCut-lsShift-bggenLSOffset), 
+					h_hadronicBkgdLineshape->FindBin(maxMggCut-lsShift-bggenLSOffset));
 				
 				//----------------------------------------------------------------------------------------//
 				// Corrected yields:
@@ -2410,6 +2787,232 @@ void MggFitter::GetYield(double &yield, double &yieldErr, int useFitPars, int su
 				
 				double locYieldInc    = locYield_signal + locYield_etapi + locYield_etapipi;
 				double locYieldIncErr = sqrt(pow(locYield_signal_err,2.0) + pow(locYield_etapi_err,2.0) + pow(locYield_etapipi_err,2.0));
+				
+				if(subtractHadBkgd) {
+					yield    = locYield_signal;
+					yieldErr = locYield_signal_err;
+				} else {
+					yield    = locYieldInc;
+					//yieldErr = locYieldIncErr;
+					
+					unsigned int etaPar = (unsigned int)(find(m_parametersFull.begin(), m_parametersFull.end(), "N_{#eta}") 
+						- m_parametersFull.begin());
+					unsigned int etaXPar = (unsigned int)(find(m_parametersFull.begin(), m_parametersFull.end(), "f_{#etaX}") 
+						- m_parametersFull.begin());
+					
+					double etaStatErr  = result.ParError(etaPar);
+					double etaXStatErr = result.ParError(etaXPar);
+					double covExcInc   = result.CovMatrix(etaPar, etaXPar);
+					yieldErr = sqrt(pow(etaStatErr,2.0) + pow(etaXStatErr,2.0) + 2.0*covExcInc);
+				}
+				break;
+			}
+			case 4:
+			{
+				// Eta (parameterized lineshape) + Eta+Pion Background (histogram) + Other Hadronic Bkgd (histogram):
+				
+				double lsShift = f_full->GetParameter("#Delta#mu_{#eta}");
+				
+				int yieldPar = f_full->GetParNumber("N_{#eta}");
+				int fEtaXPar = f_full->GetParNumber("f_{#etaX}");
+				int uPar     = f_full->GetParNumber("u_{BG}");
+				int vPar     = f_full->GetParNumber("v_{BG}");
+				
+				double N_eta     = f_full->GetParameter(yieldPar);
+				double N_etaErr  = f_full->GetParError(yieldPar);
+				
+				double f_etaX    = f_full->GetParameter(fEtaXPar);
+				double f_etaXErr = f_full->GetParError(fEtaXPar);
+				
+				double u_bg    = f_full->GetParameter(uPar);
+				double u_bgErr = f_full->GetParError(uPar);
+				
+				double v_bg    = f_full->GetParameter(vPar);
+				double v_bgErr = f_full->GetParError(vPar);
+				
+				double eu    = exp(u_bg);
+				double euErr = exp(u_bg) * u_bgErr;
+				
+				double ev    = exp(v_bg);
+				double evErr = exp(v_bg) * v_bgErr;
+				
+				double norm    = 1.0 + eu + ev;
+				double normErr = sqrt(pow(euErr,2.0) + pow(evErr,2.0));
+				
+				double w1 = 1.0 / norm;
+				double w1Err = normErr / pow(norm,2.0);
+				
+				double w2    = eu / norm;
+				double w2Err = sqrt(pow(euErr/norm,2.0) + pow(eu*normErr/(norm*norm),2.0));
+				
+				double w3    = ev / norm;
+				double w3Err = sqrt(pow(evErr/norm,2.0) + pow(ev*normErr/(norm*norm),2.0));
+				
+				//----------------------------------------------------------------------------------------//
+				// Overall yields without cut on mgg:
+				
+				double N_signal      = N_eta * (1.0 - f_etaX);
+				double N_signal_err  = sqrt(pow(N_etaErr*(1.0-f_etaX),2.0) + pow(f_etaXErr*N_eta, 2.0));
+				
+				double N_etapi       = N_eta * f_etaX * w1;
+				double N_etapi_err   = sqrt(pow(N_etaErr*f_etaX*w1,2.0) + pow(N_eta*f_etaXErr*w1, 2.0)
+					+ pow(N_eta*f_etaX*w1Err,2.0));
+				
+				double N_etapipi     = N_eta * f_etaX * w2;
+				double N_etapipi_err = sqrt(pow(N_etaErr*f_etaX*w2,2.0) + pow(N_eta*f_etaXErr*w2, 2.0)
+					+ pow(N_eta*f_etaX*w2Err,2.0));
+				
+				double N_bkgd        = N_eta * f_etaX * w3;
+				double N_bkgd_err    = sqrt(pow(N_etaErr*f_etaX*w3,2.0) + pow(N_eta*f_etaXErr*w3, 2.0)
+					+ pow(N_eta*f_etaX*w3Err,2.0));
+				
+				//----------------------------------------------------------------------------------------//
+				// Corrections based on lineshape integrations over mgg cut range:
+				
+				double locCorrection_signal = f_etaLineshape->Integral(minMggCut-lsShift, maxMggCut-lsShift);
+				
+				double locCorrection_etapi = h_etaPionLineshape->Integral(h_etaPionLineshape->FindBin(minMggCut-lsShift-bggenLSOffset),
+					h_etaPionLineshape->FindBin(maxMggCut-lsShift-bggenLSOffset));
+				
+				double locCorrection_etapipi = h_etaPiPiLineshape->Integral(h_etaPiPiLineshape->FindBin(minMggCut-lsShift-bggenLSOffset), 
+					h_etaPiPiLineshape->FindBin(maxMggCut-lsShift-bggenLSOffset));
+				
+				double locCorrection_bkgd = h_hadronicBkgdLineshape->Integral(h_hadronicBkgdLineshape->FindBin(minMggCut-lsShift-bggenLSOffset), 
+					h_hadronicBkgdLineshape->FindBin(maxMggCut-lsShift-bggenLSOffset));
+				
+				//----------------------------------------------------------------------------------------//
+				// Corrected yields:
+				
+				double locYield_signal      = N_signal      * locCorrection_signal;
+				double locYield_signal_err  = N_signal_err  * locCorrection_signal;
+				
+				double locYield_etapi       = N_etapi       * locCorrection_etapi;
+				double locYield_etapi_err   = N_etapi_err   * locCorrection_etapi;
+				
+				double locYield_etapipi     = N_etapipi     * locCorrection_etapipi;
+				double locYield_etapipi_err = N_etapipi_err * locCorrection_etapipi;
+				
+				double locYield_bkgd        = N_bkgd        * locCorrection_bkgd;
+				double locYield_bkgd_err    = N_bkgd_err    * locCorrection_bkgd;
+				
+				//----------------------------------------------------------------------------------------//
+				// Return the results based on request:
+				
+				double locYieldInc    = locYield_signal + locYield_etapi + locYield_etapipi + locYield_bkgd;
+				double locYieldIncErr = sqrt(pow(locYield_signal_err,2.0) + pow(locYield_etapi_err,2.0) 
+					+ pow(locYield_etapipi_err,2.0) + pow(locYield_bkgd_err,2.0));
+				
+				if(subtractHadBkgd) {
+					yield    = locYield_signal;
+					yieldErr = locYield_signal_err;
+				} else {
+					yield    = locYieldInc;
+					//yieldErr = locYieldIncErr;
+					
+					unsigned int etaPar = (unsigned int)(find(m_parametersFull.begin(), m_parametersFull.end(), "N_{#eta}") 
+						- m_parametersFull.begin());
+					unsigned int etaXPar = (unsigned int)(find(m_parametersFull.begin(), m_parametersFull.end(), "f_{#etaX}") 
+						- m_parametersFull.begin());
+					
+					double etaStatErr  = result.ParError(etaPar);
+					double etaXStatErr = result.ParError(etaXPar);
+					double covExcInc   = result.CovMatrix(etaPar, etaXPar);
+					yieldErr = sqrt(pow(etaStatErr,2.0) + pow(etaXStatErr,2.0) + 2.0*covExcInc);
+				}
+				break;
+			}
+			case 5:
+			{
+				// Eta (parameterized) + Eta+Pion (parameterized) + Eta+pi+pi (parameterized) + Other Hadronic Bkgd (histogram):
+				
+				double lsShift = f_full->GetParameter("#Delta#mu_{#eta}");
+				
+				int yieldPar = f_full->GetParNumber("N_{#eta}");
+				int fEtaXPar = f_full->GetParNumber("f_{#etaX}");
+				int uPar     = f_full->GetParNumber("u_{BG}");
+				int vPar     = f_full->GetParNumber("v_{BG}");
+				
+				double N_eta     = f_full->GetParameter(yieldPar);
+				double N_etaErr  = f_full->GetParError(yieldPar);
+				
+				double f_etaX    = f_full->GetParameter(fEtaXPar);
+				double f_etaXErr = f_full->GetParError(fEtaXPar);
+				
+				double u_bg    = f_full->GetParameter(uPar);
+				double u_bgErr = f_full->GetParError(uPar);
+				
+				double v_bg    = f_full->GetParameter(vPar);
+				double v_bgErr = f_full->GetParError(vPar);
+				
+				double eu    = exp(u_bg);
+				double euErr = exp(u_bg) * u_bgErr;
+				
+				double ev    = exp(v_bg);
+				double evErr = exp(v_bg) * v_bgErr;
+				
+				double norm    = 1.0 + eu + ev;
+				double normErr = sqrt(pow(euErr,2.0) + pow(evErr,2.0));
+				
+				double w1 = 1.0 / norm;
+				double w1Err = normErr / pow(norm,2.0);
+				
+				double w2    = eu / norm;
+				double w2Err = sqrt(pow(euErr/norm,2.0) + pow(eu*normErr/(norm*norm),2.0));
+				
+				double w3    = ev / norm;
+				double w3Err = sqrt(pow(evErr/norm,2.0) + pow(ev*normErr/(norm*norm),2.0));
+				
+				//----------------------------------------------------------------------------------------//
+				// Overall yields without cut on mgg:
+				
+				double N_signal      = N_eta * (1.0 - f_etaX);
+				double N_signal_err  = sqrt(pow(N_etaErr*(1.0-f_etaX),2.0) + pow(f_etaXErr*N_eta, 2.0));
+				
+				double N_etapi       = N_eta * f_etaX * w1;
+				double N_etapi_err   = sqrt(pow(N_etaErr*f_etaX*w1,2.0) + pow(N_eta*f_etaXErr*w1, 2.0)
+					+ pow(N_eta*f_etaX*w1Err,2.0));
+				
+				double N_etapipi     = N_eta * f_etaX * w2;
+				double N_etapipi_err = sqrt(pow(N_etaErr*f_etaX*w2,2.0) + pow(N_eta*f_etaXErr*w2, 2.0)
+					+ pow(N_eta*f_etaX*w2Err,2.0));
+				
+				double N_bkgd        = N_eta * f_etaX * w3;
+				double N_bkgd_err    = sqrt(pow(N_etaErr*f_etaX*w3,2.0) + pow(N_eta*f_etaXErr*w3, 2.0)
+					+ pow(N_eta*f_etaX*w3Err,2.0));
+				
+				//----------------------------------------------------------------------------------------//
+				// Corrections based on lineshape integrations over mgg cut range:
+				
+				double locCorrection_signal = f_etaLineshape->Integral(minMggCut-lsShift, maxMggCut-lsShift);
+				
+				double locCorrection_etapi = f_etaPionLineshape->Integral(minMggCut-lsShift-bggenLSOffset, maxMggCut-lsShift-bggenLSOffset);
+				
+				double locCorrection_etapipi = f_etaPiPiLineshape->Integral(minMggCut-lsShift-bggenLSOffset, maxMggCut-lsShift-bggenLSOffset);
+				
+				double locCorrection_bkgd = h_hadronicBkgdLineshape->Integral(h_hadronicBkgdLineshape->FindBin(minMggCut-lsShift-bggenLSOffset), 
+					h_hadronicBkgdLineshape->FindBin(maxMggCut-lsShift-bggenLSOffset));
+				
+				//----------------------------------------------------------------------------------------//
+				// Corrected yields:
+				
+				double locYield_signal      = N_signal      * locCorrection_signal;
+				double locYield_signal_err  = N_signal_err  * locCorrection_signal;
+				
+				double locYield_etapi       = N_etapi       * locCorrection_etapi;
+				double locYield_etapi_err   = N_etapi_err   * locCorrection_etapi;
+				
+				double locYield_etapipi     = N_etapipi     * locCorrection_etapipi;
+				double locYield_etapipi_err = N_etapipi_err * locCorrection_etapipi;
+				
+				double locYield_bkgd        = N_bkgd        * locCorrection_bkgd;
+				double locYield_bkgd_err    = N_bkgd_err    * locCorrection_bkgd;
+				
+				//----------------------------------------------------------------------------------------//
+				// Return the results based on request:
+				
+				double locYieldInc    = locYield_signal + locYield_etapi + locYield_etapipi + locYield_bkgd;
+				double locYieldIncErr = sqrt(pow(locYield_signal_err,2.0) + pow(locYield_etapi_err,2.0) 
+					+ pow(locYield_etapipi_err,2.0) + pow(locYield_bkgd_err,2.0));
 				
 				if(subtractHadBkgd) {
 					yield    = locYield_signal;
@@ -2699,6 +3302,98 @@ void MggFitter::GetHadronicBkgdYield(double &yield, double &yieldErr)
 			locfEta->SetParError(nPar, relError);
 			break;
 		}
+		case 4:
+		{
+			int nPar = f_full->GetParNumber("N_{#eta}");
+			int fPar = f_full->GetParNumber("f_{#etaX}");
+			int uPar = f_full->GetParNumber("u_{BG}");
+			int vPar = f_full->GetParNumber("v_{BG}");
+			
+			double n    = f_full->GetParameter(nPar);
+			double nErr = f_full->GetParError(nPar);
+			
+			double f    = f_full->GetParameter(fPar);
+			double fErr = f_full->GetParError(fPar);
+			
+			double u    = f_full->GetParameter(uPar);
+			double uErr = f_full->GetParError(uPar);
+			
+			double v    = f_full->GetParameter(vPar);
+			double vErr = f_full->GetParError(vPar);
+			
+			double eu    = exp(u);
+			double euErr = exp(u) * uErr;
+			
+			double ev    = exp(v);
+			double evErr = exp(v) * vErr;
+			
+			double norm    = 1.0 + eu + ev;
+			double normErr = sqrt(pow(euErr,2.0) + pow(evErr,2.0));
+			
+			double w1 = 1.0 / norm;
+			double w1Err = normErr / pow(norm,2.0);
+			
+			double w2    = eu / norm;
+			double w2Err = sqrt(pow(euErr/norm,2.0) + pow(eu*normErr/(norm*norm),2.0));
+			
+			double w3    = ev / norm;
+			double w3Err = sqrt(pow(evErr/norm,2.0) + pow(ev*normErr/(norm*norm),2.0));
+			
+			locfEta->SetParameter(nPar, n*f*w2);
+			locfEta->SetParameter(fPar, 1.0);
+			locfEta->SetParameter(uPar, 20.0);
+			locfEta->SetParameter(vPar, 1.0);
+			
+			relError = sqrt(pow(nErr*f*w2,2.0) + pow(n*fErr*w2,2.0) + pow(n*f*w2Err,2.0)) / (n*f*w2);
+			locfEta->SetParError(nPar, relError);
+			break;
+		}
+		case 5:
+		{
+			int nPar = f_full->GetParNumber("N_{#eta}");
+			int fPar = f_full->GetParNumber("f_{#etaX}");
+			int uPar = f_full->GetParNumber("u_{BG}");
+			int vPar = f_full->GetParNumber("v_{BG}");
+			
+			double n    = f_full->GetParameter(nPar);
+			double nErr = f_full->GetParError(nPar);
+			
+			double f    = f_full->GetParameter(fPar);
+			double fErr = f_full->GetParError(fPar);
+			
+			double u    = f_full->GetParameter(uPar);
+			double uErr = f_full->GetParError(uPar);
+			
+			double v    = f_full->GetParameter(vPar);
+			double vErr = f_full->GetParError(vPar);
+			
+			double eu    = exp(u);
+			double euErr = exp(u) * uErr;
+			
+			double ev    = exp(v);
+			double evErr = exp(v) * vErr;
+			
+			double norm    = 1.0 + eu + ev;
+			double normErr = sqrt(pow(euErr,2.0) + pow(evErr,2.0));
+			
+			double w1 = 1.0 / norm;
+			double w1Err = normErr / pow(norm,2.0);
+			
+			double w2    = eu / norm;
+			double w2Err = sqrt(pow(euErr/norm,2.0) + pow(eu*normErr/(norm*norm),2.0));
+			
+			double w3    = ev / norm;
+			double w3Err = sqrt(pow(evErr/norm,2.0) + pow(ev*normErr/(norm*norm),2.0));
+			
+			locfEta->SetParameter(nPar, n*f*w2);
+			locfEta->SetParameter(fPar, 1.0);
+			locfEta->SetParameter(uPar, 20.0);
+			locfEta->SetParameter(vPar, 1.0);
+			
+			relError = sqrt(pow(nErr*f*w2,2.0) + pow(n*fErr*w2,2.0) + pow(n*f*w2Err,2.0)) / (n*f*w2);
+			locfEta->SetParError(nPar, relError);
+			break;
+		}
 	}
 	
 	//-----------------------------------------------//
@@ -2778,6 +3473,98 @@ void MggFitter::GetEtaPionYield(double &yield, double &yieldErr)
 			locfEta->SetParameter(rPar, 1.0);
 			
 			relError = sqrt(pow(Ne*f*r,2.0) + pow(N*fe*r,2.0) + pow(N*f*re,2.0)) / (N*f*r);
+			locfEta->SetParError(nPar, relError);
+			break;
+		}
+		case 4:
+		{
+			int nPar = f_full->GetParNumber("N_{#eta}");
+			int fPar = f_full->GetParNumber("f_{#etaX}");
+			int uPar = f_full->GetParNumber("u_{BG}");
+			int vPar = f_full->GetParNumber("v_{BG}");
+			
+			double n    = f_full->GetParameter(nPar);
+			double nErr = f_full->GetParError(nPar);
+			
+			double f    = f_full->GetParameter(fPar);
+			double fErr = f_full->GetParError(fPar);
+			
+			double u    = f_full->GetParameter(uPar);
+			double uErr = f_full->GetParError(uPar);
+			
+			double v    = f_full->GetParameter(vPar);
+			double vErr = f_full->GetParError(vPar);
+			
+			double eu    = exp(u);
+			double euErr = exp(u) * uErr;
+			
+			double ev    = exp(v);
+			double evErr = exp(v) * vErr;
+			
+			double norm    = 1.0 + eu + ev;
+			double normErr = sqrt(pow(euErr,2.0) + pow(evErr,2.0));
+			
+			double w1 = 1.0 / norm;
+			double w1Err = normErr / pow(norm,2.0);
+			
+			double w2    = eu / norm;
+			double w2Err = sqrt(pow(euErr/norm,2.0) + pow(eu*normErr/(norm*norm),2.0));
+			
+			double w3    = ev / norm;
+			double w3Err = sqrt(pow(evErr/norm,2.0) + pow(ev*normErr/(norm*norm),2.0));
+			
+			locfEta->SetParameter(nPar, n*f*w1);
+			locfEta->SetParameter(fPar,   1.0);
+			locfEta->SetParameter(uPar, -10.0);
+			locfEta->SetParameter(vPar, -10.0);
+			
+			relError = sqrt(pow(nErr*f*w1,2.0) + pow(n*fErr*w1,2.0) + pow(n*f*w1Err,2.0)) / (n*f*w1);
+			locfEta->SetParError(nPar, relError);
+			break;
+		}
+		case 5:
+		{
+			int nPar = f_full->GetParNumber("N_{#eta}");
+			int fPar = f_full->GetParNumber("f_{#etaX}");
+			int uPar = f_full->GetParNumber("u_{BG}");
+			int vPar = f_full->GetParNumber("v_{BG}");
+			
+			double n    = f_full->GetParameter(nPar);
+			double nErr = f_full->GetParError(nPar);
+			
+			double f    = f_full->GetParameter(fPar);
+			double fErr = f_full->GetParError(fPar);
+			
+			double u    = f_full->GetParameter(uPar);
+			double uErr = f_full->GetParError(uPar);
+			
+			double v    = f_full->GetParameter(vPar);
+			double vErr = f_full->GetParError(vPar);
+			
+			double eu    = exp(u);
+			double euErr = exp(u) * uErr;
+			
+			double ev    = exp(v);
+			double evErr = exp(v) * vErr;
+			
+			double norm    = 1.0 + eu + ev;
+			double normErr = sqrt(pow(euErr,2.0) + pow(evErr,2.0));
+			
+			double w1 = 1.0 / norm;
+			double w1Err = normErr / pow(norm,2.0);
+			
+			double w2    = eu / norm;
+			double w2Err = sqrt(pow(euErr/norm,2.0) + pow(eu*normErr/(norm*norm),2.0));
+			
+			double w3    = ev / norm;
+			double w3Err = sqrt(pow(evErr/norm,2.0) + pow(ev*normErr/(norm*norm),2.0));
+			
+			locfEta->SetParameter(nPar, n*f*w1);
+			locfEta->SetParameter(fPar,   1.0);
+			locfEta->SetParameter(uPar, -10.0);
+			locfEta->SetParameter(vPar, -10.0);
+			
+			relError = sqrt(pow(nErr*f*w1,2.0) + pow(n*fErr*w1,2.0) + pow(n*f*w1Err,2.0)) / (n*f*w1);
 			locfEta->SetParError(nPar, relError);
 			break;
 		}
@@ -2861,6 +3648,30 @@ void MggFitter::ZeroSignalPars(TF1 *f1, int excludeHadronicBkgd)
 				f1->SetParameter("N_{#eta}", 0.0);
 			}
 			break;
+		case 4:
+			if(excludeHadronicBkgd) {
+				double N = f1->GetParameter("N_{#eta}");
+				double f = f1->GetParameter("f_{#etaX}");
+				f1->SetParameter("f_{#etaX}", 1.0); // zeros the signal
+				f1->SetParameter("N_{#eta}", N*f);
+			}
+			else {
+				// By default, zero everything peaking in the eta mass region.
+				f1->SetParameter("N_{#eta}", 0.0);
+			}
+			break;
+		case 5:
+			if(excludeHadronicBkgd) {
+				double N = f1->GetParameter("N_{#eta}");
+				double f = f1->GetParameter("f_{#etaX}");
+				f1->SetParameter("f_{#etaX}", 1.0); // zeros the signal
+				f1->SetParameter("N_{#eta}", N*f);
+			}
+			else {
+				// By default, zero everything peaking in the eta mass region.
+				f1->SetParameter("N_{#eta}", 0.0);
+			}
+			break;
 	}
 	return;
 }
@@ -2875,6 +3686,22 @@ void MggFitter::ZeroHadronicBkgdPars(TF1 *f1)
 			f1->SetParameter("N_{#eta#pi}", 0.0);
 			break;
 		case 3:
+		{
+			double N = f1->GetParameter("N_{#eta}");
+			double f = f1->GetParameter("f_{#etaX}");
+			f1->SetParameter("N_{#eta}", N*(1.0-f));
+			f1->SetParameter("f_{#etaX}", 0.0);
+			break;
+		}
+		case 4:
+		{
+			double N = f1->GetParameter("N_{#eta}");
+			double f = f1->GetParameter("f_{#etaX}");
+			f1->SetParameter("N_{#eta}", N*(1.0-f));
+			f1->SetParameter("f_{#etaX}", 0.0);
+			break;
+		}
+		case 5:
 		{
 			double N = f1->GetParameter("N_{#eta}");
 			double f = f1->GetParameter("f_{#etaX}");
@@ -3223,6 +4050,28 @@ int MggFitter::GetSignalParameters(vector<TString> &parameters)
 			nParameters += 5;
 			break;
 		}
+		case 4:
+		{
+			parameters.push_back("N_{#eta}");
+			parameters.push_back("#Delta#mu_{#eta}");
+			parameters.push_back("z_{qf}");
+			parameters.push_back("f_{#etaX}");
+			parameters.push_back("u_{BG}");
+			parameters.push_back("v_{BG}");
+			nParameters += 6;
+			break;
+		}
+		case 5:
+		{
+			parameters.push_back("N_{#eta}");
+			parameters.push_back("#Delta#mu_{#eta}");
+			parameters.push_back("z_{qf}");
+			parameters.push_back("f_{#etaX}");
+			parameters.push_back("u_{BG}");
+			parameters.push_back("v_{BG}");
+			nParameters += 6;
+			break;
+		}
 	}
 	return nParameters;
 }
@@ -3232,6 +4081,14 @@ int MggFitter::GetOmegaParameters(vector<TString> &parameters)
 	// Rho0 and Omega backgrounds are treated together
 	
 	int nParameters = 0;
+	
+	if(fitOption_rho==4) {
+		nParameters = 2;
+		parameters.push_back("N_{#omega}");
+		parameters.push_back("#Delta#mu_{#omega}");
+		return nParameters;
+	}
+	
 	switch(fitOption_omega) {
 		default:
 			break;

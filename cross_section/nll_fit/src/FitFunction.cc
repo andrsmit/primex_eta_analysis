@@ -128,7 +128,9 @@ void MggFitter::InitializeFitParameters(ROOT::Fit::Fitter &fitter)
 	
 	if(debug) {
 		for(int ipar=0; ipar<nTotalParameters; ipar++) {
+			auto &ps = fitter.Config().ParSettings(ipar);
 			printf("    par %d: %s:  %f\n", ipar, m_parametersFull[ipar].Data(), fitter.Config().ParSettings(ipar).Value());
+			std::cout << "        " << "limits: [" << ps.LowerLimit() << ", " << ps.UpperLimit() << "]" << std::endl;
 		}
 	}
 	
@@ -228,8 +230,42 @@ void MggFitter::GuessEtaParameters(vector<double> &parGuesses)
 			parGuesses.push_back(NGuess);
 			parGuesses.push_back(lineshapeOffset);
 			parGuesses.push_back(incFraction_theory); // fraction of quasifree lineshape
-			parGuesses.push_back(0.0); // fraction of eta+X background
-			parGuesses.push_back(1.0); // fraction of the eta+X background coming from eta+pi
+			//parGuesses.push_back(0.0); // fraction of eta+X background
+			//parGuesses.push_back(1.0); // fraction of the eta+X background coming from eta+pi
+			
+			double fGuess = GetParGuess_fEtaX();
+			double rGuess = GetParGuess_rEtaX();
+			
+			parGuesses.push_back(fGuess); // fraction of eta+X background
+			parGuesses.push_back(rGuess); // fraction of the eta+X background coming from eta+pi
+			break;
+		}
+		case 4:
+		{
+			// Lineshape  (Signal fit + EtaPi hist + other hadronic bkgd hist): N_exc, deltaMu, A_etapi, A_other
+			parGuesses.push_back(NGuess);
+			parGuesses.push_back(lineshapeOffset);
+			parGuesses.push_back(incFraction_theory); // fraction of quasifree lineshape
+			
+			double fGuess = GetParGuess_fEtaX();
+			parGuesses.push_back(fGuess); // fraction of eta+X background
+			
+			parGuesses.push_back(m_hadBG_u); // guess for 'u'
+			parGuesses.push_back(m_hadBG_v); // guess for 'v'
+			break;
+		}
+		case 5:
+		{
+			// Lineshape  (Signal fit + EtaPi hist + other hadronic bkgd hist): N_exc, deltaMu, A_etapi, A_other
+			parGuesses.push_back(NGuess);
+			parGuesses.push_back(lineshapeOffset);
+			parGuesses.push_back(incFraction_theory); // fraction of quasifree lineshape
+			
+			double fGuess = GetParGuess_fEtaX();
+			parGuesses.push_back(fGuess); // fraction of eta+X background
+			
+			parGuesses.push_back(m_hadBG_u); // guess for 'u'
+			parGuesses.push_back(m_hadBG_v); // guess for 'v'
 			break;
 		}
 	}
@@ -263,96 +299,102 @@ void MggFitter::GuessOmegaParameters(vector<double> &parGuesses)
 	NGuess -= (m_emptyFluxRatio * nEmptyBkgd);
 	if(NGuess < 0.0) NGuess = 0.0;
 	
-	// assume N_omega/(N_omega+N_rho) = 0.88:
-	
-	double NGuess_omega = NGuess;
-	double NGuess_rho   = 0.0;
-	switch(fitOption_rho) {
-		default:
-			break;
-		case 1:
-		{
-			NGuess_omega = 0.9*NGuess;
-			NGuess_rho   = 0.1*NGuess;
-			break;
-		}
-		case 2:
-		{
-			NGuess_omega = 0.9*NGuess;
-			NGuess_rho   = 0.1;
-			break;
-		}
+	if(fitOption_rho==4) {
+		parGuesses.push_back(NGuess);
+		parGuesses.push_back(lineshapeOffset);
 	}
-	
-	switch(fitOption_omega) {
-		case 0:
-		{
-			break;
-		}
-		case 1:
-		{
-			// Crystal Ball: N, mu, sigma, alpha, n
-			parGuesses.push_back(NGuess_omega);
-			parGuesses.push_back(MuGuess);
-			parGuesses.push_back(SigmaGuess);
-			parGuesses.push_back( 1.0);
-			parGuesses.push_back(10.0);
-			break;
-		}
-		case 2:
-		{
-			// Lineshape fit: N, deltaMu
-			parGuesses.push_back(NGuess_omega);
-			parGuesses.push_back(lineshapeOffset);
-			break;
-		}
-		case 3:
-		{
-			// Lineshape hist: N, deltaMu
-			parGuesses.push_back(NGuess_omega);
-			parGuesses.push_back(lineshapeOffset);
-			break;
-		}
-		case 4:
-		{
-			// Double Crystal Ball: N, mu1, sigma1, alpha1, n1, (mu2-mu1), sigma2, alpha2, n2, frac
-			parGuesses.push_back(NGuess);
-			parGuesses.push_back(f_omegaLineshape->GetParameter(0));
-			parGuesses.push_back(f_omegaLineshape->GetParameter(1));
-			parGuesses.push_back(f_omegaLineshape->GetParameter(2));
-			parGuesses.push_back(f_omegaLineshape->GetParameter(3));
-			parGuesses.push_back(f_omegaLineshape->GetParameter(4));
-			parGuesses.push_back(f_omegaLineshape->GetParameter(5));
-			parGuesses.push_back(f_omegaLineshape->GetParameter(6));
-			parGuesses.push_back(f_omegaLineshape->GetParameter(7));
-			parGuesses.push_back(f_omegaLineshape->GetParameter(8));
-			break;
-		}
-		case 5:
-		{
-			parGuesses.push_back(NGuess);
-			parGuesses.push_back(0.0);
-			parGuesses.push_back(1.0);
-			break;
-		}
-	}
-	
-	switch(fitOption_rho) {
-		case 0:
-			break;
-		case 1:
-		{
-			parGuesses.push_back(NGuess_rho);
-			if((fitOption_omega!=2) && (fitOption_omega!=3)) {
-				parGuesses.push_back(lineshapeOffset);
+	else {
+		// assume N_omega/(N_omega+N_rho) = 0.88:
+		
+		double NGuess_omega = NGuess;
+		double NGuess_rho   = 0.0;
+		switch(fitOption_rho) {
+			default:
+				break;
+			case 1:
+			{
+				NGuess_omega = 0.9*NGuess;
+				NGuess_rho   = 0.1*NGuess;
+				break;
 			}
-			break;
+			case 2:
+			{
+				NGuess_omega = 0.9*NGuess;
+				NGuess_rho   = 0.1;
+				break;
+			}
 		}
-		case 2:
-		{
-			parGuesses.push_back(NGuess_rho);
-			parGuesses.push_back(1.0); // a switch to turn off contribution from omega
-			break;
+		
+		switch(fitOption_omega) {
+			case 0:
+			{
+				break;
+			}
+			case 1:
+			{
+				// Crystal Ball: N, mu, sigma, alpha, n
+				parGuesses.push_back(NGuess_omega);
+				parGuesses.push_back(MuGuess);
+				parGuesses.push_back(SigmaGuess);
+				parGuesses.push_back( 1.0);
+				parGuesses.push_back(10.0);
+				break;
+			}
+			case 2:
+			{
+				// Lineshape fit: N, deltaMu
+				parGuesses.push_back(NGuess_omega);
+				parGuesses.push_back(lineshapeOffset);
+				break;
+			}
+			case 3:
+			{
+				// Lineshape hist: N, deltaMu
+				parGuesses.push_back(NGuess_omega);
+				parGuesses.push_back(lineshapeOffset);
+				break;
+			}
+			case 4:
+			{
+				// Double Crystal Ball: N, mu1, sigma1, alpha1, n1, (mu2-mu1), sigma2, alpha2, n2, frac
+				parGuesses.push_back(NGuess);
+				parGuesses.push_back(f_omegaLineshape->GetParameter(0));
+				parGuesses.push_back(f_omegaLineshape->GetParameter(1));
+				parGuesses.push_back(f_omegaLineshape->GetParameter(2));
+				parGuesses.push_back(f_omegaLineshape->GetParameter(3));
+				parGuesses.push_back(f_omegaLineshape->GetParameter(4));
+				parGuesses.push_back(f_omegaLineshape->GetParameter(5));
+				parGuesses.push_back(f_omegaLineshape->GetParameter(6));
+				parGuesses.push_back(f_omegaLineshape->GetParameter(7));
+				parGuesses.push_back(f_omegaLineshape->GetParameter(8));
+				break;
+			}
+			case 5:
+			{
+				parGuesses.push_back(NGuess);
+				parGuesses.push_back(0.0);
+				parGuesses.push_back(1.0);
+				break;
+			}
+		}
+		
+		switch(fitOption_rho) {
+			case 0:
+				break;
+			case 1:
+			{
+				parGuesses.push_back(NGuess_rho);
+				if((fitOption_omega!=2) && (fitOption_omega!=3)) {
+					parGuesses.push_back(lineshapeOffset);
+				}
+				break;
+			}
+			case 2:
+			{
+				parGuesses.push_back(NGuess_rho);
+				parGuesses.push_back(1.0); // a switch to turn off contribution from omega
+				break;
+			}
 		}
 	}
 	
@@ -375,25 +417,55 @@ void MggFitter::GuessEMParameters(vector<double> &parGuesses)
 		case 2:
 		{
 			// Exponential:
-			double p0Guess =  0.0;
+			double p0Guess = 0.0;
 			for(int ihist=0; ihist<2; ihist++) {
 				double weight = ihist==0 ? 1.0 : -0.1;
 				p0Guess += (weight * h_full[ihist]->GetBinContent(h_full[ihist]->FindBin(minFitRange)));
 			}
-			p0Guess -= f_emptyWide->Eval(minFitRange) * (h_full[0]->GetBinWidth(1) / h_empty[0]->GetBinWidth(1));
+			p0Guess -= f_emptyWide->Eval(minFitRange) * (h_full[0]->GetBinWidth(1) / h_empty[0]->GetBinWidth(1)) * empty_flux_ratio;
+			
 			double p1Guess =  minFitRange;
 			double p2Guess = -10.0;
 			double p3Guess =  10.0;
 			if(p0Guess < 0.0) p0Guess = 0.0;
 			
-			p1Guess =  0.0;
-			p2Guess = -7.5;
-			p3Guess =  0.0;
+			/*
+			p2Guess = -9.24216 - 1.98792*angle + 20.8686*pow(angle,2.0) - 11.942*pow(angle,3.0);
+			if(p2Guess>-3.0) p2Guess = -3.0;
+			if(angle>1.0) p2Guess = -3.0;
+			*/
+			
+			// Empirical fit to (loose veto - strict veto) distribution, determined a suitable parameterization to use for the slope parameter.
+			// We parameterize it as a function of theta, with a piecewise 3rd or 1st order polynomial:
+			
+			double p0 = -7.81934;
+			double p1 = -2.20103;
+			double p2 = 15.1336;
+			double p3 = -9.0712;
+			
+			double aa = 1.0;
+			double p5 = p1 + 2.0*p2*aa + 3.0*p3*aa*aa;
+			double p4 = p0 + (p1-p5)*aa + p2*pow(aa,2.0) + p3*pow(aa,3.0);
+			
+			double slopeGuess = 0.0;
+			if(angle<aa) {
+				slopeGuess = p0 + p1*angle + p2*pow(angle,2.0) + p3*pow(angle,3.0);
+			} else {
+				slopeGuess = p4 + p5*angle;
+			}
+			
+			// f_bg = p0*exp(slopeGuess*mgg)
+			if(p0Guess>0) {
+				p0Guess = p0Guess/exp(slopeGuess*minFitRange)/h_full[0]->GetBinWidth(1);
+			} else {
+				p0Guess = 0.0;
+			}
+			//printf("p0Guess: %f\n",p0Guess);
 			
 			parGuesses.push_back(p0Guess);
-			parGuesses.push_back(p1Guess);
-			parGuesses.push_back(p2Guess);
-			parGuesses.push_back(p3Guess);
+			parGuesses.push_back(0.0);
+			parGuesses.push_back(slopeGuess);
+			parGuesses.push_back(0.0);
 			break;
 		}
 		case 3:

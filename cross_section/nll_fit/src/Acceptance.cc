@@ -467,9 +467,11 @@ TString EtaAnalyzer::GetMatrixFileName()
 			return 1;
 	}
 	
+	TString corrString = m_analysisOption_MC==8 ? "UNCORRECTED" : "CORRECTED_0.33PERCENT";
+	
 	TString matrixFileNameFull = Form(
-		"/work/halld/home/andrsmit/primex_eta_analysis/eta_gg_matrix/analyze_trees/rootFiles/phase%d/%s", 
-		locPhase, matrixFileName.Data());
+		"/work/halld/home/andrsmit/primex_eta_analysis/eta_gg_matrix/analyze_trees/rootFiles/phase%d/%s/%s", 
+		locPhase, corrString.Data(), matrixFileName.Data());
 	
 	return matrixFileNameFull;
 }

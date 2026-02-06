@@ -69,81 +69,112 @@ int MggFitter::InitializeEmptyWideFitParameters()
 			nParameters += 5;
 			break;
 		}
-	}
-	
-	// omega from gas:
-	switch(fitOption_omega) {
-		default:
-			break;
-		case 1:
-		{
-			f_emptyWide->FixParameter(nParameters+0, 0.000);
-			f_emptyWide->FixParameter(nParameters+1, 0.780);
-			f_emptyWide->FixParameter(nParameters+2, 0.032);
-			f_emptyWide->FixParameter(nParameters+3, 1.000);
-			f_emptyWide->FixParameter(nParameters+4, 2.000);
-			nParameters += 5;
-			break;
-		}
-		case 2:
-		{
-			f_emptyWide->FixParameter(nParameters+0, 0.000);
-			f_emptyWide->FixParameter(nParameters+1, 0.000);
-			nParameters += 2;
-			break;
-		}
-		case 3:
-		{
-			f_emptyWide->FixParameter(nParameters+0, 0.000);
-			f_emptyWide->FixParameter(nParameters+1, 0.000);
-			nParameters += 2;
-			break;
-		}
 		case 4:
 		{
+			// Line shape from simulation:
 			f_emptyWide->FixParameter(nParameters+0, 0.000);
-			f_emptyWide->FixParameter(nParameters+1, 0.780);
-			f_emptyWide->FixParameter(nParameters+2, 0.020);
-			f_emptyWide->FixParameter(nParameters+3, 1.000);
-			f_emptyWide->FixParameter(nParameters+4, 2.000);
-			f_emptyWide->FixParameter(nParameters+5, 0.000);
-			f_emptyWide->FixParameter(nParameters+6, 0.040);
-			f_emptyWide->FixParameter(nParameters+7, 1.000);
-			f_emptyWide->FixParameter(nParameters+8, 2.000);
-			f_emptyWide->FixParameter(nParameters+9, 0.000);
-			nParameters += 10;
+			f_emptyWide->FixParameter(nParameters+1, 0.000);
+			f_emptyWide->FixParameter(nParameters+2, 0.000);
+			f_emptyWide->FixParameter(nParameters+3, 0.000);
+			f_emptyWide->FixParameter(nParameters+4, -5.00);
+			f_emptyWide->FixParameter(nParameters+5, -5.00);
+			nParameters += 6;
 			break;
 		}
 		case 5:
 		{
+			// Line shape from simulation:
 			f_emptyWide->FixParameter(nParameters+0, 0.000);
 			f_emptyWide->FixParameter(nParameters+1, 0.000);
-			f_emptyWide->FixParameter(nParameters+2, 1.000);
-			nParameters += 3;
+			f_emptyWide->FixParameter(nParameters+2, 0.000);
+			f_emptyWide->FixParameter(nParameters+3, 0.000);
+			f_emptyWide->FixParameter(nParameters+4, -5.00);
+			f_emptyWide->FixParameter(nParameters+5, -5.00);
+			nParameters += 6;
 			break;
 		}
 	}
 	
-	switch(fitOption_rho) {
-		default:
-			break;
-		case 1:
-		{
-			f_emptyWide->FixParameter(nParameters, 0.000);
-			nParameters++;
-			if((fitOption_omega!=2) && (fitOption_omega!=3)) {
+	// omega from gas:
+	if(fitOption_rho==4) {
+		f_emptyWide->FixParameter(nParameters+0, 0.000);
+		f_emptyWide->FixParameter(nParameters+1, 0.000);
+		nParameters += 2;
+	}
+	else {
+		switch(fitOption_omega) {
+			default:
+				break;
+			case 1:
+			{
+				f_emptyWide->FixParameter(nParameters+0, 0.000);
+				f_emptyWide->FixParameter(nParameters+1, 0.780);
+				f_emptyWide->FixParameter(nParameters+2, 0.032);
+				f_emptyWide->FixParameter(nParameters+3, 1.000);
+				f_emptyWide->FixParameter(nParameters+4, 2.000);
+				nParameters += 5;
+				break;
+			}
+			case 2:
+			{
+				f_emptyWide->FixParameter(nParameters+0, 0.000);
+				f_emptyWide->FixParameter(nParameters+1, 0.000);
+				nParameters += 2;
+				break;
+			}
+			case 3:
+			{
+				f_emptyWide->FixParameter(nParameters+0, 0.000);
+				f_emptyWide->FixParameter(nParameters+1, 0.000);
+				nParameters += 2;
+				break;
+			}
+			case 4:
+			{
+				f_emptyWide->FixParameter(nParameters+0, 0.000);
+				f_emptyWide->FixParameter(nParameters+1, 0.780);
+				f_emptyWide->FixParameter(nParameters+2, 0.020);
+				f_emptyWide->FixParameter(nParameters+3, 1.000);
+				f_emptyWide->FixParameter(nParameters+4, 2.000);
+				f_emptyWide->FixParameter(nParameters+5, 0.000);
+				f_emptyWide->FixParameter(nParameters+6, 0.040);
+				f_emptyWide->FixParameter(nParameters+7, 1.000);
+				f_emptyWide->FixParameter(nParameters+8, 2.000);
+				f_emptyWide->FixParameter(nParameters+9, 0.000);
+				nParameters += 10;
+				break;
+			}
+			case 5:
+			{
+				f_emptyWide->FixParameter(nParameters+0, 0.000);
+				f_emptyWide->FixParameter(nParameters+1, 0.000);
+				f_emptyWide->FixParameter(nParameters+2, 1.000);
+				nParameters += 3;
+				break;
+			}
+		}
+		
+		switch(fitOption_rho) {
+			default:
+				break;
+			case 1:
+			{
 				f_emptyWide->FixParameter(nParameters, 0.000);
 				nParameters++;
+				if((fitOption_omega!=2) && (fitOption_omega!=3)) {
+					f_emptyWide->FixParameter(nParameters, 0.000);
+					nParameters++;
+				}
+				break;
 			}
-			break;
-		}
-		case 2:
-		{
-			f_emptyWide->FixParameter(nParameters, 0.000);
-			nParameters++;
-			f_emptyWide->FixParameter(nParameters, 1.000);
-			nParameters++;
-			break;
+			case 2:
+			{
+				f_emptyWide->FixParameter(nParameters, 0.000);
+				nParameters++;
+				f_emptyWide->FixParameter(nParameters, 1.000);
+				nParameters++;
+				break;
+			}
 		}
 	}
 	

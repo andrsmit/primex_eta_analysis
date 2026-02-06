@@ -533,14 +533,16 @@ void YieldFitter::FitAngularYield(double minFitRange, double maxFitRange, TStrin
 	auto result = locFitter.Result();
 	result.Print(std::cout);
 	
-	if(m_model==SGEVORKYAN_SIGMA_VAR) {
-		outputFileName = Form("fit_results_sigma_%d",m_sigmaVer);
-	}
-	else if(m_model==SGEVORKYAN_AP_VAR) {
-		outputFileName = Form("fit_results_ap_%d",m_apVer);
-	}
-	else if(m_model==SGEVORKYAN_STRONG_RADIUS_VAR) {
-		outputFileName = Form("fit_results_strongRadius_%s",m_strongRadiusStr.Data());
+	if(outputFileName=="") {
+		if(m_model==SGEVORKYAN_SIGMA_VAR) {
+			outputFileName = Form("fit_results_sigma_%d",m_sigmaVer);
+		}
+		else if(m_model==SGEVORKYAN_AP_VAR) {
+			outputFileName = Form("fit_results_ap_%d",m_apVer);
+		}
+		else if(m_model==SGEVORKYAN_STRONG_RADIUS_VAR) {
+			outputFileName = Form("fit_results_strongRadius_%s",m_strongRadiusStr.Data());
+		}
 	}
 	
 	int nBinsTotal = 0;
