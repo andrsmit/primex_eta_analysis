@@ -1096,6 +1096,14 @@ void MggFitter::ReleaseEMParameters(ROOT::Fit::Fitter &fitter) {
 		case 2:
 		{
 			int p0Par = (int)(find(m_parametersFull.begin(), m_parametersFull.end(), "p0") - m_parametersFull.begin());
+			
+			fitter.Config().ParSettings(p0Par).Release();
+			fitter.Config().ParSettings(p0Par).SetLimits(0.00, 1.e7);
+			break;
+		}
+		case 3:
+		{
+			int p0Par = (int)(find(m_parametersFull.begin(), m_parametersFull.end(), "p0") - m_parametersFull.begin());
 			int p1Par = (int)(find(m_parametersFull.begin(), m_parametersFull.end(), "p1") - m_parametersFull.begin());
 			int p2Par = (int)(find(m_parametersFull.begin(), m_parametersFull.end(), "p2") - m_parametersFull.begin());
 			int p3Par = (int)(find(m_parametersFull.begin(), m_parametersFull.end(), "p3") - m_parametersFull.begin());
@@ -1103,21 +1111,12 @@ void MggFitter::ReleaseEMParameters(ROOT::Fit::Fitter &fitter) {
 			fitter.Config().ParSettings(p0Par).Release();
 			fitter.Config().ParSettings(p0Par).SetLimits(0.00, 1.e7);
 			
-			//fitter.Config().ParSettings(p1Par).Release();
-			//fitter.Config().ParSettings(p1Par).SetLimits(0.00, 1.e6);
-			/*
-			if(angle>0.5) {
-				fitter.Config().ParSettings(p2Par).Release();
-				double minLimit = -7.0;
-				fitter.Config().ParSettings(p2Par).SetLimits(-10.0, -4.0);
-			}
-			*/
-			//fitter.Config().ParSettings(p3Par).Release();
-			//fitter.Config().ParSettings(p3Par).SetLimits(-1.e2, 1.e2);
-			//fitter.Config().ParSettings(p3Par).SetLimits(-1.e2, 1.e2);
+			fitter.Config().ParSettings(p1Par).Release();
+			fitter.Config().ParSettings(p2Par).Release();
+			fitter.Config().ParSettings(p3Par).Release();
 			break;
 		}
-		case 3:
+		case 4:
 		{
 			for(int ipar=0; ipar<=fitOption_poly; ipar++) {
 				int pPar = (int)(find(m_parametersFull.begin(), m_parametersFull.end(), Form("p%d",ipar)) - m_parametersFull.begin());
@@ -1126,7 +1125,7 @@ void MggFitter::ReleaseEMParameters(ROOT::Fit::Fitter &fitter) {
 			}
 			break;
 		}
-		case 4:
+		case 5:
 		{
 			// Parametric approximation to dsigma/dM for e+e- pair production
 			int pPar = (int)(find(m_parametersFull.begin(), m_parametersFull.end(), "p0") - m_parametersFull.begin());
@@ -1153,6 +1152,7 @@ void MggFitter::FixEMParameters(ROOT::Fit::Fitter &fitter)
 			break;
 		}
 		case 2:
+		case 3:
 		{
 			int p0Par = (int)(find(m_parametersFull.begin(), m_parametersFull.end(), "p0") - m_parametersFull.begin());
 			int p1Par = (int)(find(m_parametersFull.begin(), m_parametersFull.end(), "p1") - m_parametersFull.begin());
@@ -1165,7 +1165,7 @@ void MggFitter::FixEMParameters(ROOT::Fit::Fitter &fitter)
 			fitter.Config().ParSettings(p3Par).Fix();
 			break;
 		}
-		case 3:
+		case 4:
 		{
 			for(int ipar=0; ipar<=fitOption_poly; ipar++) {
 				int pPar = (int)(find(m_parametersFull.begin(), m_parametersFull.end(), Form("p%d",ipar)) - m_parametersFull.begin());
@@ -1173,7 +1173,7 @@ void MggFitter::FixEMParameters(ROOT::Fit::Fitter &fitter)
 			}
 			break;
 		}
-		case 4:
+		case 5:
 		{
 			int pPar = (int)(find(m_parametersFull.begin(), m_parametersFull.end(), "p0") - m_parametersFull.begin());
 			fitter.Config().ParSettings(pPar).Fix();
@@ -1416,6 +1416,18 @@ void MggFitter::FixBeamlineParameters(ROOT::Fit::Fitter &fitter) {
 
 void MggFitter::ReleaseOmegaParameters(ROOT::Fit::Fitter &fitter)
 {
+	if(fitOption_rho==2) {
+		int NPar   = (int)(find(m_parametersFull.begin(), m_parametersFull.end(), "N_{#omega}") - m_parametersFull.begin());
+		int dMuPar = (int)(find(m_parametersFull.begin(), m_parametersFull.end(), "#Delta#mu_{#omega}") - m_parametersFull.begin());
+		
+		fitter.Config().ParSettings(NPar).Release();
+		fitter.Config().ParSettings(NPar).SetLimits(0.0, 1.e6);
+		
+		fitter.Config().ParSettings(dMuPar).Release();
+		fitter.Config().ParSettings(dMuPar).SetLimits(-0.02, 0.02);
+		return;
+	}
+	
 	switch(fitOption_omega) {
 		default:
 			break;
@@ -1514,28 +1526,30 @@ void MggFitter::ReleaseOmegaParameters(ROOT::Fit::Fitter &fitter)
 			break;
 		case 1:
 		{
-			int NPar = (int)(find(m_parametersFull.begin(), m_parametersFull.end(), "N_{#rho}") - m_parametersFull.begin());
+			int NPar   = (int)(find(m_parametersFull.begin(), m_parametersFull.end(), "N_{#rho}") - m_parametersFull.begin());
+			int dMuPar = (int)(find(m_parametersFull.begin(), m_parametersFull.end(), "#Delta#mu_{#rho}") - m_parametersFull.begin());
+			
 			fitter.Config().ParSettings(NPar).Release();
 			fitter.Config().ParSettings(NPar).SetLimits(0.0, 1.e6);
 			
-			if((fitOption_omega!=2) && (fitOption_omega!=3)) {
-				int dMuPar = (int)(find(m_parametersFull.begin(), m_parametersFull.end(), "#Delta#mu_{#omega}") - m_parametersFull.begin());
-				fitter.Config().ParSettings(dMuPar).Release();
-				fitter.Config().ParSettings(dMuPar).SetLimits(-0.02, 0.02);
-			}
-			break;
-		}
-		case 2:
-		{
-			int NPar = (int)(find(m_parametersFull.begin(), m_parametersFull.end(), "frac_{#rho,#omega}") - m_parametersFull.begin());
-			//fitter.Config().ParSettings(NPar).Release();
-			//fitter.Config().ParSettings(NPar).SetLimits(0.0, 2.5);
+			fitter.Config().ParSettings(dMuPar).Release();
+			fitter.Config().ParSettings(dMuPar).SetLimits(-0.02, 0.02);
 			break;
 		}
 	}
 }
 
 void MggFitter::FixOmegaParameters(ROOT::Fit::Fitter &fitter) {
+	
+	if(fitOption_rho==2) {
+		int NPar   = (int)(find(m_parametersFull.begin(), m_parametersFull.end(), "N_{#omega}") - m_parametersFull.begin());
+		int dMuPar = (int)(find(m_parametersFull.begin(), m_parametersFull.end(), "#Delta#mu_{#omega}") - m_parametersFull.begin());
+		
+		fitter.Config().ParSettings(NPar).Fix();
+		fitter.Config().ParSettings(dMuPar).Fix();
+		return;
+	}
+	
 	switch(fitOption_omega) {
 		case 0:
 			break;
@@ -1603,19 +1617,11 @@ void MggFitter::FixOmegaParameters(ROOT::Fit::Fitter &fitter) {
 			break;
 		case 1:
 		{
-			int NPar = (int)(find(m_parametersFull.begin(), m_parametersFull.end(), "N_{#rho}") - m_parametersFull.begin());
-			fitter.Config().ParSettings(NPar).Fix();
+			int NPar   = (int)(find(m_parametersFull.begin(), m_parametersFull.end(), "N_{#rho}") - m_parametersFull.begin());
+			int dMuPar = (int)(find(m_parametersFull.begin(), m_parametersFull.end(), "#Delta#mu_{#rho}") - m_parametersFull.begin());
 			
-			if((fitOption_omega!=2) && (fitOption_omega!=3)) {
-				int dMuPar = (int)(find(m_parametersFull.begin(), m_parametersFull.end(), "#Delta#mu_{#omega}") - m_parametersFull.begin());
-				fitter.Config().ParSettings(dMuPar).Fix();
-			}
-			break;
-		}
-		case 2:
-		{
-			int NPar = (int)(find(m_parametersFull.begin(), m_parametersFull.end(), "frac_{#rho,#omega}") - m_parametersFull.begin());
 			fitter.Config().ParSettings(NPar).Fix();
+			fitter.Config().ParSettings(dMuPar).Fix();
 			break;
 		}
 	}
@@ -2529,21 +2535,6 @@ void MggFitter::FitOmegaLineshape(int drawOption)
 	f_omegaLineshape->SetParameters(fOmega2->GetParameters());
 	f_omegaLineshape->FixParameter(9, 1.0);
 	
-	if((fitOption_rho==1) || (fitOption_rho==2)) {
-		
-		// get h_rhoLinshape as convolution of reconstructed mass distribution from omega->pi0+gamma decay and relativistic BW
-		
-		GetConvolvedRhoMass();
-		h_rhoLineshape->Scale(1.0/h_rhoLineshape->Integral());
-		
-		f_rhoLineshape = new TF1("f_rhoLineshape", DoubleCrystalBallPDF, minFitRange, maxFitRange, 10);
-		f_rhoLineshape->SetParameters(fOmega2->GetParameters());
-		f_rhoLineshape->SetParameter(0, fOmega2->GetParameter(0)-0.01);
-		f_rhoLineshape->SetParameter(1, 3.0*fOmega2->GetParameter(1));
-		f_rhoLineshape->SetParameter(5, 3.0*fOmega2->GetParameter(5));
-		f_rhoLineshape->FixParameter(9, 1.0);
-	}
-	
 	fOmega1->Delete();
 	fOmega2->Delete();
 	
@@ -3127,7 +3118,7 @@ void MggFitter::GetRhoYield(double &yield, double &yieldErr)
 {
 	yield    = 0.0;
 	yieldErr = 0.0;
-	if(fitOption_rho==0) return;
+	if(fitOption_rho!=1) return;
 	
 	//-----------------------------------------------//
 	
@@ -3158,9 +3149,7 @@ void MggFitter::GetRhoYield(double &yield, double &yieldErr)
 	
 	// estimate uncertainty from fit parameter:
 	
-	int rhoYieldPar;
-	if(fitOption_rho==2) rhoYieldPar = f_full->GetParNumber("frac_{#rho,#omega}");
-	else rhoYieldPar = f_full->GetParNumber("N_{#rho}");
+	int rhoYieldPar = f_full->GetParNumber("N_{#rho}");
 	
 	double locRelErr = f_full->GetParError(rhoYieldPar) / f_full->GetParameter(rhoYieldPar);
 	if(locRelErr>2.0) locRelErr = 2.0;
@@ -3715,21 +3704,13 @@ void MggFitter::ZeroHadronicBkgdPars(TF1 *f1)
 
 void MggFitter::ZeroOmegaPars(TF1 *f1)
 {
-	if(fitOption_rho==2) {
-		f1->SetParameter("switch_omega",0.0);
-	}
-	else {
-		f1->SetParameter("N_{#omega}", 0.0);
-	}
+	f1->SetParameter("N_{#omega}", 0.0);
 	return;
 }
 
 void MggFitter::ZeroRhoPars(TF1 *f1)
 {
-	if(fitOption_rho==2) {
-		f1->SetParameter("frac_{#rho,#omega}",0.0);
-	}
-	else {
+	if(fitOption_rho==1) {
 		f1->SetParameter("N_{#rho}", 0.0);
 	}
 	return;
@@ -3744,16 +3725,17 @@ void MggFitter::ZeroBkgdPars(TF1 *f1)
 			}
 			break;
 		case 2:
+		case 3:
 			for(int ipar=0; ipar<4; ipar++) {
 				f1->SetParameter(Form("p%d",ipar), 0.0);
 			}
 			break;
-		case 3:
+		case 4:
 			for(int ipar=0; ipar<=fitOption_poly; ipar++) {
 				f1->SetParameter(Form("p%d",ipar), 0.0);
 			}
 			break;
-		case 4:
+		case 5:
 			f1->SetParameter("p0", 0.0);
 			break;
 	}
@@ -4082,7 +4064,7 @@ int MggFitter::GetOmegaParameters(vector<TString> &parameters)
 	
 	int nParameters = 0;
 	
-	if(fitOption_rho==4) {
+	if(fitOption_rho==2) {
 		nParameters = 2;
 		parameters.push_back("N_{#omega}");
 		parameters.push_back("#Delta#mu_{#omega}");
@@ -4137,19 +4119,8 @@ int MggFitter::GetOmegaParameters(vector<TString> &parameters)
 		case 1:
 		{
 			parameters.push_back("N_{#rho}");
-			nParameters++;
-			if((fitOption_omega!=2) && (fitOption_omega!=3)) {
-				parameters.push_back("#Delta#mu_{#omega}");
-				nParameters++;
-			}
-			break;
-		}
-		case 2:
-		{
-			parameters.push_back("frac_{#rho,#omega}");
-			nParameters++;
-			parameters.push_back("switch_omega");
-			nParameters++;
+			parameters.push_back("#Delta#mu_{#rho}");
+			nParameters += 2;
 			break;
 		}
 	}
@@ -4168,12 +4139,13 @@ int MggFitter::GetEMParameters(vector<TString> &parameters)
 			nParameters = fitOption_poly + 1;
 			break;
 		case 2:
+		case 3:
 			nParameters = 4;
 			break;
-		case 3:
+		case 4:
 			nParameters = fitOption_poly + 1;
 			break;
-		case 4:
+		case 5:
 			nParameters = 1;
 			break;
 	}

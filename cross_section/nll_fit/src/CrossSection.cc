@@ -80,19 +80,26 @@ int main(int argc, char **argv)
 	InitializeYieldFitter(locYieldFitter, locEtaAna);
 	LoadModelType(locYieldFitter, configFileName);
 	
-	//TString locPathName = "/work/halld/home/andrsmit/primex_eta_analysis/cross_section/nll_fit/output/";
-	TString locPathName = "fit_result_offset_0.0005/";
+	TString locFileName = "";
+	if(locEtaAna.GetOutputFileName()=="") {
+		locFileName = ConstructOutputFileName(locEtaAna);
+		locEtaAna.SetOutputFileName(locFileName);
+	}
 	
-	TString fileName_base = GetOutputFileName(locEtaAna);
+	TString fitResultName = "";
+	if(locEtaAna.GetOutputFileName().Contains("yield_")) {
+		fitResultName = locEtaAna.GetOutputFileName().ReplaceAll("yield_","fit_result_").ReplaceAll(".root","");
+	} else {
+		fitResultName = ("fit_result_"+locEtaAna.GetOutputFileName()).ReplaceAll(".root","");
+	}
 	
-	TString fileName = locPathName + "yield_" + fileName_base + ".root";
-	printf("\nOutput ROOT file name: %s\n", fileName.Data());
+	//------------------------------------------------//
 	
-	TString fitResultName = "fit_result_" + fileName_base;
-	printf("\nFit results will be written to: %s.txt\n", fitResultName.Data());
-	
-	if(0)
+	if(locEtaAna.GetInputFileName()=="")
 	{
+		// No input was provided by config file, so assume we have to re-extract the yield from scratch
+		printf("\nExtracted yield distributions will be written to: %s\n", locEtaAna.GetOutputFileName().Data());
+		
 		if(!locEtaAna.IsMatrixLoaded()) {
 			if(locEtaAna.LoadAngularMatrix()) {
 				printf("\n\nProblem loading angular matrices.\n\n");
@@ -129,15 +136,16 @@ int main(int argc, char **argv)
 		locEtaAna.PlotLineshapeShift();
 		locEtaAna.PlotQFFraction();
 		
-		locEtaAna.WriteROOTFile(fileName);
+		locEtaAna.WriteROOTFile();
 		//return 0;
 	}
-	else if(0) {
-		
-		fileName = Form("%s/yield_phase%d_VetoOption%d_8.0GeV_11.3GeV_rebin2.root",
-			locPathName.Data(), locEtaAna.GetPhase(),locEtaAna.GetVetoOption());
-		
-		TFile *fIn = new TFile(fileName.Data(), "READ");
+	else {
+		printf("\nReading angular yield histogram from: %s\n", locEtaAna.GetInputFileName().Data());
+		if(gSystem->AccessPathName(locEtaAna.GetInputFileName().Data())) {
+			std::cerr << "Unable to open provided input file.\n" << std::endl;
+			exit(1);
+		}
+		TFile *fIn = new TFile(locEtaAna.GetInputFileName().Data(), "READ");
 		
 		TH1F *hYield;
 		
@@ -164,13 +172,14 @@ int main(int argc, char **argv)
 			
 			// make sure the error bars are not anomalously large:
 			if(binE > 2.5*sqrt(binC)) hYield->SetBinError(ibin, 2.5*sqrt(binC));
-			
 		}
 		
 		hYield->SetDirectory(0);
 		fIn->Close();
 		locYieldFitter.SetYield(hYield);
 	}
+	
+	/*
 	else {
 		// Combined fit across multiple energy bins:
 		
@@ -215,6 +224,7 @@ int main(int argc, char **argv)
 		
 		locYieldFitter.SetYield(yields, bins);
 	}
+	*/
 	
 	gStyle->SetStatX(0.50);
 	gStyle->SetOptStat(0);
@@ -250,37 +260,37 @@ void printUsage(configSettings_t settings, int goYes)
 	return;
 }
 
-TString GetOutputFileName(EtaAnalyzer anaObject)
+TString ConstructOutputFileName(EtaAnalyzer anaObject)
 {
 	TString fileName = "";
 	if(anaObject.GetAnalysisOption()==1)
 	{
 		double de, e1, e2;
 		anaObject.GetBeamEnergyBinning(de, e1, e2);
-		fileName = Form("phase%d_VetoOption%d_%.1fGeV_%.1fGeV", 
+		fileName = Form("yield_phase%d_VetoOption%d_%.1fGeV_%.1fGeV", 
 			anaObject.GetPhase(), anaObject.GetVetoOption(), e1, e2);
 	}
 	else if(anaObject.GetAnalysisOption()==4)
 	{
 		TString histname = anaObject.GetMggHistName();
-		fileName = Form("phase%d_VetoOption%d_%s",
+		fileName = Form("yield_phase%d_VetoOption%d_%s",
 			anaObject.GetPhase(), anaObject.GetVetoOption(), histname.ReplaceAll("mgg_","").Data());
 	}
 	else if(anaObject.GetAnalysisOption()==5)
 	{
 		TString histname = anaObject.GetMggHistName();
-		fileName = Form("phase%d_VetoOption%d_%s",
+		fileName = Form("yield_phase%d_VetoOption%d_%s",
 			anaObject.GetPhase(), anaObject.GetVetoOption(), histname.ReplaceAll("mgg_","").Data());
 	}
 	else
 	{
-		fileName = Form("phase%d_VetoOption%d_new", anaObject.GetPhase(), anaObject.GetVetoOption());
+		fileName = Form("yield_phase%d_VetoOption%d_new", anaObject.GetPhase(), anaObject.GetVetoOption());
 	}
 	
 	if(anaObject.GetLineshapeOffsetFound()) {
 		fileName = fileName + Form("_offset_%.4f",anaObject.GetLineshapeOffset());
 	}
-	fileName = fileName;
+	fileName = fileName + ".root";
 	return fileName;
 }
 
@@ -405,6 +415,22 @@ int LoadConfigSettings(EtaAnalyzer &anaObject, TString fileName, int phase)
 	}
 	
 	//----------------------------------------//
+	// Bin sizing:
+	
+	if(ReadFile->GetConfigName("rebinsMgg") != "") {
+		anaObject.SetRebinsMgg(ReadFile->GetConfig1Par("rebinsMgg")[0]);
+		anaObject.SetRebinsEmptyMgg(ReadFile->GetConfig1Par("rebinsEmptyMgg")[0]);
+	}
+	// Allow empty mgg bin size to be overwritten if specified in config file:
+	if(ReadFile->GetConfigName("rebinsEmptyMgg") != "") {
+		anaObject.SetRebinsEmptyMgg(ReadFile->GetConfig1Par("rebinsEmptyMgg")[0]);
+	}
+	
+	if(ReadFile->GetConfigName("rebinsTheta") != "") {
+		anaObject.SetRebinsTheta(ReadFile->GetConfig1Par("rebinsTheta")[0]);
+	}
+	
+	//----------------------------------------//
 	// Beam Energy should only be taken from config file if analysisOption=1:
 	
 	if(anaObject.GetAnalysisOption()==1)
@@ -422,27 +448,10 @@ int LoadConfigSettings(EtaAnalyzer &anaObject, TString fileName, int phase)
 	}
 	
 	//----------------------------------------//
-	// Bin sizing:
-	
-	if(ReadFile->GetConfigName("rebinsMgg") != "") {
-		anaObject.SetRebinsMgg(ReadFile->GetConfig1Par("rebinsMgg")[0]);
-	}
-	if(ReadFile->GetConfigName("rebinsTheta") != "") {
-		anaObject.SetRebinsTheta(ReadFile->GetConfig1Par("rebinsTheta")[0]);
-	}
-	
-	//----------------------------------------//
-	//
 	// Fitting function options:
-	//
 	
 	if(ReadFile->GetConfigName("signalFitOption") != "") {
 		anaObject.SetFitOption_signal((int)ReadFile->GetConfig1Par("signalFitOption")[0]);
-		if(anaObject.GetFitOption(1)>=5) {
-			if(ReadFile->GetConfigName("lineshapeOption") != "") {
-				anaObject.SetLineshapeOption((int)ReadFile->GetConfig1Par("lineshapeOption")[0]);
-			}
-		}
 	}
 	if(ReadFile->GetConfigName("bkgdFitOption") != "") {
 		if(ReadFile->GetConfigName("polynomialOrder") != "") {
@@ -465,6 +474,10 @@ int LoadConfigSettings(EtaAnalyzer &anaObject, TString fileName, int phase)
 	if(ReadFile->GetConfigName("fittingRange") != "") {
 		anaObject.SetFitRange((double)ReadFile->GetConfig2Par("fittingRange")[0], 
 			(double)ReadFile->GetConfig2Par("fittingRange")[1]);
+	}
+	
+	if(ReadFile->GetConfigName("lineshapeOption") != "") {
+		anaObject.SetLineshapeOption((int)ReadFile->GetConfig1Par("lineshapeOption")[0]);
 	}
 	
 	//----------------------------------------//
@@ -493,9 +506,6 @@ int LoadConfigSettings(EtaAnalyzer &anaObject, TString fileName, int phase)
 		anaObject.SetEmptyFitRange((double)ReadFile->GetConfig2Par("emptyFittingRange")[0], 
 			(double)ReadFile->GetConfig2Par("emptyFittingRange")[1]);
 	}
-	if(ReadFile->GetConfigName("rebinsEmptyMgg") != "") {
-		anaObject.SetRebinsEmptyMgg(ReadFile->GetConfig1Par("rebinsEmptyMgg")[0]);
-	}
 	
 	//----------------------------------------//
 	
@@ -503,6 +513,18 @@ int LoadConfigSettings(EtaAnalyzer &anaObject, TString fileName, int phase)
 		anaObject.SetLineshapeOffset((double)ReadFile->GetConfig1Par("lineshapeOffset")[0]);
 	}
 	
+	//----------------------------------------//
+	
+	if(ReadFile->GetConfigName("inputFileName") != "") {
+		anaObject.SetInputFileName(ReadFile->GetConfigName("inputFileName"));
+	}
+	else {
+		if(ReadFile->GetConfigName("outputFileName") != "") {
+			anaObject.SetOutputFileName(ReadFile->GetConfigName("outputFileName"));
+		}
+	}
+	
+	//----------------------------------------//
 	
 	return 0;
 }

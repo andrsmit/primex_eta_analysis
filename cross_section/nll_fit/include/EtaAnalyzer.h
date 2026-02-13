@@ -163,6 +163,9 @@ class EtaAnalyzer {
 			
 			m_lineshapeOffset      = 0.0;
 			m_lineshapeOffsetFound = false;
+			
+			m_outputFileName = "";
+			m_inputFileName  = "";
 		};
 		
 		~EtaAnalyzer(){};
@@ -313,13 +316,20 @@ class EtaAnalyzer {
 		void PlotLineshapeShift();
 		void PlotQFFraction();
 		void PlotOmegaFitPars();
-		void WriteROOTFile(TString fileName="yield.root");
+		void WriteROOTFile(TString fileName="");
 		
 		TH1F* GetAngularYield(int opt=0) { 
 			if(opt==0)      return h_Yield;
 			else if(opt==1) return h_YieldFit;
 			else            return h_YieldInclusive;
 		}
+		
+		void SetInputFileName(TString fileName) { m_inputFileName = fileName; }
+		TString GetInputFileName() { return m_inputFileName; }
+		
+		void SetOutputFileName(TString fileName) { m_outputFileName = fileName; }
+		TString GetOutputFileName() { return m_outputFileName; }
+		
 	
 	private:
 		
@@ -398,6 +408,8 @@ class EtaAnalyzer {
 		
 		TString m_matrixHistName;
 		
+		TString m_outputFileName, m_inputFileName;
+		
 		//-----------------------------------------------------------//
 		// Variables defining bin sizes (defaults set in constructor):
 		
@@ -430,8 +442,7 @@ class EtaAnalyzer {
 		int m_fitOption_rho;
 		int m_fitOption_etap;
 		
-		int m_lineshapeOption;
-		int m_useRawMass;
+		int m_useRawMass, m_lineshapeOption;
 		
 		double m_lineshapeOffset;
 		bool m_lineshapeOffsetFound;

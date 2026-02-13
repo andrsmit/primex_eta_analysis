@@ -26,6 +26,12 @@ using namespace std;
 
 #include "EtaAnalyzer.h"
 
+static constexpr double m_branchingFraction_omega_gpi0 = 8.28e-02; // +/- 0.28e-02
+static constexpr double m_branchingFraction_rho0_geta  = 1.18e-04; // +/- 0.08e-04
+static constexpr double m_branchingFraction_rho0_gpi0  = 4.70e-04; // +/- 0.20e-04
+
+static constexpr double m_RhoOmegaCSRatio = 10.0;
+
 class MggFitter {
 	public:
 		MggFitter();
@@ -153,7 +159,7 @@ class MggFitter {
 		// Set/fit lineshape of omega background:
 		void SetOmegaLineshape(TH1F *h1, int drawOption=0) { 
 			h_omegaLineshape = h1;
-			if(fitOption_rho==4) return;
+			if(fitOption_rho==2) return;
 			
 			h_omegaLineshape->Scale(1.0/h_omegaLineshape->Integral());
 			if(fitOption_omega>2) FitOmegaLineshape(drawOption);
@@ -164,13 +170,13 @@ class MggFitter {
 		// Set lineshape of rho background:
 		void SetRhoLineshape(TH1F *h1, int drawOption=0) { 
 			h_rhoLineshape = h1;
-			if(fitOption_rho==4) {
-				h_omegaLineshape->Add(h_rhoLineshape,10.0);
+			if(fitOption_rho==2) {
+				h_omegaLineshape->Add(h_rhoLineshape, m_RhoOmegaCSRatio);
 				h_omegaLineshape->Scale(1.0/h_omegaLineshape->Integral());
+				return;
 			}
-			else {
-				h_rhoLineshape->Scale(1.0/h_rhoLineshape->Integral());
-			}
+			
+			h_rhoLineshape->Scale(1.0/h_rhoLineshape->Integral());
 			return;
 		}
 		
@@ -286,7 +292,7 @@ class MggFitter {
 			return;
 		}
 		void GetFitFunction_Rho(TF1** f1, TString fname="rhoFit") {
-			if(fitOption_rho==0) return;
+			if(fitOption_rho!=1) return;
 			
 			TF1 *locf1;
 			InitializeFitFunction(&locf1,"locf1");

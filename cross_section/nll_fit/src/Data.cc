@@ -601,7 +601,7 @@ int EtaAnalyzer::LoadOmegaLineshape()
 		1, h_thrown->GetNbinsY());
 	
 	h_omegaLineshape->Scale(1.0/nThrown);
-	h_omegaLineshape->Scale(0.0835);
+	h_omegaLineshape->Scale(m_branchingFraction_omega_gpi0);
 	
 	mcFile->Close();
 	return 0;
@@ -648,8 +648,8 @@ int EtaAnalyzer::LoadRhoLineshape()
 	h_rho_geta->Scale(3.0);
 	
 	// scale by branching fractions:
-	h_rho_geta->Scale(0.00018); // rho0->g+eta->3g
-	h_rho_gpi0->Scale(0.00047); // rho0->g+pi0->3g
+	h_rho_geta->Scale(m_branchingFraction_rho0_geta); // rho0->g+eta->3g
+	h_rho_gpi0->Scale(m_branchingFraction_rho0_gpi0); // rho0->g+pi0->3g
 	
 	h_rhoLineshape = (TH2F*)h_rho_geta->Clone("rhoLineshape");
 	h_rhoLineshape->Add(h_rho_gpi0);

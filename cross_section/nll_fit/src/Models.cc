@@ -200,16 +200,14 @@ double MggFitter::model_omega(double locMgg, double *par)
 	double fOmega = 0., fRho = 0.;
 	int nParameters = 0;
 	
-	if(fitOption_rho==4) {
-		// Fit using simulated histogram:
+	if(fitOption_rho==2) {
+		// Rho0 and Omega backgrounds combined into a single lineshape
 		
 		double N    = par[0];
 		double dmu  = par[1];
 		nParameters = 2;
 		
-		if(N==0) fOmega = 0;
-		else fOmega = N * h_omegaLineshape->GetBinContent(h_omegaLineshape->FindBin(locMgg-dmu))
-			/ h_omegaLineshape->GetBinWidth(1);
+		fOmega = N * h_omegaLineshape->GetBinContent(h_omegaLineshape->FindBin(locMgg-dmu)) / h_omegaLineshape->GetBinWidth(1);
 		double locBinWidth = par[nParameters];
 		return fOmega*locBinWidth;
 	}
@@ -228,33 +226,27 @@ double MggFitter::model_omega(double locMgg, double *par)
 			double n     = par[4];
 			nParameters  = 5;
 			
-			if(N==0) fOmega = 0;
-			else fOmega = N * NormCrystalBall(locMgg, mu, sigma, alpha, n);
+			fOmega = N * NormCrystalBall(locMgg, mu, sigma, alpha, n);
 			break;
 		}
 		case 2:
 		{
 			// Fit using simulated histogram:
 			
-			double N     = par[0];
-			double dmu   = par[1];
-			nParameters  = 2;
-			
-			if(N==0) fOmega = 0;
-			else fOmega = N * h_omegaLineshape->GetBinContent(h_omegaLineshape->FindBin(locMgg-dmu))
-				/ h_omegaLineshape->GetBinWidth(1);
+			double N    = par[0];
+			double dmu  = par[1];
+			nParameters = 2;
+			fOmega = N * h_omegaLineshape->GetBinContent(h_omegaLineshape->FindBin(locMgg-dmu)) / h_omegaLineshape->GetBinWidth(1);
 			break;
 		}
 		case 3:
 		{
 			// Fit using lineshape extracted from simulated histogram:
 			
-			double N     = par[0];
-			double dmu   = par[1];
-			nParameters  = 2;
-			
-			if(N==0) fOmega = 0;
-			else fOmega = N * f_omegaLineshape->Eval(locMgg-dmu);
+			double N    = par[0];
+			double dmu  = par[1];
+			nParameters = 2;
+			fOmega = N * f_omegaLineshape->Eval(locMgg-dmu);
 			break;
 		}
 		case 4:
@@ -273,8 +265,7 @@ double MggFitter::model_omega(double locMgg, double *par)
 			double frac    = par[9];
 			nParameters    = 10;
 			
-			if(N==0) fOmega = 0;
-			else fOmega = N * ((1.0-frac)*NormCrystalBall(locMgg, mu1, sigma1, alpha1, n1) 
+			fOmega = N * ((1.0-frac)*NormCrystalBall(locMgg, mu1, sigma1, alpha1, n1) 
 				+ frac*NormCrystalBall(locMgg, mu2, sigma2, alpha2, n2));
 			break;
 		}
@@ -282,10 +273,10 @@ double MggFitter::model_omega(double locMgg, double *par)
 		{
 			// Fit using lineshape extracted from simulated histogram, but allow width to float:
 			
-			double N       = par[0];
-			double dmu     = par[1];
-			double xsigma  = par[2];
-			nParameters    = 3;
+			double N      = par[0];
+			double dmu    = par[1];
+			double xsigma = par[2];
+			nParameters   = 3;
 			
 			double    mu1 = f_omegaLineshape->GetParameter(0) - dmu;
 			double sigma1 = f_omegaLineshape->GetParameter(1) * xsigma;
@@ -297,101 +288,21 @@ double MggFitter::model_omega(double locMgg, double *par)
 			double     n2 = f_omegaLineshape->GetParameter(7);
 			double   frac = f_omegaLineshape->GetParameter(8);
 			
-			if(N==0) fOmega = 0;
-			else fOmega = N * ((1.0-frac)*NormCrystalBall(locMgg, mu1, sigma1, alpha1, n1) 
+			fOmega = N * ((1.0-frac)*NormCrystalBall(locMgg, mu1, sigma1, alpha1, n1) 
 				+ frac*NormCrystalBall(locMgg, mu2, sigma2, alpha2, n2));
 			break;
 		}
 	}
 	
-	// now get contribution from rho:
-	
 	switch(fitOption_rho) {
-		default:
+		case 0:
 			break;
 		case 1:
 		{
-			// Fit using lineshape extracted from simulated histogram:
-			
-			double N = par[nParameters];
-			nParameters++;
-			
-			double dmu;
-			switch(fitOption_omega) {
-				default:
-				{
-					dmu = par[nParameters];
-					nParameters++;
-					break;
-				}
-				case 1:
-				{
-					dmu = par[nParameters];
-					nParameters++;
-					break;
-				}
-				case 2:
-				{
-					dmu = par[1];
-					break;
-				}
-				case 3:
-				{
-					dmu = par[1];
-					break;
-				}
-				case 4:
-				{
-					dmu = par[nParameters];
-					nParameters++;
-					break;
-				}
-			}
-			
-			bool use_hist = true;
-			
-			if(N==0) fRho += 0;
-			else {
-				if(use_hist) {
-					fRho = N * h_rhoLineshape->GetBinContent(h_rhoLineshape->FindBin(locMgg-dmu))
-						/ h_rhoLineshape->GetBinWidth(h_rhoLineshape->FindBin(locMgg-dmu));
-				}
-				else {
-					fRho = N * f_rhoLineshape->Eval(locMgg-dmu);
-				}
-			}
-			break;
-		}
-		case 2:
-		{
-			// Fit using lineshape extracted from simulated histogram:
-			
-			double N = par[nParameters] * par[0];
-			nParameters++;
-			
-			double dmu = 0.;
-			if((fitOption_omega==2) || (fitOption_omega==3)) {
-				// this should always be the case for fitOption_rho=2!
-				dmu = par[1];
-			}
-			
-			bool use_hist = true;
-			
-			if(N==0) fRho += 0;
-			else {
-				if(use_hist) {
-					fRho = N * h_rhoLineshape->GetBinContent(h_rhoLineshape->FindBin(locMgg-dmu))
-						/ h_rhoLineshape->GetBinWidth(h_rhoLineshape->FindBin(locMgg-dmu));
-				}
-				else {
-					fRho = N * f_rhoLineshape->Eval(locMgg-dmu);
-				}
-			}
-			
-			double omega_switch = par[nParameters];
-			nParameters++;
-			
-			fOmega *= omega_switch;
+			double N   = par[nParameters+0];
+			double dmu = par[nParameters+1];
+			nParameters += 2;
+			fRho = N * h_rhoLineshape->GetBinContent(h_rhoLineshape->FindBin(locMgg-dmu)) / h_rhoLineshape->GetBinWidth(1);
 			break;
 		}
 	}
@@ -419,9 +330,11 @@ double MggFitter::model_em(double locMgg, double *par) {
 				fEM += locPar*pow(locMgg,dPar);
 			}
 			nParameters = (fitOption_poly+1);
+			fEM = pow(fEM,2.0);
 			break;
 		}
 		case 2:
+		case 3:
 		{
 			// exponential background:
 			double p0 = par[0];
@@ -433,7 +346,7 @@ double MggFitter::model_em(double locMgg, double *par) {
 			fEM = p0 * exp(p2*(locMgg - p1) + p3*pow(locMgg - p1,2.0));
 			break;
 		}
-		case 3:
+		case 4:
 		{
 			// Chebyshev polynomial:
 			for(int ipar=0; ipar<=fitOption_poly; ipar++) {
@@ -445,7 +358,7 @@ double MggFitter::model_em(double locMgg, double *par) {
 			fEM = f_chebyshev->Eval(locMgg);
 			break;
 		}
-		case 4:
+		case 5:
 		{
 			// Parametric approximation to dsigma/dM for e+e- pair production
 			fEM = (par[0]/locMgg) * (1.0 + 2.0*pow(0.000511/locMgg,2.0)) * (6.0*log(10.0/locMgg) + 4.0*log(2.0));

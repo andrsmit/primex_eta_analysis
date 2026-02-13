@@ -299,9 +299,9 @@ void MggFitter::GuessOmegaParameters(vector<double> &parGuesses)
 	NGuess -= (m_emptyFluxRatio * nEmptyBkgd);
 	if(NGuess < 0.0) NGuess = 0.0;
 	
-	if(fitOption_rho==4) {
+	if(fitOption_rho==2) {
 		parGuesses.push_back(NGuess);
-		parGuesses.push_back(lineshapeOffset);
+		parGuesses.push_back(0.005);
 	}
 	else {
 		// assume N_omega/(N_omega+N_rho) = 0.88:
@@ -315,12 +315,6 @@ void MggFitter::GuessOmegaParameters(vector<double> &parGuesses)
 			{
 				NGuess_omega = 0.9*NGuess;
 				NGuess_rho   = 0.1*NGuess;
-				break;
-			}
-			case 2:
-			{
-				NGuess_omega = 0.9*NGuess;
-				NGuess_rho   = 0.1;
 				break;
 			}
 		}
@@ -344,20 +338,20 @@ void MggFitter::GuessOmegaParameters(vector<double> &parGuesses)
 			{
 				// Lineshape fit: N, deltaMu
 				parGuesses.push_back(NGuess_omega);
-				parGuesses.push_back(lineshapeOffset);
+				parGuesses.push_back(0.005);
 				break;
 			}
 			case 3:
 			{
 				// Lineshape hist: N, deltaMu
 				parGuesses.push_back(NGuess_omega);
-				parGuesses.push_back(lineshapeOffset);
+				parGuesses.push_back(0.005);
 				break;
 			}
 			case 4:
 			{
 				// Double Crystal Ball: N, mu1, sigma1, alpha1, n1, (mu2-mu1), sigma2, alpha2, n2, frac
-				parGuesses.push_back(NGuess);
+				parGuesses.push_back(NGuess_omega);
 				parGuesses.push_back(f_omegaLineshape->GetParameter(0));
 				parGuesses.push_back(f_omegaLineshape->GetParameter(1));
 				parGuesses.push_back(f_omegaLineshape->GetParameter(2));
@@ -371,7 +365,7 @@ void MggFitter::GuessOmegaParameters(vector<double> &parGuesses)
 			}
 			case 5:
 			{
-				parGuesses.push_back(NGuess);
+				parGuesses.push_back(NGuess_omega);
 				parGuesses.push_back(0.0);
 				parGuesses.push_back(1.0);
 				break;
@@ -384,15 +378,7 @@ void MggFitter::GuessOmegaParameters(vector<double> &parGuesses)
 			case 1:
 			{
 				parGuesses.push_back(NGuess_rho);
-				if((fitOption_omega!=2) && (fitOption_omega!=3)) {
-					parGuesses.push_back(lineshapeOffset);
-				}
-				break;
-			}
-			case 2:
-			{
-				parGuesses.push_back(NGuess_rho);
-				parGuesses.push_back(1.0); // a switch to turn off contribution from omega
+				parGuesses.push_back(0.005);
 				break;
 			}
 		}
@@ -415,6 +401,7 @@ void MggFitter::GuessEMParameters(vector<double> &parGuesses)
 			break;
 		}
 		case 2:
+		case 3:
 		{
 			// Exponential:
 			double p0Guess = 0.0;
@@ -468,13 +455,13 @@ void MggFitter::GuessEMParameters(vector<double> &parGuesses)
 			parGuesses.push_back(0.0);
 			break;
 		}
-		case 3:
+		case 4:
 		{
 			// Chebyshev polynomial:
 			for(int ipar=0; ipar<=fitOption_poly; ipar++) parGuesses.push_back(0.0001);
 			break;
 		}
-		case 4:
+		case 5:
 		{
 			// Parametric approximation to dsigma/dM for e+e- pair production
 			parGuesses.push_back(0.0);

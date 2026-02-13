@@ -96,7 +96,7 @@ int MggFitter::InitializeEmptyWideFitParameters()
 	}
 	
 	// omega from gas:
-	if(fitOption_rho==4) {
+	if(fitOption_rho==2) {
 		f_emptyWide->FixParameter(nParameters+0, 0.000);
 		f_emptyWide->FixParameter(nParameters+1, 0.000);
 		nParameters += 2;
@@ -159,20 +159,9 @@ int MggFitter::InitializeEmptyWideFitParameters()
 				break;
 			case 1:
 			{
-				f_emptyWide->FixParameter(nParameters, 0.000);
-				nParameters++;
-				if((fitOption_omega!=2) && (fitOption_omega!=3)) {
-					f_emptyWide->FixParameter(nParameters, 0.000);
-					nParameters++;
-				}
-				break;
-			}
-			case 2:
-			{
-				f_emptyWide->FixParameter(nParameters, 0.000);
-				nParameters++;
-				f_emptyWide->FixParameter(nParameters, 1.000);
-				nParameters++;
+				f_emptyWide->FixParameter(nParameters+0, 0.000);
+				f_emptyWide->FixParameter(nParameters+1, 0.000);
+				nParameters += 2;
 				break;
 			}
 		}
@@ -191,10 +180,14 @@ int MggFitter::InitializeEmptyWideFitParameters()
 			nParameters += 4;
 			break;
 		case 3:
+			for(int ipar=0; ipar<4; ipar++) f_emptyWide->FixParameter(nParameters+ipar, 0.0);
+			nParameters += 4;
+			break;
+		case 4:
 			for(int ipar=0; ipar<=fitOption_poly; ipar++) f_emptyWide->FixParameter(nParameters+ipar, 0.0001);
 			nParameters += (fitOption_poly+1);
 			break;
-		case 4:
+		case 5:
 			f_emptyWide->FixParameter(nParameters, 0.0);
 			nParameters += 1;
 			break;

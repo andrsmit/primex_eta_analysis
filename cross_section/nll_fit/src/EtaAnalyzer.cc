@@ -151,7 +151,7 @@ void EtaAnalyzer::SetFitOption_signal(int option)
 }
 void EtaAnalyzer::SetFitOption_bkgd(int option) 
 {
-	if((option<0) || (option>4)) {
+	if((option<0) || (option>5)) {
 		printf("\nUnsupported background fit option provided (should be 1-5). Using default option: %d\n", m_fitOption_bkgd);
 	}
 	else {
@@ -177,32 +177,26 @@ void EtaAnalyzer::SetFitOption_omega(int option)
 	}
 	else {
 		m_fitOption_omega = option;
+		if((option==0) && (m_maxFitRange>0.72)) m_fitOption_omega = 1;
 	}
 	return;
 }
 void EtaAnalyzer::SetFitOption_rho(int option)
 {
-	if((option<0) || (option>4)) {
+	if((option<0) || (option>2)) {
 		printf("\nUnsupported rho fit option provided (should be 0-2). Using default option: %d\n", m_fitOption_rho);
 	}
 	else {
 		m_fitOption_rho = option;
 		if(m_fitOption_rho==2) {
-			if((m_fitOption_omega!=2) && (m_fitOption_omega!=3)) {
-				printf("\nWARNING: Inconsistent rho+omega fit options provided. Setting fitOption_omega=3, fitOption_rho=2\n");
-				m_fitOption_omega==3;
-			}
-		}
-		else if(m_fitOption_rho==4) {
-			if((m_fitOption_omega!=2) && (m_fitOption_omega!=3)) {
-				printf("\nWARNING: Inconsistent rho+omega fit options provided. Setting fitOption_omega=3, fitOption_rho=4\n");
-				m_fitOption_omega==3;
+			if(m_fitOption_omega!=2) {
+				printf("\nWARNING: Inconsistent rho+omega fit options provided. Setting fitOption_omega=2, fitOption_rho=2\n");
+				m_fitOption_omega==2;
 			}
 		}
 	}
 	
 	if(m_fitOption_omega==0) m_fitOption_rho = 0;
-	
 	return;
 }
 void EtaAnalyzer::SetFitOption_etap(int option)
@@ -275,22 +269,14 @@ void EtaAnalyzer::SetEmptyFitOption_bkgd(int option)
 void EtaAnalyzer::SetFitRange(double min, double max)
 {
 	double locMin = 0.30;
-	//if(m_phase==1) locMin = 0.30;
-	//else           locMin = 0.40;
-	
 	m_minFitRange = min < locMin ? locMin : min;
 	m_maxFitRange = max;
-	
-	if((m_maxFitRange>0.72) && (m_fitOption_omega==0)) m_fitOption_omega = 1;
 	return;
 }
 
 void EtaAnalyzer::SetEmptyFitRange(double min, double max)
 {
 	double locMin = 0.30;
-	//if(m_phase==1) locMin = 0.30;
-	//else           locMin = 0.40;
-	
 	m_minEmptyFitRange = min < locMin ? locMin : min;
 	m_maxEmptyFitRange = max;
 	return;
@@ -378,10 +364,16 @@ TString EtaAnalyzer::GetFitOptionStr(int option)
 					optString = Form("polynomial (order %d)", m_fitOption_poly);
 					break;
 				case 2:
-					optString = "exponential";
+					optString = "exponential (only normalization is floating)";
 					break;
 				case 3:
+					optString = "exponential (all parameters are floating)";
+					break;
+				case 4:
 					optString = Form("Chebyshev polynomial (order %d)", m_fitOption_poly);
+					break;
+				case 5:
+					optString = "Analtical expression for Bethe-Heitler background";
 					break;
 			}
 			break;
@@ -441,6 +433,8 @@ TString EtaAnalyzer::GetBkgdFitName()
 		case 2:
 			return "exponential";
 		case 3:
+			return "exponential";
+		case 4:
 			switch(m_fitOption_poly) {
 				case 1:
 					return "1st order poly";
@@ -452,6 +446,8 @@ TString EtaAnalyzer::GetBkgdFitName()
 					return Form("%dth order poly", m_fitOption_poly);
 			}
 			break;
+		case 5:
+			return "Bethe-Heitler (analytical)";
 	}
 	TString locString = "";
 	return locString;
@@ -655,8 +651,11 @@ void EtaAnalyzer::ExtractAngularYield(MggFitter &locFitter, int drawOption)
 		// Signal MC Lineshape
 		
 		// fraction of incoherent cross section in this angular bin:
-		locFitter.incFraction_theory = h_incFraction->GetBinContent(h_incFraction->FindBin(locAngle+1.e-6));
-		
+		if(m_lineshapeOption==1) {
+			locFitter.incFraction_theory = 1.0;
+		} else {
+			locFitter.incFraction_theory = h_incFraction->GetBinContent(h_incFraction->FindBin(locAngle+1.e-6));
+		}
 		locFitter.lineshapeOffset = m_lineshapeOffset;
 		
 		// Coherent MC:
@@ -684,9 +683,12 @@ void EtaAnalyzer::ExtractAngularYield(MggFitter &locFitter, int drawOption)
 		locFitter.SetQFLineshape(hEtaQF);
 		
 		//----------------------------------------------//
-		// Omega Lineshape
+		// Omega + Rho Lineshapes:
 		
-		lineshapeWindowSize = 0.10;
+		TH1F *hOmega = nullptr;
+		TH1F *hRho   = nullptr;
+		
+		lineshapeWindowSize = 0.25;
 		if(lineshapeWindowSize < m_angularBin[iThetaBin].second) {
 			lineshapeWindowSize = m_angularBin[iThetaBin].second;
 		}
@@ -697,30 +699,18 @@ void EtaAnalyzer::ExtractAngularYield(MggFitter &locFitter, int drawOption)
 			lineshapeAngleLow  = 0.00;
 			lineshapeAngleHigh = 2.0*lineshapeWindowSize;
 		}
-		TH1F *hOmega = (TH1F*)h_omegaLineshape->ProjectionY("hOmega",
-			h_omegaLineshape->GetXaxis()->FindBin(lineshapeAngleLow),
-			h_omegaLineshape->GetXaxis()->FindBin(lineshapeAngleHigh)-1, "e");
-		hOmega->Rebin(m_rebinsMgg);
-		hOmega->Scale((locMaxAngle-locMinAngle)/(2.0*lineshapeWindowSize));
-		locFitter.SetOmegaLineshape(hOmega);
 		
-		//----------------------------------------------//
-		// Rho Lineshape
+		if(m_fitOption_omega>0) {
+			hOmega = (TH1F*)h_omegaLineshape->ProjectionY("hOmega",
+				h_omegaLineshape->GetXaxis()->FindBin(lineshapeAngleLow),
+				h_omegaLineshape->GetXaxis()->FindBin(lineshapeAngleHigh)-1, "e");
+			hOmega->Rebin(m_rebinsMgg);
+			hOmega->Scale((locMaxAngle-locMinAngle)/(2.0*lineshapeWindowSize));
+			locFitter.SetOmegaLineshape(hOmega);
+		}
 		
-		if(m_fitOption_rho==4)
-		{
-			lineshapeWindowSize = 0.10;
-			if(lineshapeWindowSize < m_angularBin[iThetaBin].second) {
-				lineshapeWindowSize = m_angularBin[iThetaBin].second;
-			}
-			
-			lineshapeAngleLow  = locAngle - lineshapeWindowSize;
-			lineshapeAngleHigh = locAngle + lineshapeWindowSize;
-			if(lineshapeAngleLow < 0.0) {
-				lineshapeAngleLow  = 0.00;
-				lineshapeAngleHigh = 2.0*lineshapeWindowSize;
-			}
-			TH1F *hRho = (TH1F*)h_rhoLineshape->ProjectionY("hRho",
+		if(m_fitOption_rho>0) {
+			hRho = (TH1F*)h_rhoLineshape->ProjectionY("hRho",
 				h_rhoLineshape->GetXaxis()->FindBin(lineshapeAngleLow),
 				h_rhoLineshape->GetXaxis()->FindBin(lineshapeAngleHigh)-1, "e");
 			hRho->Rebin(m_rebinsMgg);
@@ -1148,7 +1138,8 @@ void EtaAnalyzer::ExtractAngularYield(MggFitter &locFitter, int drawOption)
 		delete hEtaQF;
 		delete hEtaPionBkgd;
 		delete hHadronicBkgd;
-		delete hOmega;
+		if(hOmega) delete hOmega;
+		if(hRho) delete hRho;
 		
 	}
 	
@@ -1984,7 +1975,9 @@ void InitializeMggFitter(MggFitter &fitter, EtaAnalyzer *anaObj, double angle, d
 
 void EtaAnalyzer::WriteROOTFile(TString fileName)
 {
-	TFile *fOut = new TFile(fileName.Data(), "RECREATE");
+	TString locFileName = fileName=="" ? m_outputFileName : fileName;
+	
+	TFile *fOut = new TFile(locFileName.Data(), "RECREATE");
 	fOut->cd();
 	
 	// Angular Yield:
