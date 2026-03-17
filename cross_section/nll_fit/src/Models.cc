@@ -461,8 +461,8 @@ double MggFitter::model_beamline(double locMgg, double *par) {
 		case 1:
 		{
 			// Gaussian functions for each structure:
-			
-			for(int i=0; i<m_muFDC.size(); i++) {
+			int n_fdc = static_cast<int>(m_muFDC.size());
+			for(int i=0; i<n_fdc; i++) {
 				double N     = par[nParameters+0];
 				double mu    = par[nParameters+1];
 				double sigma = par[nParameters+2];

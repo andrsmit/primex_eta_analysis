@@ -37,9 +37,9 @@ struct YieldFitter::CombinedChi2 {
 	
 	YieldFitter *fitter;
 	
+	vector<vector<int>> parIndices;
 	double x1, x2;
 	int nHists;
-	vector<vector<int>> parIndices;
 	
 	// Pre-computed data:
 	vector<vector<double>> binMin;
@@ -66,7 +66,6 @@ struct YieldFitter::CombinedChi2 {
 		
 		for(int ih=0; ih<nHists; ih++) {
 			TH1F *h = fitter->h_dNdTheta[ih];
-			int nb = h->GetNbinsX();
 			
 			int minBin = h->GetXaxis()->FindBin(x1);
 			int maxBin = h->GetXaxis()->FindBin(x2);
@@ -78,7 +77,7 @@ struct YieldFitter::CombinedChi2 {
 			meas[ih].resize(useBins);
 			err[ih].resize(useBins);
 			
-			for (int ib = minBin; ib <= maxBin; ib++) {
+			for(int ib=minBin; ib<=maxBin; ib++) {
 				int j = ib - minBin;
 				
 				double center = h->GetBinCenter(ib);
@@ -99,11 +98,11 @@ struct YieldFitter::CombinedChi2 {
 	double operator()(const double* p) const
 	{
 		// Build local parameter groups (no dynamic allocation)
-		for (int ih = 0; ih < nHists; ih++) {
+		for(int ih=0; ih<nHists; ih++) {
 			auto& v = pars[ih];
 			const auto& idx = parIndices[ih];
 			v.resize(idx.size());
-			for (int k = 0; k < idx.size(); k++) {
+			for(size_t k = 0; k < idx.size(); k++) {
 				v[k] = p[idx[k]];
 			}
 		}
@@ -113,52 +112,18 @@ struct YieldFitter::CombinedChi2 {
 		// loop over all histograms and compute chi2:
 		
 		for(int ih=0; ih<nHists; ih++) {
-			
 			const auto& bmin = binMin[ih];
 			const auto& bmax = binMax[ih];
 			const auto& y    = meas[ih];
 			const auto& e    = err[ih];
 			
-			for (int j = 0; j < bmin.size(); j++) {
+			for(size_t j=0; j<bmin.size(); j++) {
 				
 				double expYield = fitter->GetExpectedYieldFast(bmin[j], bmax[j], ih, pars[ih].data());
 				
 				double diff = y[j] - expYield;
 				chi2 += (diff * diff) / (e[j] * e[j]);
 			}
-			
-			
-			// loop over all bins within fit range:
-			/*
-			int locNbins = fitter->h_dNdTheta[ih]->GetXaxis()->GetNbins();
-			double locBinSize = fitter->h_dNdTheta[ih]->GetXaxis()->GetBinWidth(1);
-			
-			double minEnergy = fitter->m_energyBins[ih].first;
-			double maxEnergy = fitter->m_energyBins[ih].second;
-			
-			int minBin = fitter->h_dNdTheta[ih]->GetXaxis()->FindBin(x1);
-			int maxBin = fitter->h_dNdTheta[ih]->GetXaxis()->FindBin(x2);
-			
-			for(int ibin=minBin; ibin<=maxBin; ibin++)
-			{
-				double minAngle = fitter->h_dNdTheta[ih]->GetXaxis()->GetBinCenter(ibin) 
-					- 0.5*fitter->h_dNdTheta[ih]->GetXaxis()->GetBinWidth(ibin);
-				double maxAngle = fitter->h_dNdTheta[ih]->GetXaxis()->GetBinCenter(ibin) 
-					+ 0.5*fitter->h_dNdTheta[ih]->GetXaxis()->GetBinWidth(ibin);
-				
-				double measYield    = fitter->h_dNdTheta[ih]->GetBinContent(ibin);
-				double measYieldErr = fitter->h_dNdTheta[ih]->GetBinError(ibin);
-				if(measYieldErr < sqrt(measYield)) measYieldErr = sqrt(measYield);
-				
-				double expYield = fitter->GetExpectedYield(minAngle, maxAngle, ih, pars[ih].data());
-				
-				//printf("%.2f-%.2f  (%.1f GeV - %.1f GeV):\n", minAngle, maxAngle, minEnergy, maxEnergy);
-				//printf("  Measured Yield: %f +/- %f\n", measYield, measYieldErr);
-				//printf("  Expected Yield: %f\n", expYield);
-				
-				chi2 += pow((measYield - expYield)/measYieldErr, 2.0);
-			}
-			*/
 		}
 		
 		return chi2;
@@ -226,14 +191,19 @@ void YieldFitter::InitializeParameterArrays()
 			nParameters += 2;
 		}
 		
+		if(m_model==SGEVORKYAN_AP_INC_FIT) {
+			locParIndices.push_back(nParameters);
+			nParameters += 1;
+			m_parameterList.push_back(Form("a_{p,Inc,%d}",ih));
+		}
+		
 		m_parIndices.push_back(locParIndices);
 	}
 }
 
 void YieldFitter::InitializeFitParameters(ROOT::Fit::Fitter &fitter)
 {
-	int nParameters      = 0;
-	int nTotalParameters = (int)m_parameterList.size();
+	int nParameters = 0;
 	
 	// Gamma:
 	fitter.Config().ParSettings(nParameters).Set(m_parameterList[nParameters].Data(), f_dNdTheta[0]->GetParameter(1));
@@ -250,10 +220,7 @@ void YieldFitter::InitializeFitParameters(ROOT::Fit::Fitter &fitter)
 	for(int ih=0; ih<(int)f_dNdTheta.size(); ih++) {
 		for(int ipar=3; ipar<f_dNdTheta[ih]->GetNpar(); ipar++) {
 			fitter.Config().ParSettings(nParameters).Set(m_parameterList[nParameters].Data(), f_dNdTheta[ih]->GetParameter(ipar));
-			
-			int minLimit = 0.0, maxLimit = 2.5;
 			fitter.Config().ParSettings(nParameters).Release();
-			fitter.Config().ParSettings(nParameters).SetLimits(minLimit, maxLimit);
 			nParameters++;
 		}
 	}
@@ -449,7 +416,10 @@ void YieldFitter::FitAngularYield(double minFitRange, double maxFitRange, TStrin
 		locFunc->SetParameter(2, 0.5*TMath::Pi()*TMath::RadToDeg());
 		locFunc->SetParameter(3, 1.0);
 		locFunc->SetParameter(4, 1.0);
-		if(m_components.size()==4) locFunc->SetParameter(5, 1.0);
+		if(m_components.size()==4) {
+			locFunc->SetParameter(5, 1.0);
+		}
+		if(m_model==SGEVORKYAN_AP_INC_FIT) locFunc->SetParameter(5, 7.5);
 		
 		f_dNdTheta.push_back(locFunc);
 	}
@@ -482,8 +452,29 @@ void YieldFitter::FitAngularYield(double minFitRange, double maxFitRange, TStrin
 	DumpFitParameters(locFitter);
 	
 	//---------------------------------------------//
-	// fix decay width:
+	// fix incoherent normalization:
 	/*
+	for(int ih=0; ih<nHists; ih++) {
+		int incPar = (int)(find(m_parameterList.begin(), m_parameterList.end(), Form("A_{Inc,%d}",ih)) - m_parameterList.begin());
+		if(incPar >= m_parameterList.size()) continue;
+		
+		locFitter.Config().ParSettings(incPar).Set(locFitter.Config().ParSettings(incPar).Name(), 0.815578);
+		locFitter.Config().ParSettings(incPar).Fix();
+	}
+	*/
+	for(int ih=0; ih<nHists; ih++) {
+		int incPar = (int)(find(m_parameterList.begin(), m_parameterList.end(), Form("a_{p,Inc,%d}",ih)) - m_parameterList.begin());
+		if(incPar >= static_cast<int>(m_parameterList.size())) continue;
+		
+		locFitter.Config().ParSettings(incPar).Set(locFitter.Config().ParSettings(incPar).Name(), 7.83416);
+		locFitter.Config().ParSettings(incPar).Fix();
+	}
+	
+	
+	/*
+	//---------------------------------------------//
+	// fix decay width:
+	
 	for(int ih=0; ih<nHists; ih++) {
 		int phiPar = (int)(find(m_parameterList.begin(), m_parameterList.end(), "#Gamma(#eta#rightarrow#gamma#gamma)[keV]") 
 			- m_parameterList.begin());
@@ -500,7 +491,7 @@ void YieldFitter::FitAngularYield(double minFitRange, double maxFitRange, TStrin
 		int phiPar = (int)(find(m_parameterList.begin(), m_parameterList.end(), "#phi[#circ]") - m_parameterList.begin());
 		if(phiPar >= m_parameterList.size()) continue;
 		
-		locFitter.Config().ParSettings(phiPar).Set(locFitter.Config().ParSettings(phiPar).Name(), 38.0);
+		locFitter.Config().ParSettings(phiPar).Set(locFitter.Config().ParSettings(phiPar).Name(), 55.0);
 		locFitter.Config().ParSettings(phiPar).Fix();
 	}
 	
@@ -519,29 +510,89 @@ void YieldFitter::FitAngularYield(double minFitRange, double maxFitRange, TStrin
 	// fix incoherent normalization:
 	
 	for(int ih=0; ih<nHists; ih++) {
-		int phiPar = (int)(find(m_parameterList.begin(), m_parameterList.end(), Form("A_{Inc,%d}",ih)) - m_parameterList.begin());
-		if(phiPar >= m_parameterList.size()) continue;
+		int incPar = (int)(find(m_parameterList.begin(), m_parameterList.end(), Form("A_{Inc,%d}",ih)) - m_parameterList.begin());
+		if(incPar >= m_parameterList.size()) continue;
 		
-		locFitter.Config().ParSettings(phiPar).Set(locFitter.Config().ParSettings(phiPar).Name(), 0.624);
-		locFitter.Config().ParSettings(phiPar).Fix();
+		locFitter.Config().ParSettings(incPar).Set(locFitter.Config().ParSettings(incPar).Name(), 0.624);
+		locFitter.Config().ParSettings(incPar).Fix();
+	}
+	
+	for(int ih=0; ih<nHists; ih++) {
+		int incPar = (int)(find(m_parameterList.begin(), m_parameterList.end(), Form("a_{p,Inc,%d}",ih)) - m_parameterList.begin());
+		if(incPar >= m_parameterList.size()) continue;
+		
+		locFitter.Config().ParSettings(incPar).Set(locFitter.Config().ParSettings(incPar).Name(), 7.5);
+		locFitter.Config().ParSettings(incPar).Fix();
 	}
 	*/
 	//---------------------------------------------//
+	/*
+	locFitter.FitFCN();
+	auto firstResult = locFitter.Result();
 	
+	// fix incoherent and focus on forward angles:
+	
+	CombinedChi2 locChiSq2(this, m_parIndices, 0.0, 1.0);
+	
+	ROOT::Math::Functor locFCN2(locChiSq2, locNPars);
+	
+	ROOT::Fit::Fitter locFitter2;
+	locFitter2.Config().SetMinimizer("Minuit2", "Migrad");
+	locFitter2.Config().MinimizerOptions().SetPrintLevel(0);
+	locFitter2.Config().MinimizerOptions().SetDefaultErrorDef(0.5);
+	locFitter2.SetFCN(locFCN2);
+	locFitter2.Config().SetParamsSettings(locNPars, dummyPars.data());
+	
+	InitializeFitParameters(locFitter2);
+	
+	printf("Parameter settings after first fit:\n");
+	DumpFitParameters(locFitter);
+	
+	for(int i=0; i<firstResult.NPar(); i++)
+		locFitter2.Config().ParSettings(i).SetValue(firstResult.Parameter(i));
+	
+	for(int ih=0; ih<nHists; ih++) {
+		int incPar = (int)(find(m_parameterList.begin(), m_parameterList.end(), Form("A_{Inc,%d}",ih)) 
+			- m_parameterList.begin());
+		if(incPar >= m_parameterList.size()) continue;
+		locFitter2.Config().ParSettings(incPar).Fix();
+	}
+	
+	printf("Parameter settings after first fit:\n");
+	DumpFitParameters(locFitter2);
+	
+	bool ok = locFitter2.FitFCN();
+	*/
 	bool ok = locFitter.FitFCN();
+	if(!ok) {
+		printf("\nInvalid fit result!\n");
+	}
 	
 	auto result = locFitter.Result();
 	result.Print(std::cout);
 	
 	if(outputFileName=="") {
 		if(m_model==SGEVORKYAN_SIGMA_VAR) {
-			outputFileName = Form("fit_results_sigma_%d",m_sigmaVer);
+			outputFileName = Form("fit_results_sigma_%02d",m_sigmaVer);
 		}
 		else if(m_model==SGEVORKYAN_AP_VAR) {
-			outputFileName = Form("fit_results_ap_%d",m_apVer);
+			if(m_apVer==m_apVer_inc) {
+				outputFileName = Form("fit_results_ap_%02d",m_apVer);
+			} else {
+				outputFileName = Form("fit_results_ap_%02d_inc_%d",m_apVer,m_apVer_inc);
+			}
 		}
-		else if(m_model==SGEVORKYAN_STRONG_RADIUS_VAR) {
-			outputFileName = Form("fit_results_strongRadius_%s",m_strongRadiusStr.Data());
+		else if(m_model==SGEVORKYAN_AS_VAR) {
+			outputFileName = Form("fit_results_as_%d",m_asVer);
+		}
+		else if(m_model==SGEVORKYAN_RADIUS_VAR) {
+			outputFileName = Form("fit_results_radius_%02d",m_radiusVer);
+		}
+		else if(m_model==SGEVORKYAN_DENSITY_VAR) {
+			outputFileName = Form("fit_results_density_ver%02d",m_densityVer);
+		}
+		else if(m_model==SGEVORKYAN_AP_INC_FIT) {
+			outputFileName = Form("fit_results_ap_inc_fit_ap_coh_%02d",m_apVer);
 		}
 	}
 	
@@ -627,6 +678,9 @@ void YieldFitter::DrawFitResult(double min, double max, TString fileName)
 		
 		h_dNdTheta[ih]->GetYaxis()->SetMaxDigits(2);
 		
+		h_dNdTheta[ih]->SetMarkerColor(kAzure-5);
+		h_dNdTheta[ih]->SetLineColor(kAzure-5);
+		
 		double locMax = 0.0;
 		for(int ibin=2; ibin<h_dNdTheta[ih]->GetXaxis()->GetNbins(); ibin++) {
 			if(h_dNdTheta[ih]->GetXaxis()->GetBinCenter(ibin)>4.0) continue;
@@ -636,22 +690,25 @@ void YieldFitter::DrawFitResult(double min, double max, TString fileName)
 			if(locC > (locC1+locC2)) continue;
 			if(locC > locMax) locMax = locC;
 		}
-		h_dNdTheta[ih]->GetYaxis()->SetRangeUser(0.0, 1.2*locMax);
+		h_dNdTheta[ih]->GetYaxis()->SetRangeUser(0.0, 1.1*locMax);
 		
 		//-----------------------------------------//
 		// Create pull distribution:
 		
 		TH1F *h_pull = (TH1F*)h_dNdTheta[ih]->Clone(Form("yield_fit_pull_%d",ih));
+		
 		for(int ibin=1; ibin<=h_pull->GetXaxis()->GetNbins(); ibin++) {
 			double y = h_dNdTheta[ih]->GetBinContent(ibin);
 			double e = h_dNdTheta[ih]->GetBinError(ibin);
+			if(e!=e) e = sqrt(y);
+			if(e<sqrt(y)) e = sqrt(y);
 			double f = f_dNdTheta[ih]->Eval(h_dNdTheta[ih]->GetBinCenter(ibin));
 			
 			if(e!=e || e<1.0) e = sqrt(y);
 			h_pull->SetBinContent(ibin, (y-f)/e);
 			h_pull->SetBinError(ibin, 1.0);
 		}
-		h_pull->GetYaxis()->SetRangeUser(-7.0,7.0);
+		h_pull->GetYaxis()->SetRangeUser(-9.0,9.0);
 		
 		h_pull->GetXaxis()->SetTitleSize(0.15);
 		h_pull->GetXaxis()->SetLabelSize(0.10);
@@ -665,25 +722,29 @@ void YieldFitter::DrawFitResult(double min, double max, TString fileName)
 		
 		TF1 *fDraw, *fPrim, *fCoh, *fInc, *fInt, *fQFN;
 		
-		InitializeFitFunction(&fDraw, Form("f_Draw_%d",ih),         kBlack,   2, 3);
-		InitializeFitFunction(&fPrim, Form("f_Primakoff_%d",ih),    kRed,     2, 2);
-		InitializeFitFunction(&fCoh,  Form("f_Coherent_%d",ih),     kBlue,    2, 2);
-		InitializeFitFunction_Interference(&fInt,  Form("f_Interference_%d",ih), kMagenta, 2, 2);
+		InitializeFitFunction(&fDraw, Form("f_Draw_%d",ih),         kBlack,   7, 3);
+		InitializeFitFunction(&fPrim, Form("f_Primakoff_%d",ih),    kRed,     3, 2);
+		InitializeFitFunction(&fCoh,  Form("f_Coherent_%d",ih),     kBlue,    3, 2);
+		InitializeFitFunction_Interference(&fInt,  Form("f_Interference_%d",ih), kMagenta, 3, 2);
 		if(m_components.size()==4) {
-			InitializeFitFunction(&fInc, Form("f_QuasifreeProton_%d",ih),  kGreen,   2, 2);
-			InitializeFitFunction(&fQFN, Form("f_QuasifreeNeutron_%d",ih), kGreen-7, 2, 2);
+			InitializeFitFunction(&fInc, Form("f_QuasifreeProton_%d",ih),  kGreen,   3, 2);
+			InitializeFitFunction(&fQFN, Form("f_QuasifreeNeutron_%d",ih), kGreen-7, 3, 2);
 		}
 		else {
-			InitializeFitFunction(&fInc, Form("f_Incoherent_%d",ih), kGreen, 2, 2);
+			InitializeFitFunction(&fInc, Form("f_Incoherent_%d",ih), kGreen, 3, 2);
 		}
 		
 		fDraw->SetParameters(f_dNdTheta[ih]->GetParameters());
-		fPrim->SetParameters(ih, f_dNdTheta[ih]->GetParameter(1), f_dNdTheta[ih]->GetParameter(2), 0.0, 0.0, 0.0);
-		fCoh->SetParameters(ih, 0.0, f_dNdTheta[ih]->GetParameter(2), f_dNdTheta[ih]->GetParameter(3), 0.0, 0.0);
+		fPrim->SetParameters(f_dNdTheta[ih]->GetParameters());
+		fCoh->SetParameters(f_dNdTheta[ih]->GetParameters());
 		fInt->SetParameters(f_dNdTheta[ih]->GetParameters());
+		fInc->SetParameters(f_dNdTheta[ih]->GetParameters());
 		
-		fInc->SetParameters(ih, 0.0, 0.0, 0.0, f_dNdTheta[ih]->GetParameter(4), 0.0);
-		if(m_components.size()>3) fQFN->SetParameters(ih, 0.0, 0.0, 0.0, 0.0, f_dNdTheta[ih]->GetParameter(5));
+		for(int i=1; i<f_dNdTheta[ih]->GetNpar(); i++) {
+			if(i!=1) fPrim->SetParameter(i,0.0);
+			if(i!=3) fCoh->SetParameter(i,0.0);
+			if(i<4)  fInc->SetParameter(i,0.0);
+		}
 		
 		//-----------------------------------------//
 		// Draw everything:
@@ -745,9 +806,8 @@ void YieldFitter::WriteOutputASCII(int ndf, ROOT::Fit::FitResult result, TString
 	if(fileName=="") return;
 	
 	ofstream outf(Form("%s.txt",fileName.Data()));
-	char buf[256];
-	
-	for(int ipar=0; ipar<result.NPar(); ipar++) {
+	int npars = static_cast<int>(result.NPar());
+	for(int ipar=0; ipar<npars; ipar++) {
 		
 		int precisionVal = 5;
 		if(result.Parameter(ipar)>100.0) {
@@ -793,6 +853,8 @@ void YieldFitter::InitializeFitFunction(TF1 **f1, TString funcName, int lineColo
 	
 	int nParameters = 1 + m_components.size() + 1;
 	
+	if(m_model==SGEVORKYAN_AP_INC_FIT) nParameters += 1;
+	
 	*f1 = new TF1(funcName.Data(), this, &YieldFitter::YieldFitFunction, m_minReconAngle, m_maxReconAngle, nParameters);
 	
 	// set names for each parameter:
@@ -810,6 +872,10 @@ void YieldFitter::InitializeFitFunction(TF1 **f1, TString funcName, int lineColo
 		(*f1)->SetParName(4, "A_{Inc}");
 	}
 	
+	if(m_model==SGEVORKYAN_AP_INC_FIT) {
+		(*f1)->SetParName(nParameters-1, "a_{p,Inc}");
+	}
+	
 	(*f1)->SetLineColor(lineColor);
 	(*f1)->SetLineStyle(lineStyle);
 	(*f1)->SetLineWidth(lineWidth);
@@ -822,6 +888,8 @@ void YieldFitter::InitializeFitFunction_Interference(TF1 **f1, TString funcName,
 	// initialize fit function for each angular bin:
 	
 	int nParameters = 1 + m_components.size() + 1;
+	
+	if(m_model==SGEVORKYAN_AP_INC_FIT) nParameters += 1;
 	
 	*f1 = new TF1(funcName.Data(), this, &YieldFitter::YieldFitFunction_Interference, m_minReconAngle, m_maxReconAngle, nParameters);
 	
@@ -838,6 +906,10 @@ void YieldFitter::InitializeFitFunction_Interference(TF1 **f1, TString funcName,
 	}
 	else {
 		(*f1)->SetParName(4, "A_{Inc}");
+	}
+	
+	if(m_model==SGEVORKYAN_AP_INC_FIT) {
+		(*f1)->SetParName(nParameters-1, "a_{p,Inc}");
 	}
 	
 	(*f1)->SetLineColor(lineColor);
@@ -913,8 +985,11 @@ int YieldFitter::LoadTheoryHists()
 		}
 		case SGEVORKYAN_UPD_V2:
 		{
-			for(int i=0; i<nComponents; i++) 
-				theoryFileNames[i] = "/work/halld/home/andrsmit/primex_eta_analysis/theory/sgevorkyan/farm/rootFiles/he4-eta-xs-sgevorkyan-v2.root";
+			for(int i=0; i<nComponents; i++) {
+				theoryFileNames[i] = 
+					"/work/halld/home/andrsmit/primex_eta_analysis/theory/sgevorkyan/systematics/density_models/he4-eta-xs-sgevorkyan-ver03.root";
+				//theoryFileNames[i] = "/work/halld/home/andrsmit/primex_eta_analysis/theory/sgevorkyan/farm/rootFiles/he4-eta-xs-sgevorkyan-v2.root";
+			}
 			break;
 		}
 		case SGEVORKYAN_UPD_V3:
@@ -940,26 +1015,59 @@ int YieldFitter::LoadTheoryHists()
 		}
 		case SGEVORKYAN_AP_VAR:
 		{
-			for(int i=0; i<(nComponents-1); i++) {
-				theoryFileNames[i] = Form(
-					"/work/halld/home/andrsmit/primex_eta_analysis/theory/sgevorkyan/farm/ap_variations/he4-eta-xs-sgevorkyan-v%d.root", 
-					m_apVer);
+			TString locPathName = "/work/halld/home/andrsmit/primex_eta_analysis/theory/sgevorkyan/systematics/ap_variations/ver01";
+			for(int i=0; i<nComponents; i++) {
+				theoryFileNames[i] = Form("%s/he4-eta-xs-sgevorkyan-ap_%02d.root", locPathName.Data(), m_apVer);
 			}
-			theoryFileNames[nComponents-1] = 
-				"/work/halld/home/andrsmit/primex_eta_analysis/theory/sgevorkyan/farm/rootFiles/he4-eta-xs-sgevorkyan-v2.root";
+			theoryFileNames[nComponents-1] = Form("%s/he4-eta-xs-sgevorkyan-ap_%02d.root", locPathName.Data(), m_apVer_inc);
+			/*
+			TString locPathName = "/work/halld/home/andrsmit/primex_eta_analysis/theory/sgevorkyan/systematics/density_models";
+			for(int i=0; i<nComponents; i++) {
+				theoryFileNames[i] = Form("%s/he4-eta-xs-sgevorkyan-ver03.root", locPathName.Data());
+			}
+			*/
 			break;
 		}
-		case SGEVORKYAN_STRONG_RADIUS_VAR:
+		case SGEVORKYAN_AS_VAR:
 		{
-			theoryFileNames[0] = 
-				"/work/halld/home/andrsmit/primex_eta_analysis/theory/sgevorkyan/farm/ap_variations/he4-eta-xs-sgevorkyan-v4.root";
-			
-			theoryFileNames[1] = Form(
-				"/work/halld/home/andrsmit/primex_eta_analysis/theory/sgevorkyan/farm/radius_variations/he4-eta-xs-sgevorkyan-%s.root", 
-				m_strongRadiusStr.Data());
-			
-			theoryFileNames[2] = 
-				"/work/halld/home/andrsmit/primex_eta_analysis/theory/sgevorkyan/farm/rootFiles/he4-eta-xs-sgevorkyan-v2.root";
+			TString locPathName = "/work/halld/home/andrsmit/primex_eta_analysis/theory/sgevorkyan/systematics/as_variations/ver01";
+			for(int i=0; i<nComponents; i++) {
+				theoryFileNames[i] = Form("%s/he4-eta-xs-sgevorkyan-as_%02d.root", locPathName.Data(), m_asVer);
+			}
+			/*
+			TString locPathName = "/work/halld/home/andrsmit/primex_eta_analysis/theory/sgevorkyan/systematics/density_models";
+			for(int i=0; i<nComponents; i++) {
+				theoryFileNames[i] = Form("%s/he4-eta-xs-sgevorkyan-ver03.root", locPathName.Data());
+			}
+			*/
+			break;
+		}
+		case SGEVORKYAN_RADIUS_VAR:
+		{
+			TString locPathName = "/work/halld/home/andrsmit/primex_eta_analysis/theory/sgevorkyan/systematics/radius_variations/ver01";
+			for(int i=0; i<nComponents; i++) {
+				theoryFileNames[i] = Form("%s/he4-eta-xs-sgevorkyan-radius_%02d.root", locPathName.Data(), m_radiusVer);
+			}
+			break;
+		}
+		case SGEVORKYAN_DENSITY_VAR:
+		{
+			TString locPathName = "/work/halld/home/andrsmit/primex_eta_analysis/theory/sgevorkyan/systematics/density_models";
+			for(int i=0; i<nComponents; i++) {
+				theoryFileNames[i] = Form("%s/he4-eta-xs-sgevorkyan-ver%02d.root", locPathName.Data(), m_densityVer);
+			}
+			break;
+		}
+		case SGEVORKYAN_AP_INC_FIT:
+		{
+			TString locPathName = "/work/halld/home/andrsmit/primex_eta_analysis/theory/sgevorkyan/systematics/ap_variations_inc_fit/ver01";
+			printf("%s\n",locPathName.Data());
+			for(int i=0; i<nComponents; i++) {
+				printf("apVer=%d\n",m_apVer);
+				theoryFileNames[i] = Form("%s/he4-eta-xs-sgevorkyan-ap_%02d.root", locPathName.Data(), m_apVer);
+				printf("%s\n",theoryFileNames[i].Data());
+			}
+			theoryFileNames[nComponents-1] = Form("%s/he4-eta-xs-sgevorkyan-ap_%02d.root", locPathName.Data(), 6);
 			break;
 		}
 	}
@@ -1219,6 +1327,8 @@ int YieldFitter::InitializeModelComponents()
 {
 	int nComponents = 0;
 	switch(m_model) {
+		case UNKNOWN:
+			return 0;
 		case AFIX:
 			nComponents = 4;
 			m_components.push_back("xs_prim_vs_egam");
@@ -1293,7 +1403,25 @@ int YieldFitter::InitializeModelComponents()
 			m_components.push_back("xs_coh_vs_egam");
 			m_components.push_back("xs_inc_vs_egam");
 			break;
-		case SGEVORKYAN_STRONG_RADIUS_VAR:
+		case SGEVORKYAN_AS_VAR:
+			nComponents = 3;
+			m_components.push_back("xs_prim_vs_egam");
+			m_components.push_back("xs_coh_vs_egam");
+			m_components.push_back("xs_inc_vs_egam");
+			break;
+		case SGEVORKYAN_RADIUS_VAR:
+			nComponents = 3;
+			m_components.push_back("xs_prim_vs_egam");
+			m_components.push_back("xs_coh_vs_egam");
+			m_components.push_back("xs_inc_vs_egam");
+			break;
+		case SGEVORKYAN_DENSITY_VAR:
+			nComponents = 3;
+			m_components.push_back("xs_prim_vs_egam");
+			m_components.push_back("xs_coh_vs_egam");
+			m_components.push_back("xs_inc_vs_egam");
+			break;
+		case SGEVORKYAN_AP_INC_FIT:
 			nComponents = 3;
 			m_components.push_back("xs_prim_vs_egam");
 			m_components.push_back("xs_coh_vs_egam");
@@ -1422,7 +1550,8 @@ double YieldFitter::YieldFitFunction(double *x, double *par)
 	locPars.push_back(par[2]); // phi
 	locPars.push_back(par[3]); // A_coh
 	locPars.push_back(par[4]); // A_inc
-	locPars.push_back(par[5]);
+	if(m_components.size()>3) locPars.push_back(par[5]);
+	else if(m_model==SGEVORKYAN_AP_INC_FIT) locPars.push_back(par[5]);
 	
 	double yield = GetExpectedYieldFast(minAngle, maxAngle, HistIndex, locPars.data());
 	
@@ -1451,7 +1580,8 @@ double YieldFitter::YieldFitFunction_Interference(double *x, double *par)
 	locPars.push_back(par[2]); // phi
 	locPars.push_back(par[3]); // A_coh
 	locPars.push_back(par[4]); // A_inc
-	locPars.push_back(par[5]);
+	if(m_components.size()>3) locPars.push_back(par[5]);
+	else if(m_model==SGEVORKYAN_AP_INC_FIT) locPars.push_back(par[5]);
 	
 	double yield = GetExpectedYield(minAngle, maxAngle, HistIndex, locPars.data(), 1);
 	
@@ -1476,7 +1606,10 @@ double YieldFitter::GetExpectedYieldFast(double minAngle, double maxAngle, int h
 	double Phi   = par[1];
 	double Acoh  = par[2];
 	double AincP = par[3];
-	double AincN = (m_components.size() > 3) ? par[4] : 0.0;
+	double AincN = 0.0, apInc = 0.0;
+	if(m_components.size()>3) {
+		AincN = par[4];
+	} else if(m_model==SGEVORKYAN_AP_INC_FIT) apInc = par[4];
 	
 	double dNdTheta = 0.0;
 	
@@ -1484,7 +1617,6 @@ double YieldFitter::GetExpectedYieldFast(double minAngle, double maxAngle, int h
 	
 	int startReconBin = h_matrixFull->GetYaxis()->FindBin(minAngle+(1.e-6));
 	int   endReconBin = h_matrixFull->GetYaxis()->FindBin(maxAngle-(1.e-6));
-	int nReconBins = (endReconBin-startReconBin)+1;
 	
 	for(int iReconBin=startReconBin; iReconBin<=endReconBin; iReconBin++) {
 		for(int iThrownBin=0; iThrownBin<nThrownBins; iThrownBin++) {
@@ -1495,7 +1627,7 @@ double YieldFitter::GetExpectedYieldFast(double minAngle, double maxAngle, int h
 				double locEnergy     = energy[iEnergyBin];
 				double locFluxWeight = flux[iEnergyBin];
 				double locMatrix     = matrix[iEnergyBin][idx];
-				double locCS         = GetCrossSectionFast(locEnergy, iThrownBin+1, Gamma, Acoh, AincP, AincN, Phi);
+				double locCS         = GetCrossSectionFast(locEnergy, iThrownBin+1, Gamma, Acoh, AincP, AincN, Phi, apInc);
 				dNdTheta += (locMatrix * locCS * locFluxWeight);
 			}
 		}
@@ -1506,7 +1638,7 @@ double YieldFitter::GetExpectedYieldFast(double minAngle, double maxAngle, int h
 }
 
 double YieldFitter::GetCrossSectionFast(double beamEnergy, int thetaBin, 
-	double Gamma, double Acoh, double AincP, double AincN, double Phi) 
+	double Gamma, double Acoh, double AincP, double AincN, double Phi, double apInc) 
 {
 	double gammaGen = (m_model>= 6) ? 0.515 : 0.510;
 	
@@ -1533,6 +1665,38 @@ double YieldFitter::GetCrossSectionFast(double beamEnergy, int thetaBin,
 		locInc += AincN * precomputedTheory.incN[idx];
 	}
 	
+	if(m_model==SGEVORKYAN_AP_INC_FIT) {
+		locInc = precomputedTheory.inc[idx];
+		
+		double locTheta  = h_Theory[0]->GetYaxis()->GetBinCenter(thetaBin);
+		double locEnergy = h_Theory[0]->GetXaxis()->GetBinCenter(eBin);
+		double sinth = sin(locTheta*TMath::DegToRad());
+		double pEta  = getMesonMomentum(locTheta,locEnergy);
+		double pEtax = pEta*sinth;
+		/*
+		double costh = cos(locTheta*TMath::DegToRad());
+		double pEtaz = pEta*costh;
+		double m_mesonMass = 0.547862;
+		double eEta  = sqrt(pow(pEta,2.0) + pow(m_mesonMass,2.0));
+		*/
+		// transverse momentum-transferred:
+		double m_GeV2fm = 0.1973269603;
+		double locQ = sqrt(pow(pEtax,2.0));
+		locQ /= m_GeV2fm;
+		
+		double cp = 2.0*1.e-4;
+		
+		double ap_fm = apInc*0.03894;
+		
+		// at this point, locInc = (N0 - |F|^2*A). Need to multiply by dsigp and add the extra term:
+		double dsigp = cp*pow(locQ,2.0)*exp(-ap_fm*pow(locQ,2.0));
+		locInc = dsigp*locInc + cp*exp(-ap_fm*pow(locQ,2.0))*0.052;
+		locInc *= 1.e4;
+		locInc *= (sin(locTheta*TMath::DegToRad())*2.0*TMath::Pi());
+		
+		locInc *= AincP;
+	}
+	
 	double locInt = GetCrossSectionInterferenceFast(beamEnergy, thetaBin, Gamma, Acoh, Phi);
 	return locPrim + locCoh + locInc + locInt;
 }
@@ -1556,7 +1720,6 @@ double YieldFitter::GetCrossSectionInterferenceFast(double beamEnergy, int theta
 	int tBin = thetaBin - 1;
 	int idx = eBin * precomputedTheory.nThetaBins + tBin;
 	
-	double locInt = 0.0;
 	if(m_model>=6) {
 		double int1 = (precomputedTheory.primAmpReal[idx]*precomputedTheory.strongAmpReal[idx]
 			+ precomputedTheory.primAmpImag[idx]*precomputedTheory.strongAmpImag[idx]) * cos(Phi*TMath::DegToRad());
@@ -1578,13 +1741,17 @@ double YieldFitter::GetExpectedYield(double minAngle, double maxAngle, int histI
 	int locMinReconAngleBin = h_matrixFull->GetYaxis()->FindBin(minAngle+(1.e-6));
 	int locMaxReconAngleBin = h_matrixFull->GetYaxis()->FindBin(maxAngle-(1.e-6));
 	
-	double angleBinSize = m_thrownAngleBinSize * TMath::DegToRad();
-	
 	double Gamma = par[0];
 	double Phi   = par[1];
 	double Acoh  = par[2];
 	double AincP = par[3];
-	double AincN = (m_components.size()>3) ? par[4] : 0.0;
+	double AincN = 0.0, apInc = 0.0;
+	if(m_components.size()>3) {
+		AincN = par[4];
+		if(m_model==SGEVORKYAN_AP_INC_FIT) apInc = par[5];
+	} else {
+		if(m_model==SGEVORKYAN_AP_INC_FIT) apInc = par[4];
+	}
 	/*
 	printf("    Gamma: %f\n", Gamma);
 	printf("    Acoh:  %f\n", Acoh);
@@ -1605,7 +1772,7 @@ double YieldFitter::GetExpectedYield(double minAngle, double maxAngle, int histI
 				double locMatrix = h_matrices[histIndex]->GetBinContent(iThetaBin, iReconBin, iEnergyBin);
 				double locCS;
 				if(isolateInter) locCS = GetCrossSectionInterference(locEnergy, iThetaBin, Gamma, Acoh, Phi);
-				else             locCS = GetCrossSection(locEnergy, iThetaBin, Gamma, Acoh, AincP, AincN, Phi);
+				else             locCS = GetCrossSection(locEnergy, iThetaBin, Gamma, Acoh, AincP, AincN, Phi, apInc);
 				dNdTheta += (locMatrix * locCS * h_fluxWeights[histIndex]->GetBinContent(h_fluxWeights[histIndex]->FindBin(locEnergy)));
 			}
 		}
@@ -1625,7 +1792,7 @@ double YieldFitter::GetExpectedYield(double minAngle, double maxAngle, int histI
 
 
 double YieldFitter::GetCrossSection(double beamEnergy, int thetaBin, 
-	double Gamma, double Acoh, double AincP, double AincN, double Phi) 
+	double Gamma, double Acoh, double AincP, double AincN, double Phi, double apInc) 
 {
 	double gammaGen = (m_model>=6) ? 0.515 : 0.510;
 	
@@ -1649,6 +1816,38 @@ double YieldFitter::GetCrossSection(double beamEnergy, int thetaBin,
 	
 	// TEST:
 	//locCoh /= pow(beamEnergy,0.2);
+	
+	if(m_model==SGEVORKYAN_AP_INC_FIT) {
+		locInc = h_Theory[2]->GetBinContent(locEnergyBin, thetaBin);
+		
+		double locTheta  = h_Theory[2]->GetYaxis()->GetBinCenter(thetaBin);
+		double locEnergy = h_Theory[2]->GetXaxis()->GetBinCenter(locEnergyBin);
+		double sinth = sin(locTheta*TMath::DegToRad());
+		double pEta  = getMesonMomentum(locTheta,locEnergy);
+		double pEtax = pEta*sinth;
+		/*
+		double costh = cos(locTheta*TMath::DegToRad());
+		double pEtaz = pEta*costh;
+		double m_mesonMass = 0.547862;
+		double eEta  = sqrt(pow(pEta,2.0) + pow(m_mesonMass,2.0));
+		*/
+		// transverse momentum-transferred:
+		double m_GeV2fm = 0.1973269603;
+		double locQ = sqrt(pow(pEtax,2.0));
+		locQ /= m_GeV2fm;
+		
+		double cp = 2.0*1.e-4;
+		
+		double ap_fm = apInc*0.03894;
+		
+		// at this point, locInc = (N0 - |F|^2*A). Need to multiply by dsigp and add the extra term:
+		double dsigp = cp*pow(locQ,2.0)*exp(-ap_fm*pow(locQ,2.0));
+		locInc = dsigp*locInc + cp*exp(-ap_fm*pow(locQ,2.0))*0.052;
+		locInc *= 1.e4;
+		locInc *= (sin(locTheta*TMath::DegToRad())*2.0*TMath::Pi());
+		
+		locInc *= AincP;
+	}
 	
 	double locInt  = GetCrossSectionInterference(beamEnergy, thetaBin, Gamma, Acoh, Phi);
 	return (locPrim+locCoh+locInc+locInt);
@@ -1689,4 +1888,31 @@ double YieldFitter::GetCrossSectionInterference(double beamEnergy, int thetaBin,
 		locInt  = 2.0*sqrt(locPrim*locCoh)*cos(Phi*TMath::DegToRad());
 	}
 	return locInt;
+}
+
+double YieldFitter::getMesonMomentum(double angle, double beamEnergy) {
+	
+	// Calculates the momentum of the meson from the beam energy and production angle
+	// (assumes a coherent production process)
+	
+	double m_targetMass = 3.727379238;
+	double m_mesonMass  = 0.547862;
+	
+	double costh = cos(angle*TMath::Pi()/180.0);
+	double f = 0.5*(pow(m_mesonMass,2.0) + 2.0*m_targetMass*beamEnergy);
+	
+	double A = pow(beamEnergy*costh,2.0) - pow(beamEnergy+m_targetMass,2.0);
+	double B = 2.0*f*beamEnergy*costh;
+	double C = pow(f,2.0) - pow(m_mesonMass*(beamEnergy+m_targetMass),2.0);
+	
+	double D = pow(B,2.0) - 4.0*A*C;
+	if(D < 0.0) {
+		return -1.0;
+	}
+	if(A == 0.0) {
+		return 0.0;
+	}
+	double mom = (-B - sqrt(D)) / (2.0*A);
+	
+	return mom;
 }

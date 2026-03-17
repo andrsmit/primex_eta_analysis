@@ -168,7 +168,7 @@ int main(int argc, char **argv)
 				continue;
 			}
 			
-			if(binE < sqrt(binC)) hYield->SetBinError(ibin, sqrt(binC));
+			if(binE < sqrt(binC)) hYield->SetBinError(ibin, 2.0*sqrt(binC));
 			
 			// make sure the error bars are not anomalously large:
 			if(binE > 2.5*sqrt(binC)) hYield->SetBinError(ibin, 2.5*sqrt(binC));
@@ -230,8 +230,8 @@ int main(int argc, char **argv)
 	gStyle->SetOptStat(0);
 	//gStyle->SetOptFit(0);
 	
-	double minFitRange = 0.0, maxFitRange = 3.0;
-	locYieldFitter.FitAngularYield(minFitRange, maxFitRange, fitResultName);
+	double minFitRange = 0.0, maxFitRange = 2.0;
+	locYieldFitter.FitAngularYield(minFitRange, maxFitRange);
 	
 	if(!batchMode) {
 		gSystem->ProcessEvents();
@@ -561,10 +561,28 @@ int LoadModelType(YieldFitter &fitterObject, TString fileName)
 			if(ReadFile->GetConfigName("ModelParameter_ap") != "") {
 				fitterObject.SetModel_apVer((int)ReadFile->GetConfig1Par("ModelParameter_ap")[0]);
 			}
+			if(ReadFile->GetConfigName("ModelParameter_ap_inc") != "") {
+				fitterObject.SetModel_apVer_inc((int)ReadFile->GetConfig1Par("ModelParameter_ap_inc")[0]);
+			}
 		}
-		else if(fitterObject.GetModel()==SGEVORKYAN_STRONG_RADIUS_VAR) {
-			if(ReadFile->GetConfigName("ModelParameter_strongRadiusVer") != "") {
-				fitterObject.SetModel_strongRadiusStr(ReadFile->GetConfigName("ModelParameter_strongRadiusVer"));
+		else if(fitterObject.GetModel()==SGEVORKYAN_AS_VAR) {
+			if(ReadFile->GetConfigName("ModelParameter_as") != "") {
+				fitterObject.SetModel_asVer((int)ReadFile->GetConfig1Par("ModelParameter_as")[0]);
+			}
+		}
+		else if(fitterObject.GetModel()==SGEVORKYAN_RADIUS_VAR) {
+			if(ReadFile->GetConfigName("ModelParameter_radiusVer") != "") {
+				fitterObject.SetModel_radiusVer((int)ReadFile->GetConfig1Par("ModelParameter_radiusVer")[0]);
+			}
+		}
+		else if(fitterObject.GetModel()==SGEVORKYAN_DENSITY_VAR) {
+			if(ReadFile->GetConfigName("ModelParameter_densityVer") != "") {
+				fitterObject.SetModel_densityVer((int)ReadFile->GetConfig1Par("ModelParameter_densityVer")[0]);
+			}
+		}
+		else if(fitterObject.GetModel()==SGEVORKYAN_AP_INC_FIT) {
+			if(ReadFile->GetConfigName("ModelParameter_ap") != "") {
+				fitterObject.SetModel_apVer((int)ReadFile->GetConfig1Par("ModelParameter_ap")[0]);
 			}
 		}
 	}
@@ -573,19 +591,22 @@ int LoadModelType(YieldFitter &fitterObject, TString fileName)
 
 ModelType StringToModelType(std::string str) {
 	static const std::unordered_map<std::string, ModelType> lookup = {
-		{"AFIX",                 ModelType::AFIX}, 
-		{"SGEVORKYAN",           ModelType::SGEVORKYAN},
-		{"MIXED_V1",             ModelType::MIXED_V1},
-		{"MIXED_V2",             ModelType::MIXED_V2},
-		{"SGEVORKYAN_FERMI",     ModelType::SGEVORKYAN_FERMI},
-		{"SGEVORKYAN_UPD_V0",    ModelType::SGEVORKYAN_UPD_V0},
-		{"SGEVORKYAN_UPD_V1",    ModelType::SGEVORKYAN_UPD_V1},
-		{"SGEVORKYAN_UPD_V2",    ModelType::SGEVORKYAN_UPD_V2},
-		{"SGEVORKYAN_UPD_V3",    ModelType::SGEVORKYAN_UPD_V3},
-		{"SGEVORKYAN_UPD_FERMI", ModelType::SGEVORKYAN_UPD_FERMI},
-		{"SGEVORKYAN_SIGMA_VAR", ModelType::SGEVORKYAN_SIGMA_VAR},
-		{"SGEVORKYAN_AP_VAR",    ModelType::SGEVORKYAN_AP_VAR},
-		{"SGEVORKYAN_STRONG_RADIUS_VAR", ModelType::SGEVORKYAN_STRONG_RADIUS_VAR}
+		{"AFIX",                   ModelType::AFIX}, 
+		{"SGEVORKYAN",             ModelType::SGEVORKYAN},
+		{"MIXED_V1",               ModelType::MIXED_V1},
+		{"MIXED_V2",               ModelType::MIXED_V2},
+		{"SGEVORKYAN_FERMI",       ModelType::SGEVORKYAN_FERMI},
+		{"SGEVORKYAN_UPD_V0",      ModelType::SGEVORKYAN_UPD_V0},
+		{"SGEVORKYAN_UPD_V1",      ModelType::SGEVORKYAN_UPD_V1},
+		{"SGEVORKYAN_UPD_V2",      ModelType::SGEVORKYAN_UPD_V2},
+		{"SGEVORKYAN_UPD_V3",      ModelType::SGEVORKYAN_UPD_V3},
+		{"SGEVORKYAN_UPD_FERMI",   ModelType::SGEVORKYAN_UPD_FERMI},
+		{"SGEVORKYAN_SIGMA_VAR",   ModelType::SGEVORKYAN_SIGMA_VAR},
+		{"SGEVORKYAN_AP_VAR",      ModelType::SGEVORKYAN_AP_VAR},
+		{"SGEVORKYAN_AS_VAR",      ModelType::SGEVORKYAN_AS_VAR},
+		{"SGEVORKYAN_RADIUS_VAR",  ModelType::SGEVORKYAN_RADIUS_VAR},
+		{"SGEVORKYAN_DENSITY_VAR", ModelType::SGEVORKYAN_DENSITY_VAR},
+		{"SGEVORKYAN_AP_INC_FIT",  ModelType::SGEVORKYAN_AP_INC_FIT}
 	};
 	
 	auto it = lookup.find(str);

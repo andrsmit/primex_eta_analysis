@@ -67,23 +67,44 @@ struct PrecomputedTheory
 class YieldFitter {
 	public:
 		YieldFitter() : 
+			// Angular Matrices:
 			h_matrixFull(nullptr), 
+			h_thrown(nullptr), 
+			
+			// Histogram to store the fraction of photon flux in each energy bin:
 			h_fluxWeightsFull(nullptr),
+			
+			// Theory Histograms:
 			h_PrimReal(nullptr),
-			h_PrimImag(nullptr),
 			h_StrongReal(nullptr),
+			h_PrimImag(nullptr),
 			h_StrongImag(nullptr)
 		{
 			m_luminosity  = 0.0;
 			m_model = UNKNOWN;
 			
-			h_dNdTheta.clear();
-			h_dNdOmega.clear();
-			f_dNdTheta.clear();
-			m_energyBins.clear();
-			c_dNdTheta.clear();
-			h_matrices.clear();
-			h_fluxWeights.clear();
+			// Defaults for systematic variations:
+			
+			m_sigmaVer   =  3;
+			m_apVer      = 10;
+			m_apVer_inc  =  2;
+			m_asVer      =  6;
+			m_radiusVer  = 10;
+			m_densityVer =  0;
+			
+			// Defaults for bin sizes:
+			
+			m_beamEnergyBinSize  =  0.050;
+			m_minBeamEnergy      =  8.000;
+			m_maxBeamEnergy      = 11.300;
+			
+			m_reconAngleBinSize  =  0.060;
+			m_minReconAngle      =  0.000;
+			m_maxReconAngle      =  4.500;
+			
+			m_thrownAngleBinSize =  0.010;
+			m_minThrownAngle     =  0.000;
+			m_maxThrownAngle     =  5.000;
 		}
 		
 		//----------------------------------------//
@@ -129,9 +150,12 @@ class YieldFitter {
 		void SetModel(ModelType model) { m_model = model; }
 		ModelType GetModel() { return m_model; }
 		
-		void SetModel_apVer(int ver) { m_apVer = ver; }
+		void SetModel_apVer(int ver) { m_apVer = ver; m_apVer_inc = ver; }
+		void SetModel_apVer_inc(int ver) { m_apVer_inc = ver; }
+		void SetModel_asVer(int ver) { m_asVer = ver; }
 		void SetModel_sigmaVer(int ver) { m_sigmaVer = ver; }
-		void SetModel_strongRadiusStr(TString str) { m_strongRadiusStr = str; }
+		void SetModel_radiusVer(int ver) { m_radiusVer = ver; }
+		void SetModel_densityVer(int ver) { m_densityVer = ver; }
 		
 		TString GetModelString() {
 			switch(m_model) {
@@ -156,9 +180,15 @@ class YieldFitter {
 				case SGEVORKYAN_SIGMA_VAR:
 					return Form("S. Gevorkyan (sigma index: %d)", m_sigmaVer);
 				case SGEVORKYAN_AP_VAR:
-					return Form("S. Gevorkyan (ap index: %d)", m_apVer);
-				case SGEVORKYAN_STRONG_RADIUS_VAR:
-					return Form("S. Gevorkyan (strong radius index: %s)", m_strongRadiusStr.Data());
+					return Form("S. Gevorkyan (ap index: %d (coh), %d (inc))", m_apVer, m_apVer_inc);
+				case SGEVORKYAN_AS_VAR:
+					return Form("S. Gevorkyan (as index: %d)", m_asVer);
+				case SGEVORKYAN_RADIUS_VAR:
+					return Form("S. Gevorkyan (radius index: %d)", m_radiusVer);
+				case SGEVORKYAN_DENSITY_VAR:
+					return Form("S. Gevorkyan (density model version: %d)", m_densityVer);
+				case SGEVORKYAN_AP_INC_FIT:
+					return Form("S. Gevorkyan (ap index: %d (coh))", m_apVer);
 				default:
 					return "Unknown";
 			}
@@ -256,6 +286,7 @@ class YieldFitter {
 		TSpline3 *spline;
 		TF1 *f_TheoryTulio;
 		
+		
 		double m_luminosity;
 		vector<double> m_fractionalLumi;
 		
@@ -276,28 +307,21 @@ class YieldFitter {
 		
 		ModelType m_model;
 		
-		int m_sigmaVer = 3, m_apVer = 3;
-		TString m_strongRadiusStr = "0";
+		int m_sigmaVer, m_apVer, m_apVer_inc, m_asVer, m_radiusVer, m_densityVer;
 		
 		// Binning:
 		
-		double m_beamEnergyBinSize  =  0.050;
-		double m_minBeamEnergy      =  8.000;
-		double m_maxBeamEnergy      = 11.300;
+		double m_beamEnergyBinSize,  m_minBeamEnergy,  m_maxBeamEnergy;
+		double m_reconAngleBinSize,  m_minReconAngle,  m_maxReconAngle;
+		double m_thrownAngleBinSize, m_minThrownAngle, m_maxThrownAngle;
 		
-		double m_reconAngleBinSize  =  0.060;
-		double m_minReconAngle      =  0.000;
-		double m_maxReconAngle      =  4.500;
-		
-		double m_thrownAngleBinSize =  0.010;
-		double m_minThrownAngle     =  0.000;
-		double m_maxThrownAngle     =  5.000;
-		
-		double GetCrossSectionFast(double, int, double, double, double, double, double);
+		double GetCrossSectionFast(double, int, double, double, double, double, double, double);
 		double GetCrossSectionInterferenceFast(double, int, double, double, double);
 		
-		double GetCrossSection(double, int, double, double, double, double, double);
+		double GetCrossSection(double, int, double, double, double, double, double, double);
 		double GetCrossSectionInterference(double, int, double, double, double);
+		
+		double getMesonMomentum(double,double);
 		
 		void InitializeFitFunction(TF1 **f1, TString funcName, int lineColor=kBlack, int lineStyle=1, int lineWidth=2);
 		void InitializeFitFunction_Interference(TF1 **f1, TString funcName, int lineColor=kMagenta, int lineStyle=4, int lineWidth=2);

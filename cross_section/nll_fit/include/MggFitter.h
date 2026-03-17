@@ -43,6 +43,7 @@ class MggFitter {
 		double empty_flux_ratio = 1.0;
 		
 		double incFraction_theory = 1.0;
+		int incFraction_option = 0;
 		
 		// Fitting options:
 		
@@ -570,7 +571,7 @@ class MggFitter {
 					break;
 				}
 			}
-			return (p0 + p1*angle + p2*pow(angle,2.0) + p3*pow(angle,3.0) + p4*pow(angle,4.0));
+			return (p0 + p1*angle + p2*pow(angle,2.0) + p3*pow(angle,3.0) + p4*pow(angle,4.0) + p5*pow(angle,5.0));
 		}
 		
 		void GetOmegaFitPars(double&, double&, double&, double&, double&, double&, double&, double&);

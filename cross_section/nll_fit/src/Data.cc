@@ -186,12 +186,14 @@ int EtaAnalyzer::LoadLineshapes()
 
 int EtaAnalyzer::LoadIncoherentFraction()
 {
+	//TString locFileName =
+	//	"/work/halld/home/andrsmit/primex_eta_analysis/theory/sgevorkyan/farm/rootFiles/incoherent_fraction_new.root";
 	TString locFileName =
-		"/work/halld/home/andrsmit/primex_eta_analysis/theory/sgevorkyan/farm/rootFiles/incoherent_fraction_new.root";
+		"/work/halld/home/andrsmit/primex_eta_analysis/theory/sgevorkyan/systematics/ap_variations_inc_fit/ver01/incoherent_fraction_new_new.root";
 	if(gSystem->AccessPathName(locFileName.Data())) return 1;
 	
 	TFile *fIn = new TFile(locFileName.Data(), "READ");
-	h_incFraction = (TH1F*)fIn->Get("incFraction")->Clone("h_incFraction");
+	h_incFraction = (TH1F*)fIn->Get("h_incFraction")->Clone("h_incFraction");
 	h_incFraction->SetDirectory(0);
 	fIn->Close();
 	return 0;
@@ -582,7 +584,7 @@ int EtaAnalyzer::LoadOmegaLineshape()
 	
 	TString mcFileName, mcHistName;
 	mcFileName = Form("%s/omega_gpi0/coh/%s/phase3.root", omegaMCDirectory.Data(), corrString.Data());
-	mcHistName = Form("VetoOption%d/mgg_const_veto_%d", m_vetoOption, m_vetoOption);
+	mcHistName = Form("VetoOption%d/mgg_const_cut_veto_%d", m_vetoOption, m_vetoOption);
 	
 	if(gSystem->AccessPathName(mcFileName.Data())) return 1;
 	
@@ -613,7 +615,7 @@ int EtaAnalyzer::LoadRhoLineshape()
 	
 	TString mcFileName_geta = Form("%s/rho0_geta/coh/%s/phase3.root", rhoMCDirectory.Data(), corrString.Data());
 	TString mcFileName_gpi0 = Form("%s/rho0_gpi0/coh/%s/phase3.root", rhoMCDirectory.Data(), corrString.Data());
-	TString mcHistName = Form("VetoOption%d/mgg_const_veto_%d", m_vetoOption, m_vetoOption);
+	TString mcHistName = Form("VetoOption%d/mgg_const_cut_veto_%d", m_vetoOption, m_vetoOption);
 	
 	if(gSystem->AccessPathName(mcFileName_geta.Data()) || 
 		gSystem->AccessPathName(mcFileName_gpi0.Data())) return 1;

@@ -5,8 +5,6 @@ int EtaAnalyzer::LoadAngularMatrix()
 {
 	printf("\nREADING ANGULAR MATRICES...\n");
 	
-	int locPhase = m_phase;
-	
 	//------------------------------------------------------------//
 	// ROOT file where angular and acceptance matrix is stored:
 	
@@ -205,7 +203,6 @@ int EtaAnalyzer::CalcAcceptance()
 	
 	int locMinEnergyBin = hRecMatrix->GetZaxis()->FindBin(m_minBeamEnergy + 0.5*locBeamEnergyBinSize);
 	int locMaxEnergyBin = hRecMatrix->GetZaxis()->FindBin(m_maxBeamEnergy - 0.5*locBeamEnergyBinSize);
-	double nEnergyBins = (double)(locMaxEnergyBin-locMinEnergyBin+1);
 	
 	//---------------------------------------------------------------------//
 	// To get the acceptance as a function of the reconstructed angle, we sum the matrix over reconstructed angle bins for a particular beam energy
@@ -277,7 +274,7 @@ int EtaAnalyzer::CalcAcceptance()
 	delete hThrownAngle_vs_ThrownEnergy;
 	
 	h_Acceptance->GetYaxis()->SetRangeUser(0.0,1.0);
-	
+	/*
 	if(cAcceptance==NULL) {
 		cAcceptance = new TCanvas("cAcceptance", "Acceptance", 950, 700);
 		cAcceptance->SetWindowPosition(100, 100);
@@ -286,6 +283,7 @@ int EtaAnalyzer::CalcAcceptance()
 	h_Acceptance->Draw("PE");
 	cAcceptance->Update();
 	cAcceptance->Modified();
+	*/
 	/*
 	TFile *fOut = new TFile("test.root", "RECREATE");
 	fOut->cd();

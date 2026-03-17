@@ -3,20 +3,23 @@
 
 typedef enum
 {
-	UNKNOWN              = 0,
-	AFIX                 = 1,
-	SGEVORKYAN           = 2,
-	MIXED_V1             = 3, // S.Gevorkyan calculation of Primakoff and Nuclear Coherent, A.Fix Calculation of Incoherent
-	MIXED_V2             = 4, // A.Fix calculation of Primakoff and S.Gevorkyan everything else
-	SGEVORKYAN_FERMI     = 5, // S.Gevorkyan calculation with Fermi Motion folded into incoherent part
-	SGEVORKYAN_UPD_V0    = 6,
-	SGEVORKYAN_UPD_V1    = 7,
-	SGEVORKYAN_UPD_V2    = 8,
-	SGEVORKYAN_UPD_V3    = 9,
-	SGEVORKYAN_UPD_FERMI = 10,
-	SGEVORKYAN_SIGMA_VAR = 11,
-	SGEVORKYAN_AP_VAR    = 12,
-	SGEVORKYAN_STRONG_RADIUS_VAR = 13
+	UNKNOWN                = 0,
+	AFIX                   = 1,
+	SGEVORKYAN             = 2,
+	MIXED_V1               = 3, // S.Gevorkyan calculation of Primakoff and Nuclear Coherent, A.Fix Calculation of Incoherent
+	MIXED_V2               = 4, // A.Fix calculation of Primakoff and S.Gevorkyan everything else
+	SGEVORKYAN_FERMI       = 5, // S.Gevorkyan calculation with Fermi Motion folded into incoherent part
+	SGEVORKYAN_UPD_V0      = 6,
+	SGEVORKYAN_UPD_V1      = 7,
+	SGEVORKYAN_UPD_V2      = 8,
+	SGEVORKYAN_UPD_V3      = 9,
+	SGEVORKYAN_UPD_FERMI   = 10,
+	SGEVORKYAN_SIGMA_VAR   = 11,
+	SGEVORKYAN_AP_VAR      = 12,
+	SGEVORKYAN_AS_VAR      = 13,
+	SGEVORKYAN_RADIUS_VAR  = 14,
+	SGEVORKYAN_DENSITY_VAR = 15,
+	SGEVORKYAN_AP_INC_FIT  = 16
 } ModelType;
 
 #include "EtaAnalyzer.h"

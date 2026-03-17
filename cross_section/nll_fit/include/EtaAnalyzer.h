@@ -35,100 +35,97 @@ class EtaAnalyzer {
 			
 			// Data:
 			
-			h_mggVsThetaFull(nullptr),     h_mggVsThetaEmpty(nullptr), 
-			h_mggVsThetaFull_acc(nullptr), h_mggVsThetaEmpty_acc(nullptr), 
+			h_mggVsThetaFull(nullptr),     h_mggVsThetaEmpty(nullptr),
+			h_mggVsThetaFull_acc(nullptr), h_mggVsThetaEmpty_acc(nullptr),
 			
 			// Simulated Lineshapes:
 			
 			h_incFraction(nullptr),
-			h_etaLineshapeCoh(nullptr), 
-			h_etaLineshapeQF(nullptr), 
-			h_omegaLineshape(nullptr), 
-			h_rhoLineshape(nullptr),
-			
-			h_eta1PionLineshape(nullptr), 
-			h_eta2PionLineshape(nullptr), 
-			h_eta3PionLineshape(nullptr), 
-			h_hadronicBkgdLineshape(nullptr), 
+			h_etaLineshapeCoh(nullptr), h_etaLineshapeQF(nullptr),
+			h_omegaLineshape(nullptr),  h_rhoLineshape(nullptr),
+			h_eta1PionLineshape(nullptr), h_eta2PionLineshape(nullptr), h_eta3PionLineshape(nullptr),
+			h_hadronicBkgdLineshape(nullptr),
 			
 			// Fraction of eta yield corresponding to each eta+X background:
 			
-			h_EtaPionBkgdFraction(nullptr), 
-			h_EtaPionBkgdFraction_bggen(nullptr), h_EtaPionBkgdFraction_bggen_cut(nullptr), 
-			h_HadronicBkgdFraction(nullptr), 
-			h_HadronicBkgdFraction_bggen(nullptr), h_HadronicBkgdFraction_bggen_cut(nullptr), 
+			h_EtaPionBkgdFraction(nullptr),
+			h_EtaPionBkgdFraction_bggen(nullptr),  h_EtaPionBkgdFraction_bggen_cut(nullptr),
+			h_EtaPiPiBkgdFraction(nullptr),
+			h_EtaPiPiBkgdFraction_bggen(nullptr),  h_EtaPiPiBkgdFraction_bggen_cut(nullptr),
+			h_HadronicBkgdFraction(nullptr),
+			h_HadronicBkgdFraction_bggen(nullptr), h_HadronicBkgdFraction_bggen_cut(nullptr),
+			
+			// Histogram to store fitted parameter values for inclusive background channels:
+			
+			h_BkgdPar_f_etaX(nullptr), h_BkgdPar_r_etaX(nullptr),
+			h_LineshapeShift(nullptr),
+			cShift(nullptr),
 			
 			// Other inputs needed for cross section
 			
-			h_fluxWeights(nullptr), 
-			h_matrix(nullptr), 
-			h_matrixFine(nullptr), 
-			h_thrown(nullptr), 
+			h_fluxWeights(nullptr),
+			h_matrix(nullptr), h_matrixFine(nullptr),
+			h_thrown(nullptr),
 			
 			// Histograms to store results:
 			
-			h_Counts(nullptr), 
-			h_EmptyCounts(nullptr), 
+			h_Counts(nullptr), h_EmptyCounts(nullptr), h_EmptyEtaRatio(nullptr),
+			h_EmptyYield(nullptr),   h_BkgdYield(nullptr),
+			h_OmegaYield(nullptr),   h_RhoYield(nullptr),
+			h_EtaPionYield(nullptr), h_HadronicBkgdYield(nullptr),
 			
-			h_EmptyEtaRatio(nullptr), 
-			h_EmptyYield(nullptr), 
-			h_OmegaYield(nullptr), 
-			h_RhoYield(nullptr), 
-			h_BkgdYield(nullptr), 
-			h_EtaPionYield(nullptr), 
-			h_HadronicBkgdYield(nullptr), 
+			// Objects used for drawing:
+			
+			cFit(nullptr),
+			pFit(nullptr), pRes(nullptr),
+			cEmpty(nullptr),
+			cYield(nullptr), cCrossSection(nullptr), cAcceptance(nullptr), cEmptyRatio(nullptr),
+			cEtaPionFraction(nullptr), cHadronicBkgdFraction(nullptr),
+			cCounts(nullptr), cBackgrounds(nullptr),
+			cOmegaFitPars(nullptr),
 			
 			h_omega_mu_fit(nullptr),
 			h_omega_sigma_fit(nullptr),
 			h_omega_alpha_fit(nullptr),
 			h_omega_n_fit(nullptr),
 			
-			// Objects used for drawing:
-			
-			cFit(nullptr), pFit(nullptr), pRes(nullptr), 
-			cEmpty(nullptr), 
-			cYield(nullptr), 
-			cCrossSection(nullptr), 
-			cAcceptance(nullptr), 
-			cEmptyRatio(nullptr), 
-			cEtaPionFraction(nullptr), 
-			cHadronicBkgdFraction(nullptr), 
-			cCounts(nullptr), 
-			cOmegaFitPars(nullptr), 
-			cBackgrounds(nullptr), 
 			l0(nullptr), 
 			lp(nullptr), 
 			lm(nullptr), 
 			lx1(nullptr), 
 			lx2(nullptr)
 		{
-			// Run conditions:
+			// Run-specific numbers:
 			
 			m_phase                =  3;
-			
-			m_analysisOption       =  0;
-			m_vetoOption           =  6;
-			
-			m_mggHistName          = "mgg_const";
-			m_matrixHistName       = "AngularMatrix";
 			m_luminosity           =  0.0;
 			m_emptyTargetFluxRatio =  1.0;
 			
-			m_IsMatrixLoaded       = false;
+			m_analysisOption       =  0;
+			m_vetoOption           =  6;
+			m_mggHistName          = "mgg_const";
 			
-			// Binning defaults:
+			m_analysisOption_MC    =  0;
+			m_vetoOption_MC        =  6;
+			m_mggHistName_MC       = "mgg_const";
 			
-			m_binningSet         = false;
+			m_matrixHistName       = "AngularMatrix";
+			
+			m_outputFileName       = "";
+			m_inputFileName        = "";
+			
+			// Variables defining bin sizes:
 			
 			m_rebinsMgg          =  2;
 			m_mggBinSize         =  0.002;
-			m_rebinsEmptyMgg     =  5;
-			m_emptyMggBinSize    =  0.005;
 			
 			m_rebinsTheta        =  6;
 			m_reconAngleBinSize  =  0.06;
 			m_minReconAngle      =  0.00;
 			m_maxReconAngle      =  4.50;
+			
+			m_rebinsEmptyMgg     =  5;
+			m_emptyMggBinSize    =  0.005;
 			
 			m_thrownAngleBinSize =  0.01;
 			m_minThrownAngle     =  0.00;
@@ -138,7 +135,10 @@ class EtaAnalyzer {
 			m_minBeamEnergy      =  8.00;
 			m_maxBeamEnergy      = 11.30;
 			
-			// Fitting Configuration:
+			m_binningSet         = false;
+			m_IsMatrixLoaded     = false;
+			
+			// Fitting options:
 			
 			m_fitOption_signal     =  2;
 			m_fitOption_bkgd       =  2;
@@ -150,6 +150,9 @@ class EtaAnalyzer {
 			m_lineshapeOption      =  0;
 			m_useRawMass           =  0;
 			
+			m_lineshapeOffset      = 0.0;
+			m_lineshapeOffsetFound = false;
+			
 			m_emptyFitOption_eta   =  2;
 			m_emptyFitOption_omega =  1;
 			m_emptyFitOption_fdc   =  1; 
@@ -160,12 +163,6 @@ class EtaAnalyzer {
 			m_maxFitRange          = 0.950;
 			m_minEmptyFitRange     = 0.300;
 			m_maxEmptyFitRange     = 0.950;
-			
-			m_lineshapeOffset      = 0.0;
-			m_lineshapeOffsetFound = false;
-			
-			m_outputFileName = "";
-			m_inputFileName  = "";
 		};
 		
 		~EtaAnalyzer(){};
@@ -349,32 +346,30 @@ class EtaAnalyzer {
 		// Fraction of eta yield corresponding to each eta+X background:
 		
 		TH1F *h_EtaPionBkgdFraction;  // from fit result
-		TH1F *h_EtaPionBkgdFraction_bggen, *h_EtaPionBkgdFraction_bggen_cut;  // from bggen simulation
-		
+		TH1F *h_EtaPionBkgdFraction_bggen, *h_EtaPionBkgdFraction_bggen_cut;   // from bggen simulation
 		TH1F *h_EtaPiPiBkgdFraction;  // from fit result
-		TH1F *h_EtaPiPiBkgdFraction_bggen, *h_EtaPiPiBkgdFraction_bggen_cut;  // from bggen simulation
-		
+		TH1F *h_EtaPiPiBkgdFraction_bggen, *h_EtaPiPiBkgdFraction_bggen_cut;   // from bggen simulation
 		TH1F *h_HadronicBkgdFraction; // from fit result
 		TH1F *h_HadronicBkgdFraction_bggen, *h_HadronicBkgdFraction_bggen_cut; // from bggen simulation
 		
 		// Histogram to store fitted parameter values for inclusive background channels:
 		
 		TH1F *h_BkgdPar_f_etaX, *h_BkgdPar_r_etaX;
-		
 		TH1F *h_LineshapeShift;
 		TCanvas *cShift;
 		
 		// Other inputs needed for cross section
 		
 		TH1F *h_fluxWeights;
-		
 		TH3F *h_matrix, *h_matrixFine;
 		TH2F *h_thrown;
 		
 		// Histograms to store results:
 		
 		TH1F *h_Counts, *h_EmptyCounts, *h_EmptyEtaRatio;
-		TH1F *h_EmptyYield, *h_OmegaYield, *h_RhoYield, *h_BkgdYield, *h_EtaPionYield, *h_HadronicBkgdYield;
+		TH1F *h_EmptyYield,   *h_BkgdYield;
+		TH1F *h_OmegaYield,   *h_RhoYield;
+		TH1F *h_EtaPionYield, *h_HadronicBkgdYield;
 		
 		// Objects needed for drawing:
 		

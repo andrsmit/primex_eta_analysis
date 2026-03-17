@@ -177,8 +177,6 @@ void MggFitter::GuessEtaParameters(vector<double> &parGuesses)
 		double weight = ihist==0 ? 1.0 : -0.1;
 		NGuess += (weight * h_full[ihist]->Integral(h_full[ihist]->FindBin(minEtaFit), h_full[ihist]->FindBin(maxEtaFit)));
 	}
-	double MuGuess    = EtaAnalyzer::m_massEta;
-	double SigmaGuess = 0.013;
 	
 	// subtract empty-target background based on fit to h_emptyWide:
 	
@@ -194,8 +192,7 @@ void MggFitter::GuessEtaParameters(vector<double> &parGuesses)
 	double locMax = 0.0;
 	for(int ibin=h_full[0]->FindBin(0.54); ibin<=h_full[0]->FindBin(0.56); ibin++) {
 		if(h_full[0]->GetBinContent(ibin) > locMax) {
-			locMax  = h_full[0]->GetBinContent(ibin);
-			MuGuess = h_full[0]->GetBinCenter(ibin);
+			locMax = h_full[0]->GetBinContent(ibin);
 		}
 	}
 	
@@ -410,10 +407,6 @@ void MggFitter::GuessEMParameters(vector<double> &parGuesses)
 				p0Guess += (weight * h_full[ihist]->GetBinContent(h_full[ihist]->FindBin(minFitRange)));
 			}
 			p0Guess -= f_emptyWide->Eval(minFitRange) * (h_full[0]->GetBinWidth(1) / h_empty[0]->GetBinWidth(1)) * empty_flux_ratio;
-			
-			double p1Guess =  minFitRange;
-			double p2Guess = -10.0;
-			double p3Guess =  10.0;
 			if(p0Guess < 0.0) p0Guess = 0.0;
 			
 			/*

@@ -176,9 +176,6 @@ int MggFitter::InitializeEmptyWideFitParameters()
 			nParameters += (fitOption_poly+1);
 			break;
 		case 2:
-			for(int ipar=0; ipar<4; ipar++) f_emptyWide->FixParameter(nParameters+ipar, 0.0);
-			nParameters += 4;
-			break;
 		case 3:
 			for(int ipar=0; ipar<4; ipar++) f_emptyWide->FixParameter(nParameters+ipar, 0.0);
 			nParameters += 4;
@@ -231,7 +228,7 @@ int MggFitter::InitializeEmptyWideFitParameters()
 		case 0:
 			break;
 		case 1:
-			for(int i=0; i<m_muFDC.size(); i++) {
+			for(size_t i=0; i<m_muFDC.size(); i++) {
 				f_emptyWide->FixParameter(nParameters+0, 0.00);
 				f_emptyWide->FixParameter(nParameters+1, m_muFDC[i]);
 				f_emptyWide->FixParameter(nParameters+2, 0.02);
@@ -241,25 +238,25 @@ int MggFitter::InitializeEmptyWideFitParameters()
 		case 2:
 			f_emptyWide->FixParameter(nParameters, 0.00);
 			nParameters++;
-			for(int i=0; i<m_muFDC.size(); i++) {
+			for(size_t i=0; i<m_muFDC.size(); i++) {
 				f_emptyWide->FixParameter(nParameters, m_muFDC[i]-m_muFDC[0]);
 				nParameters++;
 			}
 			break;
 		case 3:
-			for(int i=0; i<m_muFDC.size(); i++) {
+			for(size_t i=0; i<m_muFDC.size(); i++) {
 				f_emptyWide->FixParameter(nParameters+0, 0.00);
 				f_emptyWide->FixParameter(nParameters+1, m_muFDC[i]-m_muFDC[0]);
 				nParameters += 2;
 			}
 			break;
 		case 4:
-			for(int i=0; i<m_muFDC_omega.size(); i++) {
+			for(size_t i=0; i<m_muFDC_omega.size(); i++) {
 				f_emptyWide->FixParameter(nParameters+0, 0.00);
 				f_emptyWide->FixParameter(nParameters+1, m_muFDC_omega[i]);
 				nParameters += 2;
 			}
-			for(int i=0; i<m_muFDC_eta.size(); i++) {
+			for(size_t i=0; i<m_muFDC_eta.size(); i++) {
 				f_emptyWide->FixParameter(nParameters+0, 0.00);
 				f_emptyWide->FixParameter(nParameters+1, m_muFDC_eta[i]);
 				nParameters += 2;
@@ -292,7 +289,7 @@ double MggFitter::EmptyMggFitFunction(double *x, double *par)
 	
 	// for excluding sub-regions of the fit:
 	
-	for(int iexc = 0; iexc < excludeRegions.size(); iexc++) {
+	for(size_t iexc = 0; iexc < excludeRegions.size(); iexc++) {
 		if(excludeRegions[iexc].first < locMgg && locMgg < excludeRegions[iexc].second) {
 			TF1::RejectPoint();
 			return 0;

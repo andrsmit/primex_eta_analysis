@@ -77,19 +77,19 @@ void MggFitter::InitializeParameterArrays()
 	------------------------------------------------------------------------------------------------------*/
 	
 	vector<TString> locSignalParameters;
-	int nParsSignal = GetSignalParameters(locSignalParameters);
+	GetSignalParameters(locSignalParameters);
 	
 	vector<TString> locOmegaParameters;
-	int nParsOmega = GetOmegaParameters(locOmegaParameters);
+	GetOmegaParameters(locOmegaParameters);
 	
 	vector<TString> locEMParameters;
-	int nParsEM = GetEMParameters(locEMParameters);
+	GetEMParameters(locEMParameters);
 	
 	vector<TString> locEtaPrimeParameters;
-	int nParsEtaPrime = GetEtaPrimeParameters(locEtaPrimeParameters);
+	GetEtaPrimeParameters(locEtaPrimeParameters);
 	
 	vector<TString> locBeamlineParameters;
-	int nParsBeamline = GetBeamlineParameters(locBeamlineParameters);
+	GetBeamlineParameters(locBeamlineParameters);
 	
 	// combine all parameters into a single vector:
 	
@@ -129,7 +129,6 @@ struct MggFitter::CombinedNLL {
 	MggFitter *fitter;
 	
 	double x1, x2;
-	TH1F *hFull, *hEmpty;
 	vector<int> indexFull, indexEmpty;
 	
 	bool debugPrint = false;
@@ -370,8 +369,8 @@ struct MggFitter::CombinedNLL {
 				}
 				if(skipBin) continue;
 				
-				double n_i = fitter->h_emptyWide[0]->GetBinContent(ibin); // observed counts in prompt-timing distribution
-				double m_i = fitter->h_emptyWide[1]->GetBinContent(ibin); // observed counts in accidental-timing distribution
+				double n_i = fitter->h_empty[0]->GetBinContent(ibin); // observed counts in prompt-timing distribution
+				double m_i = fitter->h_empty[1]->GetBinContent(ibin); // observed counts in accidental-timing distribution
 				
 				// expected counts (from model) in prompt-timing distribution (minus the accidental contribution):
 				
@@ -521,17 +520,6 @@ void MggFitter::FitData()
 	if(debug) printf("\nInitializing parameter arrays...\n");
 	InitializeParameterArrays();
 	
-	// define some useful parameters we will play with later:
-	
-	// parameter to account for uncertainty in full/empty flux ratio:
-	int alpha_flux_par = (int)(find(m_parametersFull.begin(), m_parametersFull.end(), "#alpha_{flux}") - m_parametersFull.begin());
-	
-	// parameter to account for density of cold gas and target walls:
-	int A_empty_par = (int)(find(m_parametersFull.begin(), m_parametersFull.end(), "A_{empty}") - m_parametersFull.begin());
-	
-	// parameter to account for offset of simulated lineshape compared to dta.
-	int offsetPar = (int)(find(m_parametersFull.begin(), m_parametersFull.end(), "#Delta#mu_{#eta}") - m_parametersFull.begin());
-	
 	/*-----------------------------*/
 	// Next, initialize the fit functions themselves:
 	
@@ -560,7 +548,7 @@ void MggFitter::FitData()
 	/*-----------------------------*/
 	// Define two objects that can be used across all subsequent fits:
 	
-	int locNPars = (int)m_parametersFull.size();
+	int locNPars = static_cast<int>(m_parametersFull.size());
 	vector<double> dummyPars(locNPars, 0.0);
 	
 	//=======================================================================================================//
@@ -591,7 +579,7 @@ void MggFitter::FitData()
 	
 	// update fitter with results:
 	auto result1 = locFitter1.Result();
-	for(int i=0; i<result1.NPar(); ++i) {
+	for(int i=0; i<locNPars; ++i) {
 		
 		const auto &ps = locFitter1.Config().ParSettings(i);
 		if(ps.IsFixed()) continue;
@@ -627,13 +615,14 @@ void MggFitter::FitData()
 		printf("\n\nFit Results (1st fit):\n");
 		result1.Print(std::cout);
 	}
+	
 	//excludeRegions.clear();
-	//UpdateFitFunctions(result1);
+	//UpdateFitFunctions(locFitter1);
 	//return;
 	
 	// update fitter with results:
 	result1 = locFitter1.Result();
-	for(int i=0; i<result1.NPar(); ++i) {
+	for(int i=0; i<locNPars; ++i) {
 		
 		const auto &ps = locFitter1.Config().ParSettings(i);
 		if(ps.IsFixed()) continue;
@@ -675,8 +664,6 @@ void MggFitter::FitData()
 	FixEMParameters(locFitter2);
 	ReleaseBeamlineParameters(locFitter2);
 	
-	//locFitter2.Config().ParSettings(alpha_flux_par).Release();
-	//locFitter2.Config().ParSettings(alpha_flux_par).SetLimits(0.9*m_emptyFluxRatio, 1.1*m_emptyFluxRatio);
 	combinedFit = 1;
 	locFitter2.FitFCN();
 	
@@ -690,7 +677,7 @@ void MggFitter::FitData()
 	//return;
 	
 	// update fitter with results:
-	for(int i=0; i<result2.NPar(); ++i) {
+	for(int i=0; i<locNPars; ++i) {
 		
 		const auto &ps = locFitter2.Config().ParSettings(i);
 		if(ps.IsFixed()) continue;
@@ -708,7 +695,7 @@ void MggFitter::FitData()
 		}
 		
 		locFitter2.Config().ParSettings(i).SetValue(result2.Parameter(i));
-		dummyPars[i] = result1.Parameter(i);
+		dummyPars[i] = result2.Parameter(i);
 	}
 	
 	//=======================================================================================================//
@@ -752,7 +739,7 @@ void MggFitter::FitData()
 		}
 		
 		// update fitter with results:
-		for(int i=0; i<result3.NPar(); ++i) {
+		for(int i=0; i<locNPars; ++i) {
 			
 			const auto &ps = locFitter3.Config().ParSettings(i);
 			if(ps.IsFixed()) continue;
@@ -770,7 +757,7 @@ void MggFitter::FitData()
 			}
 			
 			locFitter3.Config().ParSettings(i).SetValue(result3.Parameter(i));
-			dummyPars[i] = result1.Parameter(i);
+			dummyPars[i] = result3.Parameter(i);
 		}
 		
 		//excludeRegions.clear();
@@ -806,17 +793,6 @@ void MggFitter::FitData()
 	ReleaseEtaParameters(locFitter4);
 	ReleaseFDCParameters(locFitter4);
 	
-	/*
-	locFitter4.Config().ParSettings(A_empty_par).Release();
-	locFitter4.Config().ParSettings(A_empty_par).SetLimits(0.02, 0.08);
-	locFitter4.Config().ParSettings(A_empty_par).SetStepSize(0.005);
-	*/
-	/*
-	locFitter4.Config().ParSettings(offsetPar).Release();
-	locFitter4.Config().ParSettings(offsetPar).SetLimits(-0.005, 0.005);
-	locFitter4.Config().ParSettings(offsetPar).SetStepSize(0.0001);
-	*/
-	
 	combinedFit = 1;
 	locFitter4.FitFCN();
 	
@@ -827,7 +803,7 @@ void MggFitter::FitData()
 	}
 	
 	// update fitter with results:
-	for(int i=0; i<result4.NPar(); ++i) {
+	for(int i=0; i<locNPars; ++i) {
 		
 		const auto &ps = locFitter4.Config().ParSettings(i);
 		if(ps.IsFixed()) continue;
@@ -845,7 +821,7 @@ void MggFitter::FitData()
 		}
 		
 		locFitter4.Config().ParSettings(i).SetValue(result4.Parameter(i));
-		dummyPars[i] = result1.Parameter(i);
+		dummyPars[i] = result4.Parameter(i);
 	}
 	
 	//excludeRegions.clear();
@@ -900,11 +876,15 @@ void MggFitter::FitData()
 	ROOT::Math::Functor locFCN6(locNLL6, locNPars);
 	
 	ROOT::Fit::Fitter locFitter6;
-	locFitter6.Config().SetMinimizer("Minuit2", "Migrad");
+	locFitter6.Config().SetMinimizer("Minuit2", "Simplex");
 	locFitter6.Config().MinimizerOptions().SetPrintLevel(0);
 	locFitter6.Config().MinimizerOptions().SetDefaultErrorDef(0.5);
 	locFitter6.SetFCN(locFCN6);
 	locFitter6.Config().SetParamsSettings(locNPars, dummyPars.data());
+	
+	locFitter6.Config().MinimizerOptions().SetStrategy(2);
+	locFitter6.Config().MinimizerOptions().SetTolerance(2e-3);
+	locFitter6.Config().MinimizerOptions().SetMaxFunctionCalls(20000);
 	
 	SetFitParameters(locFitter6, locFitter4); // set from previous fit:
 	
@@ -921,13 +901,33 @@ void MggFitter::FitData()
 	TString etaPiParName = fitOption_signal < 3 ? "N_{#eta#pi}" : "f_{#etaX}";
 	unsigned int etaPiPar = (unsigned int)(find(m_parametersFull.begin(), m_parametersFull.end(), etaPiParName) - m_parametersFull.begin());
 	
-	//locFitter6.Config().SetMinosErrors({yieldPar, etaPiPar});
+	locFitter6.Config().SetMinosErrors({yieldPar, etaPiPar});
+	
+	locFitter6.FitFCN();
+	auto simplexResult = locFitter6.Result();
+	for(unsigned i=0; i<simplexResult.NPar(); i++) {
+		
+		const auto &ps = locFitter6.Config().ParSettings(i);
+		if(ps.IsFixed()) continue;
+		
+		double val = simplexResult.Parameter(i);
+		locFitter6.Config().ParSettings(i).SetValue(val);
+		
+		double step = 0.01 * std::abs(val);
+		if(step==0) step = 1e-3;
+		locFitter6.Config().ParSettings(i).SetStepSize(step);
+	}
+	
+	locFitter6.Config().SetMinimizer("Minuit2", "Migrad");
+	locFitter6.Config().MinimizerOptions().SetStrategy(2);
+	locFitter6.Config().MinimizerOptions().SetTolerance(2e-3);
+	locFitter6.Config().MinimizerOptions().SetMaxFunctionCalls(20000);
 	
 	bool ok = locFitter6.FitFCN();
 	
 	// update fitter with results:
 	auto result6 = locFitter6.Result();
-	for(int i=0; i<result6.NPar(); ++i) {
+	for(int i=0; i<locNPars; ++i) {
 		
 		const auto &ps = locFitter6.Config().ParSettings(i);
 		if(ps.IsFixed()) continue;
@@ -950,6 +950,13 @@ void MggFitter::FitData()
 		// Note: I commented out the above line because I'm not sure what happens for fixed parameters or
 		// for parameters where the error is poorly estimated.
 	}
+	
+	
+	std::cout << "Status = " << result6.Status() << std::endl;
+	std::cout << "EDM = " << result6.Edm() << std::endl;
+	std::cout << "CovMatrixStatus = " << result6.CovMatrixStatus() << std::endl;
+	std::cout << "NCalls = " << result6.NCalls() << std::endl;
+	//result6.Print(std::cout);
 	
 	if(!ok) {
 		std::cout << "Migrad failed, retrying with all empty target parameters fixed...\n";
@@ -975,7 +982,7 @@ void MggFitter::FitData()
 	result.Print(std::cout);
 	
 	UpdateFitFunctions(result);
-	/*
+	
 	if(ok) {
 		// Run HESSE (improves covariance estimates):
 		locFitter6.CalculateHessErrors();
@@ -999,7 +1006,7 @@ void MggFitter::FitData()
 	double z_qf_fit = result.Parameter(zPar);
 	f_etaLineshape->SetParameter(0, z_qf_fit);
 	
-	/*
+	
 	double etaYield   = result.Parameter(yieldPar);
 	double etaStatErr = result.ParError(yieldPar);
 	
@@ -1015,7 +1022,7 @@ void MggFitter::FitData()
 	printf("Covariance: %f\n", covExcInc);
 	printf("Inclusive Yield: %f +/- %f\n", etaYield+etaPiYield, incStatErr);
 	printf("\n\n\n");
-	*/
+	
 	return;
 }
 
@@ -1104,14 +1111,12 @@ void MggFitter::ReleaseEMParameters(ROOT::Fit::Fitter &fitter) {
 		case 3:
 		{
 			int p0Par = (int)(find(m_parametersFull.begin(), m_parametersFull.end(), "p0") - m_parametersFull.begin());
-			int p1Par = (int)(find(m_parametersFull.begin(), m_parametersFull.end(), "p1") - m_parametersFull.begin());
 			int p2Par = (int)(find(m_parametersFull.begin(), m_parametersFull.end(), "p2") - m_parametersFull.begin());
 			int p3Par = (int)(find(m_parametersFull.begin(), m_parametersFull.end(), "p3") - m_parametersFull.begin());
 			
 			fitter.Config().ParSettings(p0Par).Release();
 			fitter.Config().ParSettings(p0Par).SetLimits(0.00, 1.e7);
 			
-			fitter.Config().ParSettings(p1Par).Release();
 			fitter.Config().ParSettings(p2Par).Release();
 			fitter.Config().ParSettings(p3Par).Release();
 			break;
@@ -1199,15 +1204,11 @@ void MggFitter::ReleaseBeamlineParameters(ROOT::Fit::Fitter &fitter) {
 		case 2:
 		{
 			int p0Par = (int)(find(m_parametersFull.begin(), m_parametersFull.end(), "p0,empty") - m_parametersFull.begin());
-			int p1Par = (int)(find(m_parametersFull.begin(), m_parametersFull.end(), "p1,empty") - m_parametersFull.begin());
 			int p2Par = (int)(find(m_parametersFull.begin(), m_parametersFull.end(), "p2,empty") - m_parametersFull.begin());
 			int p3Par = (int)(find(m_parametersFull.begin(), m_parametersFull.end(), "p3,empty") - m_parametersFull.begin());
 			
 			fitter.Config().ParSettings(p0Par).Release();
 			fitter.Config().ParSettings(p0Par).SetLimits(0.00, 1.e6);
-			
-			//fitter.Config().ParSettings(p1Par).Release();
-			//fitter.Config().ParSettings(p1Par).SetLimits(0.00, 1.e6);
 			
 			fitter.Config().ParSettings(p2Par).Release();
 			fitter.Config().ParSettings(p2Par).SetLimits(-1.e3, 1.e3);
@@ -1240,7 +1241,8 @@ void MggFitter::ReleaseFDCParameters(ROOT::Fit::Fitter &fitter) {
 			break;
 		case 1:
 		{
-			for(int i=0; i<m_muFDC.size(); i++) {
+			int n_fdc = static_cast<int>(m_muFDC.size());
+			for(int i=0; i<n_fdc; i++) {
 				
 				// skip fitting regions outside of specified fit range:
 				if((m_muFDC[i] < minFitRange) || (m_muFDC[i] > maxFitRange)) continue;
@@ -1282,7 +1284,8 @@ void MggFitter::ReleaseFDCParameters(ROOT::Fit::Fitter &fitter) {
 			fitter.Config().ParSettings(locNPar).Release();
 			fitter.Config().ParSettings(locNPar).SetLimits(0.0, 1.e5);
 			
-			for(int i=0; i<m_muFDC.size(); i++) {
+			int n_fdc = static_cast<int>(m_muFDC.size());
+			for(int i=0; i<n_fdc; i++) {
 				
 				bool skip = false;
 				for(int ireg=0; ireg<(int)excludeRegions.size(); ireg++) {
@@ -1302,7 +1305,8 @@ void MggFitter::ReleaseFDCParameters(ROOT::Fit::Fitter &fitter) {
 		}
 		case 3:
 		{
-			for(int i=0; i<m_muFDC.size(); i++) {
+			int n_fdc = static_cast<int>(m_muFDC.size());
+			for(int i=0; i<n_fdc; i++) {
 				
 				bool skip = false;
 				for(int ireg=0; ireg<(int)excludeRegions.size(); ireg++) {
@@ -1366,7 +1370,8 @@ void MggFitter::FixBeamlineParameters(ROOT::Fit::Fitter &fitter) {
 			break;
 		case 1:
 		{
-			for(int i=0; i<m_muFDC.size(); i++) {
+			int n_fdc = static_cast<int>(m_muFDC.size());
+			for(int i=0; i<n_fdc; i++) {
 				int locNPar   = (int)(find(m_parametersFull.begin(), m_parametersFull.end(), Form("N_{fdc,%d}",i+1)) 
 					- m_parametersFull.begin());
 				int locMuPar  = (int)(find(m_parametersFull.begin(), m_parametersFull.end(), Form("#mu_{fdc,%d}",i+1)) 
@@ -1386,7 +1391,8 @@ void MggFitter::FixBeamlineParameters(ROOT::Fit::Fitter &fitter) {
 			fitter.Config().ParSettings(locNPar).Release();
 			fitter.Config().ParSettings(locNPar).SetLimits(0.0, 1.e5);
 			
-			for(int i=0; i<m_muFDC.size(); i++) {
+			int n_fdc = static_cast<int>(m_muFDC.size());
+			for(int i=0; i<n_fdc; i++) {
 				int locMuPar  = (int)(find(m_parametersFull.begin(), m_parametersFull.end(), Form("#Delta#mu_{fdc,%d}",i+1)) 
 					- m_parametersFull.begin());
 				fitter.Config().ParSettings(locMuPar).Fix();
@@ -1395,7 +1401,8 @@ void MggFitter::FixBeamlineParameters(ROOT::Fit::Fitter &fitter) {
 		}
 		case 3:
 		{
-			for(int i=0; i<m_muFDC.size(); i++) {
+			int n_fdc = static_cast<int>(m_muFDC.size());
+			for(int i=0; i<n_fdc; i++) {
 				int locNPar   = (int)(find(m_parametersFull.begin(), m_parametersFull.end(), Form("N_{fdc,%d}",i+1)) 
 					- m_parametersFull.begin());
 				int locMuPar  = (int)(find(m_parametersFull.begin(), m_parametersFull.end(), Form("#Delta#mu_{fdc,%d}",i+1)) 
@@ -1641,10 +1648,10 @@ void MggFitter::ReleaseEtaParameters(ROOT::Fit::Fitter &fitter) {
 			fitter.Config().ParSettings(NPar).Release();
 			fitter.Config().ParSettings(NPar).SetLimits(0.0, 1.e6);
 			
-			int zPar = (int)(find(m_parametersFull.begin(), m_parametersFull.end(), "z_{qf}") - m_parametersFull.begin());
-			if(angle<2.5) {
+			if(incFraction_option==2) {
+				int zPar = (int)(find(m_parametersFull.begin(), m_parametersFull.end(), "z_{qf}") - m_parametersFull.begin());
 				fitter.Config().ParSettings(zPar).Release();
-				fitter.Config().ParSettings(zPar).SetLimits(0.0, 1.0);
+				fitter.Config().ParSettings(zPar).SetLimits(0.0,1.0);
 			}
 			
 			int NEtaPiPar = (int)(find(m_parametersFull.begin(), m_parametersFull.end(), "N_{#eta#pi}") - m_parametersFull.begin());
@@ -1671,16 +1678,13 @@ void MggFitter::ReleaseEtaParameters(ROOT::Fit::Fitter &fitter) {
 			int NPar = (int)(find(m_parametersFull.begin(), m_parametersFull.end(), "N_{#eta}") - m_parametersFull.begin());
 			fitter.Config().ParSettings(NPar).Release();
 			fitter.Config().ParSettings(NPar).SetLimits(0.0, 1.e6);
-			/*
-			int zPar = (int)(find(m_parametersFull.begin(), m_parametersFull.end(), "z_{qf}") - m_parametersFull.begin());
-			fitter.Config().ParSettings(zPar).Release();
 			
-			double minLimit = 0.0, maxLimit = 1.0;
-			if(incFraction_theory>0.1) minLimit = incFraction_theory - 0.1;
-			if(incFraction_theory<0.9) maxLimit = incFraction_theory + 0.1;
+			if(incFraction_option==2) {
+				int zPar = (int)(find(m_parametersFull.begin(), m_parametersFull.end(), "z_{qf}") - m_parametersFull.begin());
+				fitter.Config().ParSettings(zPar).Release();
+				fitter.Config().ParSettings(zPar).SetLimits(0.0,1.0);
+			}
 			
-			fitter.Config().ParSettings(zPar).SetLimits(minLimit, maxLimit);
-			*/
 			int NEtaPiPar = (int)(find(m_parametersFull.begin(), m_parametersFull.end(), "N_{#eta#pi}") - m_parametersFull.begin());
 			fitter.Config().ParSettings(NEtaPiPar).Release();
 			fitter.Config().ParSettings(NEtaPiPar).SetLimits(0.0, 1.e6);
@@ -1705,16 +1709,13 @@ void MggFitter::ReleaseEtaParameters(ROOT::Fit::Fitter &fitter) {
 			int NPar = (int)(find(m_parametersFull.begin(), m_parametersFull.end(), "N_{#eta}") - m_parametersFull.begin());
 			fitter.Config().ParSettings(NPar).Release();
 			fitter.Config().ParSettings(NPar).SetLimits(0.0, 1.e6);
-			/*
-			int zPar = (int)(find(m_parametersFull.begin(), m_parametersFull.end(), "z_{qf}") - m_parametersFull.begin());
-			fitter.Config().ParSettings(zPar).Release();
 			
-			double minLimit = 0.0, maxLimit = 1.0;
-			if(incFraction_theory>0.1) minLimit = incFraction_theory - 0.1;
-			if(incFraction_theory<0.9) maxLimit = incFraction_theory + 0.1;
+			if(incFraction_option==2) {
+				int zPar = (int)(find(m_parametersFull.begin(), m_parametersFull.end(), "z_{qf}") - m_parametersFull.begin());
+				fitter.Config().ParSettings(zPar).Release();
+				fitter.Config().ParSettings(zPar).SetLimits(0.0,1.0);
+			}
 			
-			fitter.Config().ParSettings(zPar).SetLimits(minLimit, maxLimit);
-			*/
 			int fEtaXPar = (int)(find(m_parametersFull.begin(), m_parametersFull.end(), "f_{#etaX}") - m_parametersFull.begin());
 			fitter.Config().ParSettings(fEtaXPar).Release();
 			fitter.Config().ParSettings(fEtaXPar).SetLimits(0.0, 1.0);
@@ -1733,16 +1734,13 @@ void MggFitter::ReleaseEtaParameters(ROOT::Fit::Fitter &fitter) {
 			int NPar = (int)(find(m_parametersFull.begin(), m_parametersFull.end(), "N_{#eta}") - m_parametersFull.begin());
 			fitter.Config().ParSettings(NPar).Release();
 			fitter.Config().ParSettings(NPar).SetLimits(0.0, 1.e6);
-			/*
-			int zPar = (int)(find(m_parametersFull.begin(), m_parametersFull.end(), "z_{qf}") - m_parametersFull.begin());
-			fitter.Config().ParSettings(zPar).Release();
 			
-			double minLimit = 0.0, maxLimit = 1.0;
-			if(incFraction_theory>0.1) minLimit = incFraction_theory - 0.1;
-			if(incFraction_theory<0.9) maxLimit = incFraction_theory + 0.1;
+			if(incFraction_option==2) {
+				int zPar = (int)(find(m_parametersFull.begin(), m_parametersFull.end(), "z_{qf}") - m_parametersFull.begin());
+				fitter.Config().ParSettings(zPar).Release();
+				fitter.Config().ParSettings(zPar).SetLimits(0.0,1.0);
+			}
 			
-			fitter.Config().ParSettings(zPar).SetLimits(minLimit, maxLimit);
-			*/
 			int fEtaXPar = (int)(find(m_parametersFull.begin(), m_parametersFull.end(), "f_{#etaX}") - m_parametersFull.begin());
 			fitter.Config().ParSettings(fEtaXPar).Release();
 			fitter.Config().ParSettings(fEtaXPar).SetLimits(0.0, 1.0);
@@ -1760,13 +1758,12 @@ void MggFitter::ReleaseEtaParameters(ROOT::Fit::Fitter &fitter) {
 			}
 			
 			int vPar = (int)(find(m_parametersFull.begin(), m_parametersFull.end(), "v_{BG}") - m_parametersFull.begin());
-			double locVVal = fitter.Config().ParSettings(vPar).Value();
-			//if(locVVal>-2.0) {
 			if(vetoOption<5) {
 				fitter.Config().ParSettings(vPar).Release();
 				fitter.Config().ParSettings(vPar).SetLimits(-10.0,10.0);
 			}
 			else {
+				//double locVVal = fitter.Config().ParSettings(vPar).Value();
 				//fitter.Config().ParSettings(vPar).Release();
 				//fitter.Config().ParSettings(vPar).SetLimits(locVVal-1.0,locVVal+1.0);
 			}
@@ -1781,6 +1778,12 @@ void MggFitter::ReleaseEtaParameters(ROOT::Fit::Fitter &fitter) {
 			int NPar = (int)(find(m_parametersFull.begin(), m_parametersFull.end(), "N_{#eta}") - m_parametersFull.begin());
 			fitter.Config().ParSettings(NPar).Release();
 			fitter.Config().ParSettings(NPar).SetLimits(0.0, 1.e6);
+			
+			if(incFraction_option==2) {
+				int zPar = (int)(find(m_parametersFull.begin(), m_parametersFull.end(), "z_{qf}") - m_parametersFull.begin());
+				fitter.Config().ParSettings(zPar).Release();
+				fitter.Config().ParSettings(zPar).SetLimits(0.0,1.0);
+			}
 			
 			int fEtaXPar = (int)(find(m_parametersFull.begin(), m_parametersFull.end(), "f_{#etaX}") - m_parametersFull.begin());
 			fitter.Config().ParSettings(fEtaXPar).Release();
@@ -1799,11 +1802,14 @@ void MggFitter::ReleaseEtaParameters(ROOT::Fit::Fitter &fitter) {
 			}
 			
 			int vPar = (int)(find(m_parametersFull.begin(), m_parametersFull.end(), "v_{BG}") - m_parametersFull.begin());
-			double locVVal = fitter.Config().ParSettings(vPar).Value();
-			
 			if(vetoOption<5) {
 				fitter.Config().ParSettings(vPar).Release();
 				fitter.Config().ParSettings(vPar).SetLimits(-10.0,10.0);
+			}
+			else {
+				//double locVVal = fitter.Config().ParSettings(vPar).Value();
+				//fitter.Config().ParSettings(vPar).Release();
+				//fitter.Config().ParSettings(vPar).SetLimits(locVVal-1.0,locVVal+1.0);
 			}
 			break;
 		}
@@ -1925,7 +1931,7 @@ void MggFitter::FitCohLineshape(int drawOption)
 	
 	locfCoh->SetParName(0, "#mu_{1}");
 	locfCoh->SetParameter(0, 0.540);
-	locfCoh->SetParLimits(0, 0.530,  0.560);
+	locfCoh->SetParLimits(0, 0.520,  0.560);
 	
 	locfCoh->SetParName(1, "#sigma_{1}");
 	locfCoh->SetParameter(1, 0.0075);
@@ -1976,6 +1982,7 @@ void MggFitter::FitCohLineshape(int drawOption)
 	//locfCoh->FixParameter(8, 0.0);
 	
 	// Fit:
+	locfCoh->SetRange(0.48,0.60);
 	h_cohLineshape->Fit(locfCoh, "R0QI");
 	
 	// Initialize private member, 'f_cohLineshape' based on this fit result:
@@ -1988,16 +1995,17 @@ void MggFitter::FitCohLineshape(int drawOption)
 		cEtaLS->SetLeftMargin(0.13); cEtaLS->SetRightMargin(0.07);
 		cEtaLS->SetBottomMargin(0.13); cEtaLS->SetTopMargin(0.07);
 		//gStyle->SetOptFit(0);
-		//cEtaLS->SetLogy();
+		cEtaLS->SetLogy();
 		
-		h_cohLineshape->GetXaxis()->SetRangeUser(0.5,0.6);
+		h_cohLineshape->GetXaxis()->SetRangeUser(0.3,0.7);
 		h_cohLineshape->Draw();
-		f_cohLineshape->SetRange(0.4,0.7);
+		f_cohLineshape->SetRange(0.3,0.9);
 		f_cohLineshape->SetNpx(1000);
 		f_cohLineshape->Draw("same");
 		
 		// Calculate fraction of PDF between 0.5 and 0.6 GeV/c2:
 		double fracAccepted = locfCoh->Integral(0.5,0.6) / h_cohLineshape->GetXaxis()->GetBinWidth(1);
+		fracAccepted = h_cohLineshape->Integral(h_cohLineshape->GetXaxis()->FindBin(0.50001), h_cohLineshape->GetXaxis()->FindBin(0.59999));
 		printf("  fraction of signal lineshape within mgg cut: %f\n", fracAccepted);
 		
 		TLatex locLat;
@@ -2116,12 +2124,16 @@ void MggFitter::FitQFLineshape(int drawOption)
 	//locfQF->FixParameter(8, 0.0);
 	
 	// Fit:
+	locfQF->SetRange(0.48,0.62);
 	h_qfLineshape->Fit(locfQF, "R0QI");
 	
 	// Initialize private member, 'f_qfLineshape' based on this fit result:
 	f_qfLineshape = new TF1("f_qfLineshape", DoubleCrystalBallPlusGausPDF, minFitRange, maxFitRange, 13);
 	f_qfLineshape->SetParameters(locfQF->GetParameters());
 	f_qfLineshape->SetLineColor(kGreen);
+	
+	f_cohLineshape->SetNpx(1000);
+	f_qfLineshape->SetNpx(1000);
 	
 	if(drawOption) {
 		
@@ -2146,20 +2158,34 @@ void MggFitter::FitQFLineshape(int drawOption)
 		f_cohLineshape->SetLineColor(kBlue);
 		f_etaLineshape->SetLineColor(kBlack);
 		
+		h_cohLineshape->SetMarkerStyle(25);
+		h_cohLineshape->SetMarkerSize(0.8);
+		
+		h_qfLineshape->SetMarkerStyle(25);
+		h_qfLineshape->SetMarkerSize(0.8);
+		
 		f_qfLineshape->SetLineStyle(7);
 		f_cohLineshape->SetLineStyle(7);
 		
+		cQFLS->cd();
 		h_cohLineshape->Draw();
 		h_qfLineshape->Draw("same");
 		f_qfLineshape->SetRange(0.4,0.7);
 		f_qfLineshape->SetNpx(1000);
 		f_qfLineshape->Draw("same");
 		f_cohLineshape->Draw("same");
-		f_etaLineshape->Draw("same");
+		//f_etaLineshape->Draw("same");
 		
 		// Calculate fraction of PDF between 0.5 and 0.6 GeV/c2:
-		double fracAccepted = locfQF->Integral(0.5,0.6) / h_qfLineshape->GetXaxis()->GetBinWidth(1);
-		printf("  fraction of signal lineshape within mgg cut: %f\n", fracAccepted);
+		double fracAccepted_coh = f_cohLineshape->Integral(0.5,0.6) / h_qfLineshape->GetXaxis()->GetBinWidth(1);
+		fracAccepted_coh = h_cohLineshape->Integral(h_cohLineshape->GetXaxis()->FindBin(0.50001), 
+			h_cohLineshape->GetXaxis()->FindBin(0.59999));
+		printf("  fraction of coh lineshape within mgg cut: %f\n", fracAccepted_coh);
+		
+		double fracAccepted_qf = locfQF->Integral(0.5,0.6) / h_qfLineshape->GetXaxis()->GetBinWidth(1);
+		fracAccepted_qf = h_qfLineshape->Integral(h_qfLineshape->GetXaxis()->FindBin(0.50001), 
+			h_qfLineshape->GetXaxis()->FindBin(0.59999));
+		printf("  fraction of qf lineshape within mgg cut: %f\n", fracAccepted_qf);
 		
 		TLatex locLat;
 		locLat.SetTextFont(42);
@@ -2171,21 +2197,48 @@ void MggFitter::FitQFLineshape(int drawOption)
 		locLat.SetTextColor(kBlue);
 		locLat.DrawLatexNDC(0.155, 0.875, 
 			Form("#scale[1.0]{%.2f#circ < #theta_{#gamma#gamma} < %.2f#circ}", locMinAngle, locMaxAngle));
-		
-		locLat.SetTextColor(kBlack);
-		//locLat.DrawLatexNDC(0.165, 0.725, Form("#int_{%.2f}^{%.2f}#color[632]{f_{#eta}}dm_{#gamma#gamma} = %.4f", 
-		//	minMggCut, maxMggCut, fracAccepted));
 		/*
-		TLegend *leg1 = new TLegend(0.65, 0.65, 0.9, 0.9);
+		locLat.SetTextColor(kBlack);
+		locLat.DrawLatexNDC(0.65, 0.825, Form("#int_{%.2f}^{%.2f}#color[4]{f_{Coh}}dm_{#gamma#gamma} = %.4f", 
+			minMggCut, maxMggCut, fracAccepted_coh));
+		locLat.DrawLatexNDC(0.65, 0.655, Form("#int_{%.2f}^{%.2f}#color[2]{f_{QF}}dm_{#gamma#gamma} = %.4f", 
+			minMggCut, maxMggCut, fracAccepted_qf));
+		*/
+		TLegend *leg1 = new TLegend(0.65, 0.60, 0.99, 0.99);
 		leg1->AddEntry(h_cohLineshape, "Coh Simulation", "PE");
 		leg1->AddEntry(h_qfLineshape, "QF Simulation", "PE");
-		leg1->AddEntry(f_cohLineshape, "f_{Coh}",    "l");
-		leg1->AddEntry(f_qfLineshape, "f_{QF}", "l");
-		leg1->AddEntry(f_etaLineshape, "f_{#eta} (z=0.9)", "l");
-		leg1->Draw();
-		*/
+		leg1->AddEntry(f_cohLineshape, "F_{Coh}#left(m_{#gamma#gamma}^{Constr}#right)",    "l");
+		leg1->AddEntry(f_qfLineshape, "F_{QF}#left(m_{#gamma#gamma}^{Constr}#right)", "l");
+		//leg1->AddEntry(f_etaLineshape, "f_{#eta} (z=0.9)", "l");
+		//leg1->Draw();
+		
 		cQFLS->Update();
-		//cQFLS->SaveAs("lineshape_fit.pdf");
+		cQFLS->SaveAs("lineshape_fit.pdf");
+		
+		
+		TCanvas *cQFLS_log = new TCanvas("cQFLS_log", "cQFLS_log", 950, 700);
+		cQFLS_log->SetLeftMargin(0.13); cQFLS->SetRightMargin(0.07);
+		cQFLS_log->SetBottomMargin(0.13); cQFLS->SetTopMargin(0.07);
+		cQFLS_log->SetLogy();
+		cQFLS_log->cd();
+		h_cohLineshape->Draw();
+		h_qfLineshape->Draw("same");
+		f_qfLineshape->SetRange(0.4,0.7);
+		f_qfLineshape->SetNpx(1000);
+		f_qfLineshape->Draw("same");
+		f_cohLineshape->Draw("same");
+		
+		locLat.SetTextColor(kBlue);
+		locLat.DrawLatexNDC(0.155, 0.875, 
+			Form("#scale[1.0]{%.2f#circ < #theta_{#gamma#gamma} < %.2f#circ}", locMinAngle, locMaxAngle));
+		
+		locLat.SetTextColor(kBlack);
+		locLat.DrawLatexNDC(0.65, 0.825, Form("#int_{%.2f}^{%.2f}#color[4]{f_{Coh}}dm_{#gamma#gamma} = %.4f", 
+			minMggCut, maxMggCut, fracAccepted_coh));
+		locLat.DrawLatexNDC(0.65, 0.655, Form("#int_{%.2f}^{%.2f}#color[2]{f_{QF}}dm_{#gamma#gamma} = %.4f", 
+			minMggCut, maxMggCut, fracAccepted_qf));
+		cQFLS_log->Update();
+		
 		getchar();
 		
 		delete cQFLS;
@@ -2349,7 +2402,7 @@ void MggFitter::FitEtaPionLineshape(int drawOption)
 		printf("  fraction of eta+pion lineshape within mgg cut: %f\n", fracAccepted);
 		
 		cEtaPionLS->Update();
-		//cEtaPionLS->SaveAs("eta_pion_lineshape_fit.pdf");
+		cEtaPionLS->SaveAs("eta_pion_lineshape_fit.pdf");
 		getchar();
 		delete cEtaPionLS;
 	}
@@ -2431,7 +2484,7 @@ void MggFitter::FitEtaPiPiLineshape(int drawOption)
 		printf("  fraction of eta+pion lineshape within mgg cut: %f\n", fracAccepted);
 		
 		cEtaPiPiLS->Update();
-		//cEtaPiPiLS->SaveAs("eta_pipi_lineshape_fit.pdf");
+		cEtaPiPiLS->SaveAs("eta_pipi_lineshape_fit.pdf");
 		getchar();
 		delete cEtaPiPiLS;
 	}
@@ -2479,7 +2532,7 @@ void MggFitter::FitOmegaLineshape(int drawOption)
 	
 	h_omegaLineshape->Fit(fOmega1, "R0QL");
 	
-	TF1 *fOmega2 = new TF1("fOmega2", DoubleCrystalBallPDF, 0.2, 0.9, 10);
+	TF1 *fOmega2 = new TF1("fOmega2", DoubleCrystalBallPDF, 0.5, 0.9, 10);
 	fOmega2->SetParameter(0, fOmega1->GetParameter(0));
 	fOmega2->SetParameter(1, fOmega1->GetParameter(1));
 	fOmega2->SetParameter(2, fOmega1->GetParameter(2));
@@ -2512,23 +2565,49 @@ void MggFitter::FitOmegaLineshape(int drawOption)
 	
 	fOmega2->FixParameter(9, h_omegaLineshape->GetBinWidth(1));
 	
-	h_omegaLineshape->Fit(fOmega2, "R0QL");
-	h_omegaLineshape->SetTitle("#gamma+p(n)#rightarrow#omega+p(n)");
+	h_omegaLineshape->Fit(fOmega2, "R0Q");
+	h_omegaLineshape->SetTitle("");//"#gamma+^{4}He#rightarrow#omega(#pi^{0}#gamma)+^{4}He");
+	h_omegaLineshape->SetMarkerStyle(8);
+	h_omegaLineshape->SetMarkerSize(0.8);
 	
+	h_omegaLineshape->GetXaxis()->SetRangeUser(0.3,1.0);
+	h_omegaLineshape->GetXaxis()->SetTitleSize(0.05);
+	h_omegaLineshape->GetXaxis()->CenterTitle(true);
+	/*
+	h_omegaLineshape->GetYaxis()->SetTitle("normalized counts / MeV");
+	h_omegaLineshape->GetYaxis()->SetTitleSize(0.05);
+	h_omegaLineshape->GetYaxis()->CenterTitle(true);
+	h_omegaLineshape->GetYaxis()->SetRangeUser(0.0, 0.013);
+	h_omegaLineshape->SetMinimum(0.);
+	*/
 	if(drawOption) {
 		TCanvas *cOmegaLS = new TCanvas("cOmegaLS", "cOmegaLS", 950, 700);
-		//cOmegaLS->SetLogy();
+		cOmegaLS->SetLeftMargin(0.13); cOmegaLS->SetRightMargin(0.07);
+		cOmegaLS->SetBottomMargin(0.13); cOmegaLS->SetTopMargin(0.07);
+		h_omegaLineshape->Draw();
+		fOmega2->Draw("same");
+		
+		//TLatex lat;
+		//lat.SetTextFont(42);
+		//lat.DrawLatexNDC(0.155, 0.865, "2.0#circ < #theta_{#gamma#gamma} < 2.25#circ");
+		
+		TCanvas *cOmegaLS_log = new TCanvas("cOmegaLS_log", "cOmegaLS_log", 950, 700);
+		cOmegaLS_log->SetLogy();
+		cOmegaLS_log->SetLeftMargin(0.13); cOmegaLS_log->SetRightMargin(0.07);
+		cOmegaLS_log->SetBottomMargin(0.13); cOmegaLS_log->SetTopMargin(0.07);
 		h_omegaLineshape->Draw();
 		fOmega2->Draw("same");
 		
 		cOmegaLS->Update();
-		/*
-		gStyle->SetOptStat(0);
-		cOmegaLS->Modified();
-		cOmegaLS->SaveAs("omega_linshape_fit.pdf");
-		*/
+		cOmegaLS_log->Update();
+		
+		//gStyle->SetOptStat(0);
+		//cOmegaLS->Modified();
+		//cOmegaLS->SaveAs("omega_lineshape_fit.pdf");
+		
 		getchar();
 		delete cOmegaLS;
+		delete cOmegaLS_log;
 	}
 	
 	f_omegaLineshape = new TF1("f_omegaLineshape", DoubleCrystalBallPDF, minFitRange, maxFitRange, 10);
@@ -2566,7 +2645,7 @@ void MggFitter::GetYield(double &yield, double &yieldErr, int useFitPars, int su
 	//-----------------------------------------------//
 	
 	TF1 *locfBkgd;
-	int nParameters = InitializeFitFunction(&locfBkgd, "locBkgdClone");
+	InitializeFitFunction(&locfBkgd, "locBkgdClone");
 	locfBkgd->SetParameters(f_full->GetParameters());
 	ZeroSignalPars(locfBkgd, subtractHadBkgd);
 	
@@ -2635,14 +2714,14 @@ void MggFitter::GetYield(double &yield, double &yieldErr, int useFitPars, int su
 				double locYieldBkgdErr = locCorrectionBkgd * N_bkgdErr;
 				
 				double locYieldInc    = locYieldEta + locYieldEtaPion + locYieldBkgd;
-				double locYieldIncErr = sqrt(pow(locYieldEtaErr,2.0) + pow(locYieldEtaPion,2.0) + pow(locYieldBkgdErr,2.0));
+				double locYieldIncErr = sqrt(pow(locYieldEtaErr,2.0) + pow(locYieldEtaPionErr,2.0) + pow(locYieldBkgdErr,2.0));
 				
 				if(subtractHadBkgd) {
 					yield    = locYieldEta;
 					yieldErr = locYieldEtaErr;
 				} else {
 					yield    = locYieldInc;
-					//yieldErr = locYieldIncErr;
+					yieldErr = locYieldIncErr;
 					
 					unsigned int etaPar = (unsigned int)(find(m_parametersFull.begin(), m_parametersFull.end(), "N_{#eta}") 
 						- m_parametersFull.begin());
@@ -2696,14 +2775,14 @@ void MggFitter::GetYield(double &yield, double &yieldErr, int useFitPars, int su
 				double locYieldBkgdErr = locCorrectionBkgd * N_bkgdErr;
 				
 				double locYieldInc    = locYieldEta + locYieldEtaPion + locYieldBkgd;
-				double locYieldIncErr = sqrt(pow(locYieldEtaErr,2.0) + pow(locYieldEtaPion,2.0) + pow(locYieldBkgdErr,2.0));
+				double locYieldIncErr = sqrt(pow(locYieldEtaErr,2.0) + pow(locYieldEtaPionErr,2.0) + pow(locYieldBkgdErr,2.0));
 				
 				if(subtractHadBkgd) {
 					yield    = locYieldEta;
 					yieldErr = locYieldEtaErr;
 				} else {
 					yield    = locYieldInc;
-					//yieldErr = locYieldIncErr;
+					yieldErr = locYieldIncErr;
 					
 					unsigned int etaPar = (unsigned int)(find(m_parametersFull.begin(), m_parametersFull.end(), "N_{#eta}") 
 						- m_parametersFull.begin());
@@ -2784,7 +2863,7 @@ void MggFitter::GetYield(double &yield, double &yieldErr, int useFitPars, int su
 					yieldErr = locYield_signal_err;
 				} else {
 					yield    = locYieldInc;
-					//yieldErr = locYieldIncErr;
+					yieldErr = locYieldIncErr;
 					
 					unsigned int etaPar = (unsigned int)(find(m_parametersFull.begin(), m_parametersFull.end(), "N_{#eta}") 
 						- m_parametersFull.begin());
@@ -2898,7 +2977,7 @@ void MggFitter::GetYield(double &yield, double &yieldErr, int useFitPars, int su
 					yieldErr = locYield_signal_err;
 				} else {
 					yield    = locYieldInc;
-					//yieldErr = locYieldIncErr;
+					yieldErr = locYieldIncErr;
 					
 					unsigned int etaPar = (unsigned int)(find(m_parametersFull.begin(), m_parametersFull.end(), "N_{#eta}") 
 						- m_parametersFull.begin());
@@ -3005,22 +3084,26 @@ void MggFitter::GetYield(double &yield, double &yieldErr, int useFitPars, int su
 				double locYieldIncErr = sqrt(pow(locYield_signal_err,2.0) + pow(locYield_etapi_err,2.0) 
 					+ pow(locYield_etapipi_err,2.0) + pow(locYield_bkgd_err,2.0));
 				
+				unsigned int etaPar = (unsigned int)(find(m_parametersFull.begin(), m_parametersFull.end(), "N_{#eta}") 
+					- m_parametersFull.begin());
+				unsigned int etaXPar = (unsigned int)(find(m_parametersFull.begin(), m_parametersFull.end(), "f_{#etaX}") 
+					- m_parametersFull.begin());
+				
+				double etaStatErr  = result.ParError(etaPar);
+				double etaXStatErr = result.ParError(etaXPar);
+				double covExcInc   = result.CovMatrix(etaPar, etaXPar);
+				
 				if(subtractHadBkgd) {
 					yield    = locYield_signal;
 					yieldErr = locYield_signal_err;
+					yieldErr = sqrt(pow((1.0-f_etaX)*etaStatErr,2.0) + pow(N_eta*etaXStatErr,2.0) - 2.0*N_eta*(1.0-f_etaX)*covExcInc);
+					printf("  Updated uncertainty on eta yield: %f%%\n", 100.0*yieldErr/yield);
 				} else {
 					yield    = locYieldInc;
-					//yieldErr = locYieldIncErr;
+					yieldErr = locYieldIncErr;
 					
-					unsigned int etaPar = (unsigned int)(find(m_parametersFull.begin(), m_parametersFull.end(), "N_{#eta}") 
-						- m_parametersFull.begin());
-					unsigned int etaXPar = (unsigned int)(find(m_parametersFull.begin(), m_parametersFull.end(), "f_{#etaX}") 
-						- m_parametersFull.begin());
-					
-					double etaStatErr  = result.ParError(etaPar);
-					double etaXStatErr = result.ParError(etaXPar);
-					double covExcInc   = result.CovMatrix(etaPar, etaXPar);
-					yieldErr = sqrt(pow(etaStatErr,2.0) + pow(etaXStatErr,2.0) + 2.0*covExcInc);
+					//yieldErr = sqrt(pow(etaStatErr,2.0) + pow(etaXStatErr,2.0) + 2.0*covExcInc);
+					//yieldErr = sqrt(pow((1.0-f_etaX)*etaStatErr,2.0) + pow(N_eta*etaXStatErr,2.0) - 2.0*N_eta*(1.0-f_etaX)*covExcInc);
 				}
 				break;
 			}
@@ -3039,7 +3122,7 @@ void MggFitter::GetEmptyYield(double &yield, double &yieldErr) {
 	//-----------------------------------------------//
 	
 	TF1 *locfEta;
-	int nParameters = InitializeFitFunction(&locfEta, "locfEta");
+	InitializeFitFunction(&locfEta, "locfEta");
 	locfEta->SetParameters(f_full->GetParameters());
 	
 	// zero the parameters not associated with the empty target background:
@@ -3077,7 +3160,7 @@ void MggFitter::GetOmegaYield(double &yield, double &yieldErr)
 	//-----------------------------------------------//
 	
 	TF1 *locfEta;
-	int nParameters = InitializeFitFunction(&locfEta, "locfEta");
+	InitializeFitFunction(&locfEta, "locfEta");
 	locfEta->SetParameters(f_full->GetParameters());
 	
 	// zero the parameters not associated with the omega background:
@@ -3123,7 +3206,7 @@ void MggFitter::GetRhoYield(double &yield, double &yieldErr)
 	//-----------------------------------------------//
 	
 	TF1 *locfEta;
-	int nParameters = InitializeFitFunction(&locfEta, "locfEta");
+	InitializeFitFunction(&locfEta, "locfEta");
 	locfEta->SetParameters(f_full->GetParameters());
 	
 	// zero the parameters not associated with the omega background:
@@ -3201,7 +3284,7 @@ void MggFitter::GetBkgdYield(double &yield, double &yieldErr)
 	//-----------------------------------------------//
 	
 	TF1 *locfBkgd;
-	int nParameters = InitializeFitFunction(&locfBkgd, "locfBkgd");
+	InitializeFitFunction(&locfBkgd, "locfBkgd");
 	locfBkgd->SetParameters(f_full->GetParameters());
 	
 	// zero the parameters not associated with the background:
@@ -3240,7 +3323,7 @@ void MggFitter::GetHadronicBkgdYield(double &yield, double &yieldErr)
 	//-----------------------------------------------//
 	
 	TF1 *locfEta;
-	int nParameters = InitializeFitFunction(&locfEta, "locfEta");
+	InitializeFitFunction(&locfEta, "locfEta");
 	locfEta->SetParameters(f_full->GetParameters());
 	
 	// zero the parameters not associated with the hadronic background:
@@ -3319,14 +3402,8 @@ void MggFitter::GetHadronicBkgdYield(double &yield, double &yieldErr)
 			double norm    = 1.0 + eu + ev;
 			double normErr = sqrt(pow(euErr,2.0) + pow(evErr,2.0));
 			
-			double w1 = 1.0 / norm;
-			double w1Err = normErr / pow(norm,2.0);
-			
 			double w2    = eu / norm;
 			double w2Err = sqrt(pow(euErr/norm,2.0) + pow(eu*normErr/(norm*norm),2.0));
-			
-			double w3    = ev / norm;
-			double w3Err = sqrt(pow(evErr/norm,2.0) + pow(ev*normErr/(norm*norm),2.0));
 			
 			locfEta->SetParameter(nPar, n*f*w2);
 			locfEta->SetParameter(fPar, 1.0);
@@ -3365,14 +3442,8 @@ void MggFitter::GetHadronicBkgdYield(double &yield, double &yieldErr)
 			double norm    = 1.0 + eu + ev;
 			double normErr = sqrt(pow(euErr,2.0) + pow(evErr,2.0));
 			
-			double w1 = 1.0 / norm;
-			double w1Err = normErr / pow(norm,2.0);
-			
 			double w2    = eu / norm;
 			double w2Err = sqrt(pow(euErr/norm,2.0) + pow(eu*normErr/(norm*norm),2.0));
-			
-			double w3    = ev / norm;
-			double w3Err = sqrt(pow(evErr/norm,2.0) + pow(ev*normErr/(norm*norm),2.0));
 			
 			locfEta->SetParameter(nPar, n*f*w2);
 			locfEta->SetParameter(fPar, 1.0);
@@ -3414,7 +3485,7 @@ void MggFitter::GetEtaPionYield(double &yield, double &yieldErr)
 	//-----------------------------------------------//
 	
 	TF1 *locfEta;
-	int nParameters = InitializeFitFunction(&locfEta, "locfEta");
+	InitializeFitFunction(&locfEta, "locfEta");
 	locfEta->SetParameters(f_full->GetParameters());
 	
 	// zero the parameters not associated with the eta+pion background:
@@ -3496,16 +3567,10 @@ void MggFitter::GetEtaPionYield(double &yield, double &yieldErr)
 			double w1 = 1.0 / norm;
 			double w1Err = normErr / pow(norm,2.0);
 			
-			double w2    = eu / norm;
-			double w2Err = sqrt(pow(euErr/norm,2.0) + pow(eu*normErr/(norm*norm),2.0));
-			
-			double w3    = ev / norm;
-			double w3Err = sqrt(pow(evErr/norm,2.0) + pow(ev*normErr/(norm*norm),2.0));
-			
 			locfEta->SetParameter(nPar, n*f*w1);
 			locfEta->SetParameter(fPar,   1.0);
-			locfEta->SetParameter(uPar, -10.0);
-			locfEta->SetParameter(vPar, -10.0);
+			locfEta->SetParameter(uPar, -20.0);
+			locfEta->SetParameter(vPar, -20.0);
 			
 			relError = sqrt(pow(nErr*f*w1,2.0) + pow(n*fErr*w1,2.0) + pow(n*f*w1Err,2.0)) / (n*f*w1);
 			locfEta->SetParError(nPar, relError);
@@ -3542,16 +3607,10 @@ void MggFitter::GetEtaPionYield(double &yield, double &yieldErr)
 			double w1 = 1.0 / norm;
 			double w1Err = normErr / pow(norm,2.0);
 			
-			double w2    = eu / norm;
-			double w2Err = sqrt(pow(euErr/norm,2.0) + pow(eu*normErr/(norm*norm),2.0));
-			
-			double w3    = ev / norm;
-			double w3Err = sqrt(pow(evErr/norm,2.0) + pow(ev*normErr/(norm*norm),2.0));
-			
 			locfEta->SetParameter(nPar, n*f*w1);
 			locfEta->SetParameter(fPar,   1.0);
-			locfEta->SetParameter(uPar, -10.0);
-			locfEta->SetParameter(vPar, -10.0);
+			locfEta->SetParameter(uPar, -20.0);
+			locfEta->SetParameter(vPar, -20.0);
 			
 			relError = sqrt(pow(nErr*f*w1,2.0) + pow(n*fErr*w1,2.0) + pow(n*f*w1Err,2.0)) / (n*f*w1);
 			locfEta->SetParError(nPar, relError);
@@ -4193,40 +4252,53 @@ int MggFitter::GetBeamlineParameters(vector<TString> &parameters)
 		case 0:
 			break;
 		case 1:
-			for(int i=0; i<m_muFDC.size(); i++) {
+		{
+			int n_fdc = static_cast<int>(m_muFDC.size());
+			for(int i=0; i<n_fdc; i++) {
 				nParameters += 3;
 				parameters.push_back(Form("N_{fdc,%d}",i+1));
 				parameters.push_back(Form("#mu_{fdc,%d}",i+1));
 				parameters.push_back(Form("#sigma_{fdc,%d}",i+1));
 			}
 			break;
+		}
 		case 2:
+		{
 			nParameters += 1;
 			parameters.push_back("N_{fdc}");
-			for(int i=0; i<m_muFDC.size(); i++) {
+			int n_fdc = static_cast<int>(m_muFDC.size());
+			for(int i=0; i<n_fdc; i++) {
 				nParameters++;
 				parameters.push_back(Form("#Delta#mu_{fdc,%d}",i+1));
 			}
 			break;
+		}
 		case 3:
-			for(int i=0; i<m_muFDC.size(); i++) {
+		{
+			int n_fdc = static_cast<int>(m_muFDC.size());
+			for(int i=0; i<n_fdc; i++) {
 				nParameters += 2;
 				parameters.push_back(Form("N_{fdc,%d}",i+1));
 				parameters.push_back(Form("#Delta#mu_{fdc,%d}",i+1));
 			}
 			break;
+		}
 		case 4:
-			for(int i=0; i<m_muFDC_omega.size(); i++) {
+		{
+			int n_fdc_omega = static_cast<int>(m_muFDC_omega.size());
+			for(int i=0; i<n_fdc_omega; i++) {
 				nParameters += 2;
 				parameters.push_back(Form("N_{fdc,#omega,%d}",i+1));
 				parameters.push_back(Form("#mu_{fdc,#omega,%d}",i+1));
 			}
-			for(int i=0; i<m_muFDC_eta.size(); i++) {
+			int n_fdc_eta = static_cast<int>(m_muFDC_eta.size());
+			for(int i=0; i<n_fdc_eta; i++) {
 				nParameters += 2;
 				parameters.push_back(Form("N_{fdc,#eta,%d}",i+1));
 				parameters.push_back(Form("#mu_{fdc,#eta,%d}",i+1));
 			}
 			break;
+		}
 	}
 	
 	return nParameters;
