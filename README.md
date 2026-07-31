@@ -19,4 +19,7 @@ Directory Structure:
 
 - analyze_trees:
   - c++ code to analyze ROOT trees and apply selection criteria for exclusive eta(->2gamma) events
-	
+
+- cross_section:
+  - The code used to analyze histograms produced by the `analyze_trees` directory (for both data
+    and MC), and extract differential cross sections versus production angle.
